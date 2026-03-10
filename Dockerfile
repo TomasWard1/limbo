@@ -2,9 +2,14 @@
 # ──────────────────────────────────────────────
 # Stage 1: deps — install OpenClaw and MCP server deps
 # ──────────────────────────────────────────────
-FROM node:22-alpine AS deps
+FROM node:22-slim AS deps
 
 WORKDIR /build
+
+# git is required by node-llama-cpp (openclaw transitive dep) during postinstall.
+# Rewrite SSH git URLs to HTTPS so build works without SSH keys.
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* \
+  && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
 
 # Install OpenClaw globally
 RUN npm install -g openclaw
@@ -16,10 +21,10 @@ RUN cd mcp-server && npm ci --omit=dev
 # ──────────────────────────────────────────────
 # Stage 2: final runtime image
 # ──────────────────────────────────────────────
-FROM node:22-alpine AS runtime
+FROM node:22-slim AS runtime
 
 # Non-root user for security
-RUN addgroup -S limbo && adduser -S limbo -G limbo
+RUN groupadd -r limbo && useradd -r -g limbo limbo
 
 # Copy OpenClaw from deps stage (global npm install)
 COPY --from=deps /usr/local/lib/node_modules /usr/local/lib/node_modules

@@ -36,13 +36,9 @@ mkdir -p /data/db /data/backups /data/logs
 # ── Generate openclaw.json from template ─────────────────────────────────────
 log "INFO  Generating /app/openclaw.json from template"
 
-sed \
-  -e "s|\${MODEL_PROVIDER:-anthropic}|$MODEL_PROVIDER|g" \
-  -e "s|\${MODEL_NAME:-claude-sonnet-4-6}|$MODEL_NAME|g" \
-  -e "s|\${ANTHROPIC_API_KEY}|$ANTHROPIC_API_KEY|g" \
-  -e "s|\${TELEGRAM_ENABLED:-false}|$TELEGRAM_ENABLED|g" \
-  -e "s|\${TELEGRAM_BOT_TOKEN}|$TELEGRAM_BOT_TOKEN|g" \
-  /app/openclaw.json.template > /app/openclaw.json
+export MODEL_PROVIDER MODEL_NAME ANTHROPIC_API_KEY TELEGRAM_ENABLED TELEGRAM_BOT_TOKEN
+envsubst '$MODEL_PROVIDER $MODEL_NAME $ANTHROPIC_API_KEY $TELEGRAM_ENABLED $TELEGRAM_BOT_TOKEN' \
+  < /app/openclaw.json.template > /app/openclaw.json
 
 log "INFO  openclaw.json written"
 

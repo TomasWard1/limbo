@@ -12,9 +12,9 @@ const REQUIRED_FIELDS = ["id", "title", "type", "description", "content"];
 function buildFrontmatter(note) {
   const lines = ["---"];
   lines.push(`id: ${note.id}`);
-  lines.push(`title: "${note.title.replace(/"/g, '\\"')}"`);
+  lines.push(`title: "${note.title.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
   lines.push(`type: ${note.type}`);
-  lines.push(`description: "${note.description.replace(/"/g, '\\"')}"`);
+  lines.push(`description: "${note.description.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
   if (note.map) {
     lines.push(`map: ${note.map}`);
   }
