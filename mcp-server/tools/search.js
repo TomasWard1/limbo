@@ -37,6 +37,10 @@ function extractSnippet(content, regex, maxLen = 150) {
 /**
  * vault_search(query): regex search across all .md files in /data/vault/notes/.
  * Returns [{noteId, title, snippet, score}] sorted by score desc.
+ *
+ * NOTE: Current implementation is a linear scan (O(n) per query). This is fine
+ * for small vaults (hundreds of notes), but will need optimization at scale —
+ * consider an inverted index (e.g. SQLite FTS5) when the vault grows large.
  */
 export async function vaultSearch(query) {
   let files;

@@ -4,13 +4,13 @@
     "port": 18789
   },
   "model": {
-    "provider": "${MODEL_PROVIDER:-anthropic}",
-    "name": "${MODEL_NAME:-claude-sonnet-4-6}",
+    "provider": "${MODEL_PROVIDER}",
+    "name": "${MODEL_NAME}",
     "apiKey": "${ANTHROPIC_API_KEY}"
   },
   "integrations": {
     "telegram": {
-      "enabled": "${TELEGRAM_ENABLED:-false}",
+      "enabled": "${TELEGRAM_ENABLED}",
       "token": "${TELEGRAM_BOT_TOKEN}"
     }
   },
