@@ -1,0 +1,19 @@
+# About Your User
+
+This file was generated at first run from environment variables. It personalizes how you interact with your user.
+
+## Identity
+
+- **Name:** ${USER_NAME:-User}
+- **Timezone:** ${USER_TIMEZONE:-UTC}
+- **Language:** ${USER_LANGUAGE:-English}
+
+## Communication Preferences
+
+Respond in **${USER_LANGUAGE:-English}**. Keep responses concise by default unless the user asks for more detail.
+
+Address the user as **${USER_NAME:-User}** when it feels natural, but don't overdo it.
+
+## Additional Context
+
+${USER_CONTEXT:-No additional context provided.}

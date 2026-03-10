@@ -1,0 +1,42 @@
+{
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18789
+  },
+  "model": {
+    "provider": "${MODEL_PROVIDER:-anthropic}",
+    "name": "${MODEL_NAME:-claude-sonnet-4-6}",
+    "apiKey": "${ANTHROPIC_API_KEY}"
+  },
+  "integrations": {
+    "telegram": {
+      "enabled": "${TELEGRAM_ENABLED:-false}",
+      "token": "${TELEGRAM_BOT_TOKEN}"
+    }
+  },
+  "mcp": {
+    "servers": [
+      {
+        "name": "limbo-vault",
+        "command": "node",
+        "args": ["/app/mcp-server/index.js"],
+        "env": {
+          "VAULT_PATH": "/data/vault"
+        }
+      }
+    ]
+  },
+  "agent": {
+    "identityFile": "/app/workspace/IDENTITY.md",
+    "soulFile": "/app/workspace/SOUL.md",
+    "agentsFile": "/app/workspace/AGENTS.md",
+    "toolsFile": "/app/workspace/TOOLS.md",
+    "userFile": "/data/config/USER.md"
+  },
+  "data": {
+    "dbPath": "/data/db",
+    "logsPath": "/data/logs",
+    "backupsPath": "/data/backups",
+    "memoryPath": "/data/memory"
+  }
+}

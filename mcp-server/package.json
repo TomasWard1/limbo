@@ -1,0 +1,16 @@
+{
+  "name": "limbo-vault-mcp",
+  "version": "1.0.0",
+  "description": "Vault MCP server for Limbo — exposes vault_search, vault_read, vault_write_note, vault_update_map",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

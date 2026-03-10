@@ -1,0 +1,8 @@
+.git
+agents/
+.env
+.env.*
+node_modules
+scripts/install.sh
+.github
+README.md
