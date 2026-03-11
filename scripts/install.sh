@@ -167,7 +167,21 @@ ok "docker-compose.yml downloaded."
 # ─── Start Limbo ─────────────────────────────────────────────────────────────
 header "Starting Limbo..."
 cd /opt/limbo
-docker compose pull -q
+if docker compose pull -q; then
+  ok "Pulled image from GHCR."
+else
+  warn "Could not pull ghcr.io image (likely private or unavailable). Falling back to source build."
+  SRC_DIR="/opt/limbo/src"
+  rm -rf "$SRC_DIR"
+  if ! command -v git &>/dev/null; then
+    log "Installing git for source fallback..."
+    apt-get update -qq
+    apt-get install -y -qq git
+  fi
+  git clone --depth 1 https://github.com/tomasward1/limbo.git "$SRC_DIR"
+  docker build -t "ghcr.io/tomasward1/limbo:${LIMBO_IMAGE_TAG}" "$SRC_DIR"
+  ok "Built image locally: ghcr.io/tomasward1/limbo:${LIMBO_IMAGE_TAG}"
+fi
 docker compose up -d
 ok "Container started."
 
