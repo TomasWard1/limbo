@@ -9,7 +9,11 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: ["CMD-SHELL", "openclaw health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"const s=require('net').connect(18789,'127.0.0.1');const done=(code)=>{try{s.destroy()}catch{};process.exit(code)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);\"",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
