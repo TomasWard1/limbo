@@ -32,27 +32,43 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
+      - name: Validate Vercel secrets
+        id: vercel_secrets
+        shell: bash
+        run: |
+          missing=()
+          [ -n "${{ secrets.VERCEL_TOKEN }}" ] || missing+=("VERCEL_TOKEN")
+          [ -n "${{ secrets.VERCEL_ORG_ID }}" ] || missing+=("VERCEL_ORG_ID")
+          [ -n "${{ secrets.VERCEL_PROJECT_ID }}" ] || missing+=("VERCEL_PROJECT_ID")
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping Vercel deploy. Missing secrets: ${missing[*]}"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # Required once in GitHub repo settings:
       # - VERCEL_TOKEN: Personal/Team token with deploy access
       # - VERCEL_ORG_ID: Team/org id
       # - VERCEL_PROJECT_ID: Project id for this landing page
       - name: Pull Vercel environment (staging preview)
-        if: github.ref_name == 'staging'
+        if: github.ref_name == 'staging' && steps.vercel_secrets.outputs.ready == 'true'
         run: vercel pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}" --cwd web
 
       - name: Deploy preview from staging
-        if: github.ref_name == 'staging'
+        if: github.ref_name == 'staging' && steps.vercel_secrets.outputs.ready == 'true'
         id: deploy_preview
         run: |
           DEPLOY_URL="$(vercel deploy --target preview --token="${{ secrets.VERCEL_TOKEN }}" --cwd web)"
           echo "deploy_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
 
       - name: Pull Vercel environment (production)
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' && steps.vercel_secrets.outputs.ready == 'true'
         run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}" --cwd web
 
       - name: Deploy production from main
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' && steps.vercel_secrets.outputs.ready == 'true'
         id: deploy_production
         run: |
           DEPLOY_URL="$(vercel deploy --prod --token="${{ secrets.VERCEL_TOKEN }}" --cwd web)"
@@ -60,7 +76,9 @@ jobs:
 
       - name: Summary
         run: |
-          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+          if [ "${{ steps.vercel_secrets.outputs.ready }}" != "true" ]; then
+            echo "Deploy skipped: missing required Vercel secrets."
+          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
             echo "Production deploy: ${{ steps.deploy_production.outputs.deploy_url }}"
           else
             echo "Preview deploy: ${{ steps.deploy_preview.outputs.deploy_url }}"
