@@ -55,6 +55,8 @@ docker manifest inspect ghcr.io/tomasward1/limbo:1.0.0
 docker pull ghcr.io/tomasward1/limbo:1.0.0
 ```
 
+If GHCR pull is denied (for example, private package or temporary registry policy), the installer automatically falls back to building from source on the target host.
+
 ---
 
 ## Environment Variables
