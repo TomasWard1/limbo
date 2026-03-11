@@ -1,12 +1,23 @@
 # Available Tools
 
-You have access to one MCP server: **limbo-vault**. It provides 4 tools for reading and writing the user's vault.
+You have access to the **limbo-vault** MCP server via **mcporter**. Call tools from the shell using the `mcporter call` command.
+
+```sh
+mcporter call limbo-vault.<tool_name> <key>=<value> ...
+```
+
+The `MCPORTER_CONFIG` environment variable is pre-set to `/app/mcporter.json`, which registers the limbo-vault server.
 
 ---
 
 ## vault_search
 
 Search notes in the vault by regex or keyword query.
+
+**Shell call:**
+```sh
+mcporter call limbo-vault.vault_search query="your search term"
+```
 
 **Input:**
 | Field | Type | Required | Description |
@@ -21,6 +32,11 @@ Search notes in the vault by regex or keyword query.
 
 Read the full content of a vault note by ID.
 
+**Shell call:**
+```sh
+mcporter call limbo-vault.vault_read noteId="note-id-here"
+```
+
 **Input:**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -33,6 +49,17 @@ Read the full content of a vault note by ID.
 ## vault_write_note
 
 Create or overwrite a vault note with YAML frontmatter.
+
+**Shell call:**
+```sh
+mcporter call limbo-vault.vault_write_note \
+  id="note-id" \
+  title="Note Title" \
+  type="claim" \
+  description="One-sentence summary of the note's core claim." \
+  content="Full markdown body of the note." \
+  map="optional-moc-name"
+```
 
 **Input:**
 | Field | Type | Required | Description |
@@ -51,6 +78,14 @@ Create or overwrite a vault note with YAML frontmatter.
 ## vault_update_map
 
 Append entries to a section in a Map of Content (MOC). Creates the map file and/or section if they don't exist.
+
+**Shell call:**
+```sh
+mcporter call limbo-vault.vault_update_map \
+  map="map-name" \
+  section="Section Heading" \
+  entries='["[[note-id|Note Title]]"]'
+```
 
 **Input:**
 | Field | Type | Required | Description |

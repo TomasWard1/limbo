@@ -34,8 +34,14 @@ MODEL_NAME="${MODEL_NAME:-claude-sonnet-4-6}"
 TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 
-# ── Bootstrap log dir (migration runner needs /data/logs first) ───────────────
-mkdir -p /data/db /data/backups /data/logs
+# ── Bootstrap data dirs ───────────────────────────────────────────────────────
+mkdir -p /data/db /data/backups /data/logs /data/vault
+
+# ── Bootstrap workspace (first-run: seed from baked-in template) ──────────────
+if [ ! -d /data/workspace ]; then
+  log "INFO  First run — seeding workspace from template"
+  cp -r /app/workspace /data/workspace
+fi
 
 # ── Generate openclaw.json from template ─────────────────────────────────────
 log "INFO  Generating /app/openclaw.json from template"
@@ -50,6 +56,10 @@ log "INFO  openclaw.json written"
 log "INFO  Running migration runner"
 node /app/migrations/index.js
 log "INFO  Migrations OK"
+
+# ── Configure mcporter ────────────────────────────────────────────────────────
+export MCPORTER_CONFIG=/app/mcporter.json
+log "INFO  mcporter configured — MCPORTER_CONFIG=$MCPORTER_CONFIG"
 
 # ── Start OpenClaw gateway ────────────────────────────────────────────────────
 log "INFO  Starting OpenClaw gateway"
