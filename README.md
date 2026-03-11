@@ -92,6 +92,7 @@ Copy `.env.example` to `.env` and set:
 | `MODEL_NAME` | no | `claude-sonnet-4-6` | Model name (e.g. `claude-sonnet-4-6`, `codex-mini-latest`, `gpt-4o`) |
 | `TELEGRAM_ENABLED` | no | `false` | Enable Telegram bot integration |
 | `TELEGRAM_BOT_TOKEN` | no | — | Telegram bot token (required if `TELEGRAM_ENABLED=true`) |
+| `TELEGRAM_AUTO_PAIR_FIRST_DM` | no | `true` | Auto-approves the first Telegram DM sender and persists access (MVP-friendly onboarding) |
 
 > \* Either `LLM_API_KEY` **or** `ANTHROPIC_API_KEY` is required. `LLM_API_KEY` takes precedence if both are set.
 
