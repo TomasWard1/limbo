@@ -147,12 +147,14 @@ fi
 
 # ─── Write .env ───────────────────────────────────────────────────────────────
 header "Writing /opt/limbo/.env..."
+LIMBO_IMAGE_TAG="${LIMBO_IMAGE_TAG:-1.0.0}"
 cat > /opt/limbo/.env <<EOF
 LLM_API_KEY=${LLM_API_KEY}
 MODEL_PROVIDER=${MODEL_PROVIDER}
 MODEL_NAME=${MODEL_NAME}
 TELEGRAM_ENABLED=${TELEGRAM_ENABLED}
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+LIMBO_IMAGE_TAG=${LIMBO_IMAGE_TAG}
 EOF
 chmod 600 /opt/limbo/.env
 ok ".env written."

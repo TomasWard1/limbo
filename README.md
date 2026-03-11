@@ -30,6 +30,7 @@ Limbo binds to `127.0.0.1:18789`. Connect via the OpenClaw gateway or Telegram b
 
 ---
 
+<<<<<<< friday/lim-52-installer-endpoint-staging
 ## One-Line Installer
 
 Canonical installer URL:
@@ -52,6 +53,8 @@ sudo bash <(curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc
 
 ---
 
+=======
+>>>>>>> staging
 ## Release Channel (GHCR)
 
 Stable deploys should use a pinned semver image tag via `LIMBO_IMAGE_TAG`.
