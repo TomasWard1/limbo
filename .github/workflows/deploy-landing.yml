@@ -1,63 +1,67 @@
 name: Deploy Landing Page
 
-# Deploys /web (static HTML/CSS/JS) to Cloudflare Pages.
-#
-# Branches:
-#   staging → preview deployment (unique preview URL per push)
-#   main    → production deployment (custom domain once configured)
-#
-# Required secrets (set in repo Settings → Secrets → Actions):
-#   CLOUDFLARE_API_TOKEN  — API token with "Cloudflare Pages: Edit" permission
-#   CLOUDFLARE_ACCOUNT_ID — your Cloudflare account ID (found in CF dashboard sidebar)
-#
-# One-time setup:
-#   1. Create a Cloudflare Pages project named "limbo-landing"
-#      via the CF dashboard (or `wrangler pages project create limbo-landing`)
-#   2. Set the production branch to "main" in CF Pages settings
-#   3. Add the two secrets above to this repo
-#   4. (Optional) Add custom domain in CF Pages → Custom Domains
-
 on:
   push:
     branches:
-      - main
       - staging
+      - main
     paths:
-      - 'web/**'
-      - '.github/workflows/deploy-landing.yml'
+      - "web/**"
+      - ".github/workflows/deploy-landing.yml"
+  workflow_dispatch:
 
 jobs:
   deploy:
-    name: Deploy to Cloudflare Pages
+    name: Deploy to Vercel
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      deployments: write
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        id: deploy
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy web --project-name=limbo-landing --branch=${{ github.ref_name }}
+          node-version: 22
 
-      - name: Print deployment URL
-        env:
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
-          BRANCH_NAME: ${{ github.ref_name }}
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      # Required once in GitHub repo settings:
+      # - VERCEL_TOKEN: Personal/Team token with deploy access
+      # - VERCEL_ORG_ID: Team/org id
+      # - VERCEL_PROJECT_ID: Project id for this landing page
+      - name: Pull Vercel environment (staging preview)
+        if: github.ref_name == 'staging'
+        run: vercel pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}" --cwd web
+
+      - name: Deploy preview from staging
+        if: github.ref_name == 'staging'
+        id: deploy_preview
         run: |
-          echo "### Deployment complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** \`$BRANCH_NAME\`" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** $DEPLOYMENT_URL" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "$BRANCH_NAME" = "main" ]; then
-            echo "> Production deployment" >> $GITHUB_STEP_SUMMARY
+          DEPLOY_URL="$(vercel deploy --target preview --token="${{ secrets.VERCEL_TOKEN }}" --cwd web)"
+          echo "deploy_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Pull Vercel environment (production)
+        if: github.ref_name == 'main'
+        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}" --cwd web
+
+      - name: Deploy production from main
+        if: github.ref_name == 'main'
+        id: deploy_production
+        run: |
+          DEPLOY_URL="$(vercel deploy --prod --token="${{ secrets.VERCEL_TOKEN }}" --cwd web)"
+          echo "deploy_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            echo "Production deploy: ${{ steps.deploy_production.outputs.deploy_url }}"
           else
-            echo "> Preview deployment" >> $GITHUB_STEP_SUMMARY
+            echo "Preview deploy: ${{ steps.deploy_preview.outputs.deploy_url }}"
           fi
