@@ -6,7 +6,7 @@
   "model": {
     "provider": "${MODEL_PROVIDER}",
     "name": "${MODEL_NAME}",
-    "apiKey": "${ANTHROPIC_API_KEY}"
+    "apiKey": "${LLM_API_KEY}"
   },
   "integrations": {
     "telegram": {

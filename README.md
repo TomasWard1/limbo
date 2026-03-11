@@ -36,11 +36,14 @@ Copy `.env.example` to `.env` and set:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | **yes** | — | API key for the Claude model |
-| `MODEL_PROVIDER` | no | `anthropic` | Model provider |
-| `MODEL_NAME` | no | `claude-sonnet-4-6` | Model name |
+| `LLM_API_KEY` | **yes*** | — | API key for your chosen model provider (Anthropic or OpenAI) |
+| `ANTHROPIC_API_KEY` | **yes*** | — | Legacy alias for `LLM_API_KEY` — accepted for backwards compatibility |
+| `MODEL_PROVIDER` | no | `anthropic` | Model provider: `anthropic` or `openai` |
+| `MODEL_NAME` | no | `claude-sonnet-4-6` | Model name (e.g. `claude-sonnet-4-6`, `codex-mini-latest`, `gpt-4o`) |
 | `TELEGRAM_ENABLED` | no | `false` | Enable Telegram bot integration |
 | `TELEGRAM_BOT_TOKEN` | no | — | Telegram bot token (required if `TELEGRAM_ENABLED=true`) |
+
+> \* Either `LLM_API_KEY` **or** `ANTHROPIC_API_KEY` is required. `LLM_API_KEY` takes precedence if both are set.
 
 ---
 
@@ -119,7 +122,7 @@ VAULT_PATH=./dev-vault node index.js
 
 ```sh
 docker build -t limbo:dev .
-docker run --rm -e ANTHROPIC_API_KEY=sk-... -p 18789:18789 limbo:dev
+docker run --rm -e LLM_API_KEY=sk-ant-... -p 18789:18789 limbo:dev
 ```
 
 ### Run migrations standalone
