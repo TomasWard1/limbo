@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # install.sh — Limbo one-line installer
-# Usage: curl -fsSL https://get.limbo.ar | bash
+# Usage: curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh | bash
 set -euo pipefail
+
+INSTALLER_URL="https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh"
+COMPOSE_URL="https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/docker-compose.yml"
 
 # ─── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -22,7 +25,7 @@ header "=== Limbo Installer ==="
 
 # Root check
 if [[ $EUID -ne 0 ]]; then
-  die "This script must be run as root. Try: sudo bash <(curl -fsSL https://get.limbo.ar)"
+  die "This script must be run as root. Try: sudo bash <(curl -fsSL ${INSTALLER_URL})"
 fi
 
 # OS detection — Ubuntu / Debian only
@@ -156,7 +159,6 @@ ok ".env written."
 
 # ─── Download docker-compose.yml ──────────────────────────────────────────────
 header "Downloading docker-compose.yml..."
-COMPOSE_URL="https://raw.githubusercontent.com/tomasward1/limbo/main/docker-compose.yml"
 curl -fsSL "$COMPOSE_URL" -o /opt/limbo/docker-compose.yml
 ok "docker-compose.yml downloaded."
 
