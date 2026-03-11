@@ -1,0 +1,67 @@
+name: Deploy Landing Page
+
+on:
+  push:
+    branches:
+      - staging
+      - main
+    paths:
+      - "web/**"
+      - ".github/workflows/deploy-landing.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      # Required once in GitHub repo settings:
+      # - VERCEL_TOKEN: Personal/Team token with deploy access
+      # - VERCEL_ORG_ID: Team/org id
+      # - VERCEL_PROJECT_ID: Project id for this landing page
+      - name: Pull Vercel environment (staging preview)
+        if: github.ref_name == 'staging'
+        run: vercel pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}" --cwd web
+
+      - name: Deploy preview from staging
+        if: github.ref_name == 'staging'
+        id: deploy_preview
+        run: |
+          DEPLOY_URL="$(vercel deploy --target preview --token="${{ secrets.VERCEL_TOKEN }}" --cwd web)"
+          echo "deploy_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Pull Vercel environment (production)
+        if: github.ref_name == 'main'
+        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}" --cwd web
+
+      - name: Deploy production from main
+        if: github.ref_name == 'main'
+        id: deploy_production
+        run: |
+          DEPLOY_URL="$(vercel deploy --prod --token="${{ secrets.VERCEL_TOKEN }}" --cwd web)"
+          echo "deploy_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            echo "Production deploy: ${{ steps.deploy_production.outputs.deploy_url }}"
+          else
+            echo "Preview deploy: ${{ steps.deploy_preview.outputs.deploy_url }}"
+          fi
