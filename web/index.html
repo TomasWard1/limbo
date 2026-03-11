@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limbo - Tu memoria personal en Telegram</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Background Elements -->
+    <div class="bg-container">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+        <div class="blob blob-4"></div>
+        <div class="geo-grid"></div>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <a href="#" class="logo">limbo</a>
+                <span class="coming-soon-badge">Próximamente en Argentina</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section - Two Columns -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-grid">
+                <!-- Left: Text & CTA -->
+                <div class="hero-content">
+                    <h1>Para todo lo que queda en el <span>limbo</span></h1>
+                    <p class="hero-subtitle">Contaselo por Telegram. Cuando lo necesitás, preguntale.</p>
+                    <div class="cta-group">
+                        <a href="#waitlist" class="btn btn-primary">Reservar acceso anticipado</a>
+                        <a href="#how" class="btn btn-secondary">Cómo funciona</a>
+                    </div>
+                </div>
+
+                <!-- Right: Telegram Chat Demo -->
+                <div class="hero-demo">
+                    <div class="demo-float demo-float-1"></div>
+                    <div class="demo-float demo-float-2"></div>
+                    <div class="demo-float demo-float-3"></div>
+                    <div class="demo-card-wrapper">
+                        <div class="tg-phone">
+                            <div class="tg-header">
+                                <div class="tg-header-back">‹</div>
+                                <div class="tg-header-info">
+                                    <div class="tg-avatar">L</div>
+                                    <div class="tg-header-text">
+                                        <div class="tg-name">Limbo</div>
+                                        <div class="tg-status">online</div>
+                                    </div>
+                                </div>
+                                <div class="tg-header-icon">⋮</div>
+                            </div>
+                            <div class="tg-body" id="tg-body">
+                                <!-- Messages injected by JS via safe DOM methods -->
+                            </div>
+                            <div class="tg-input-bar">
+                                <div class="tg-input-field">
+                                    <span class="tg-typing-text" id="tg-typing"></span>
+                                    <span class="tg-cursor">|</span>
+                                </div>
+                                <button class="tg-send-btn" aria-label="Enviar">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem Section -->
+    <section class="problem-section">
+        <div class="container">
+            <div class="section-header animate-on-scroll">
+                <span class="ai-powered-badge">
+                    <span class="ai-icon">✦</span>
+                    Potenciado por IA
+                </span>
+                <h2 class="section-title">Esas cositas que cuando las necesitás, no las encontrás.</h2>
+                <p class="section-subtitle">¿Te suenan?</p>
+            </div>
+            <div class="problem-grid">
+                <div class="problem-card animate-on-scroll">
+                    <span class="problem-emoji">📋</span>
+                    <h3>Número de póliza</h3>
+                    <p>Te lo pidieron para un trámite y perdés 2 horas buscándolo.</p>
+                </div>
+                <div class="problem-card animate-on-scroll">
+                    <span class="problem-emoji">🎫</span>
+                    <h3>Número de trámite</h3>
+                    <p>Ese que te dieron para seguir tu caso. Lo anotaste en un post-it que se te perdió.</p>
+                </div>
+                <div class="problem-card animate-on-scroll">
+                    <span class="problem-emoji">🔗</span>
+                    <h3>Link del drive</h3>
+                    <p>Te lo compartieron por mail hace un mes. Buena suerte encontrándolo.</p>
+                </div>
+                <div class="problem-card animate-on-scroll">
+                    <span class="problem-emoji">🧳</span>
+                    <h3>Código de la valija</h3>
+                    <p>000? 123? Era algo fácil pero ya probaste todo.</p>
+                </div>
+                <div class="problem-card animate-on-scroll">
+                    <span class="problem-emoji">🍷</span>
+                    <h3>Nombre del vino</h3>
+                    <p>Ese que tomaste en la cena pero tenía un nombre raro. Andá a encontrarlo después.</p>
+                </div>
+                <div class="problem-card animate-on-scroll">
+                    <span class="problem-emoji">👕</span>
+                    <h3>Talle de tu vieja</h3>
+                    <p>Para comprarle algo de ropa. ¿Era M o L? No te acordás y no querés preguntar.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works - 5 Steps with Scroll Lock -->
+    <section class="how-section-scroll" id="how">
+        <div class="steps-scroll-container">
+            <div class="steps-sticky">
+                <div class="steps-title">
+                    <h2>Así funciona</h2>
+                </div>
+
+                <div class="steps-progress">
+                    <div class="progress-dot active" data-step="0"></div>
+                    <div class="progress-dot" data-step="1"></div>
+                    <div class="progress-dot" data-step="2"></div>
+                    <div class="progress-dot" data-step="3"></div>
+                    <div class="progress-dot" data-step="4"></div>
+                </div>
+
+                <div class="steps-viewport">
+                    <!-- Step 1: Abrís Telegram -->
+                    <div class="scroll-step active" data-step="0">
+                        <div class="scroll-step-inner">
+                            <div class="scroll-step-left">
+                                <div class="scroll-step-number">1</div>
+                                <div class="scroll-step-content">
+                                    <h3>Abrís Telegram</h3>
+                                    <p>Buscás @limbo_bot y empezás una conversación. Sin instalar nada extra, sin registrarte en ningún lado.</p>
+                                </div>
+                            </div>
+                            <div class="scroll-step-visual">
+                                <div class="step-tg-search step-chat-large">
+                                    <div class="step-tg-search-bar">
+                                        <span class="step-tg-search-icon">🔍</span>
+                                        <span class="step-tg-search-text">@limbo_bot<span class="input-cursor"></span></span>
+                                    </div>
+                                    <div class="step-tg-result">
+                                        <div class="step-tg-result-avatar">L</div>
+                                        <div class="step-tg-result-info">
+                                            <div class="step-tg-result-name">Limbo</div>
+                                            <div class="step-tg-result-sub">@limbo_bot · bot</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Le contás algo -->
+                    <div class="scroll-step" data-step="1">
+                        <div class="scroll-step-inner">
+                            <div class="scroll-step-left">
+                                <div class="scroll-step-number">2</div>
+                                <div class="scroll-step-content">
+                                    <h3>Le contás algo</h3>
+                                    <p>Le escribís a Limbo por Telegram, como si le mandaras un mensaje a alguien.</p>
+                                </div>
+                            </div>
+                            <div class="scroll-step-visual">
+                                <div class="step-tg-chat step-chat-large">
+                                    <div class="step-tg-bubble step-tg-bubble-out">
+                                        Mi póliza del auto es 4532-8876, de La Caja Seguros. Vence el 15 de marzo.<span class="input-cursor"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Limbo lo guarda -->
+                    <div class="scroll-step" data-step="2">
+                        <div class="scroll-step-inner">
+                            <div class="scroll-step-left">
+                                <div class="scroll-step-number">3</div>
+                                <div class="scroll-step-content">
+                                    <h3>Limbo lo guarda</h3>
+                                    <p>Entiende qué guardaste, qué importa, y qué contexto tiene. Lo almacena en tu servidor — ordenado, listo, tuyo.</p>
+                                </div>
+                            </div>
+                            <div class="scroll-step-visual">
+                                <div class="magic-box magic-box-large">
+                                    <div class="magic-box-glow"></div>
+                                    <div class="magic-box-inner">
+                                        <div class="sparkle sparkle-1">✦</div>
+                                        <div class="sparkle sparkle-2">✦</div>
+                                        <div class="sparkle sparkle-3">✦</div>
+                                        <div class="sparkle sparkle-4">✦</div>
+                                        <span class="magic-box-text">AI</span>
+                                    </div>
+                                    <div class="magic-particles">
+                                        <span class="particle p1"></span>
+                                        <span class="particle p2"></span>
+                                        <span class="particle p3"></span>
+                                        <span class="particle p4"></span>
+                                        <span class="particle p5"></span>
+                                        <span class="particle p6"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Preguntás cuando querés -->
+                    <div class="scroll-step" data-step="3">
+                        <div class="scroll-step-inner">
+                            <div class="scroll-step-left">
+                                <div class="scroll-step-number">4</div>
+                                <div class="scroll-step-content">
+                                    <h3>Preguntás cuando querés</h3>
+                                    <p>Preguntale lo que necesitás, cuando lo necesitás. En dos segundos — aunque lo hayas guardado hace meses.</p>
+                                </div>
+                            </div>
+                            <div class="scroll-step-visual">
+                                <div class="step-tg-chat step-chat-large">
+                                    <div class="step-tg-bubble step-tg-bubble-out">
+                                        ¿Cuál era mi número de póliza?<span class="input-cursor"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 5: Limbo te responde -->
+                    <div class="scroll-step" data-step="4">
+                        <div class="scroll-step-inner">
+                            <div class="scroll-step-left">
+                                <div class="scroll-step-number">5</div>
+                                <div class="scroll-step-content">
+                                    <h3>Limbo te responde</h3>
+                                    <p>Te da el dato exacto en segundos. Sin abrir apps, sin revisar mails, sin buscar en fotos.</p>
+                                </div>
+                            </div>
+                            <div class="scroll-step-visual">
+                                <div class="step-tg-conversation step-chat-large">
+                                    <div class="step-tg-bubble step-tg-bubble-out">
+                                        ¿Cuál era mi número de póliza?
+                                    </div>
+                                    <div class="step-tg-bubble step-tg-bubble-in">
+                                        Tu póliza del auto es <strong>4532-8876</strong> de La Caja Seguros, vence el <strong>15 de marzo</strong>. ✓
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="scroll-hint">
+                    <span class="scroll-hint-text">Seguí scrolleando</span>
+                    <svg class="scroll-hint-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Roadmap Section -->
+    <section class="roadmap-section">
+        <div class="container">
+            <div class="section-header animate-on-scroll">
+                <h2 class="section-title">Hoy texto. Mañana, todo.</h2>
+                <p class="section-subtitle">Pronto vas a poder mandarle cualquier tipo de contenido a Limbo por Telegram.</p>
+            </div>
+            <div class="roadmap-card animate-on-scroll">
+                <div class="roadmap-list">
+                    <div class="roadmap-item active">
+                        <div class="roadmap-icon">💬</div>
+                        <span class="roadmap-label">Texto</span>
+                        <span class="roadmap-badge">Disponible</span>
+                    </div>
+                    <div class="roadmap-item locked">
+                        <div class="roadmap-icon">📄</div>
+                        <span class="roadmap-label">PDFs</span>
+                        <span class="roadmap-badge">Próximamente</span>
+                    </div>
+                    <div class="roadmap-item locked">
+                        <div class="roadmap-icon">📷</div>
+                        <span class="roadmap-label">Fotos</span>
+                        <span class="roadmap-badge">Próximamente</span>
+                    </div>
+                    <div class="roadmap-item locked">
+                        <div class="roadmap-icon">✉️</div>
+                        <span class="roadmap-label">Email</span>
+                        <span class="roadmap-badge">Próximamente</span>
+                    </div>
+                    <div class="roadmap-item locked">
+                        <div class="roadmap-icon">🎙️</div>
+                        <span class="roadmap-label">Mensajes de voz</span>
+                        <span class="roadmap-badge">Próximamente</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Privacy Section -->
+    <section class="privacy-section">
+        <div class="container">
+            <div class="privacy-card animate-on-scroll">
+                <div class="privacy-icon">🔒</div>
+                <div class="privacy-content">
+                    <h3>¿Y mis datos?</h3>
+                    <p>Limbo procesa y guarda todo en tu propio servidor. Nosotros no vemos tus notas, no las indexamos, no las vendemos. Telegram es solo la interfaz — como el teclado. Tu vault vive en tu máquina.</p>
+                    <p class="privacy-subtext">¿No querés configurar nada? Lo hacemos nosotros por $9/mes.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Waitlist Section -->
+    <section class="waitlist-section" id="waitlist">
+        <div class="container">
+            <div class="waitlist-card animate-on-scroll">
+                <div class="waitlist-emoji">⚡</div>
+                <h2>Sé de los primeros en usarlo.</h2>
+                <p>Los primeros 200 tienen acceso anticipado y precio de early adopter.</p>
+                <form class="waitlist-form" id="waitlist-form">
+                    <input type="email" name="email" class="waitlist-input" placeholder="tu@email.com" required>
+                    <button type="submit" class="btn btn-primary">Reservar mi lugar</button>
+                </form>
+                <p class="waitlist-note">🎉 Lugar reservado. Te escribimos antes que nadie.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-logo">limbo</div>
+            <p class="footer-text">&copy; 2026 Limbo. Hecho con ❤️ en 🇦🇷 por Tomas Ward.</p>
+        </div>
+    </footer>
+
+    <!-- Back to Top Button -->
+    <button class="back-to-top" id="backToTop" aria-label="Volver arriba">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+    </button>
+
+    <script>
+        // Telegram demo conversation examples (static strings — no user input)
+        const tgExamples = [
+            {
+                userMsg: "Llevé el DeLorean al taller de Av. Rivadavia 8820. DMC DeLorean 1981, patente OUTATIME.",
+                botLines: ["Guardado ✓", "🚗 DeLorean 1981 · patente OUTATIME", "📍 Taller: Av. Rivadavia 8820"]
+            },
+            {
+                userMsg: "Mi póliza del auto es 4532-8876, de La Caja Seguros. Vence el 15 de marzo.",
+                botLines: ["Guardado ✓", "📋 Póliza: 4532-8876", "🏢 La Caja Seguros", "📅 Vence: 15 de marzo"]
+            },
+            {
+                userMsg: "El electricista es Raúl, 11-5544-3322. Cobra $15.000 la visita. Viene los martes.",
+                botLines: ["Guardado ✓", "👷 Raúl · electricista", "📞 11-5544-3322", "💰 $15.000 · martes"]
+            },
+            {
+                userMsg: "El vino de la cena se llamaba Clos de los Siete, Malbec 2019. Lo compramos en Urbano.",
+                botLines: ["Guardado ✓", "🍷 Clos de los Siete · Malbec 2019", "🛒 Comprado en Urbano"]
+            }
+        ];
+
+        let tgCurrentIndex = 0;
+        const tgBody = document.getElementById('tg-body');
+        const tgTypingSpan = document.getElementById('tg-typing');
+        let tgAnimating = false;
+
+        function createTgMessage(lines, type) {
+            const el = document.createElement('div');
+            el.className = 'tg-message tg-message-' + type;
+            lines.forEach((line, i) => {
+                if (i > 0) el.appendChild(document.createElement('br'));
+                el.appendChild(document.createTextNode(line));
+            });
+            return el;
+        }
+
+        function createTgTypingDots() {
+            const el = document.createElement('div');
+            el.className = 'tg-message tg-message-in tg-typing-dots';
+            for (let i = 0; i < 3; i++) el.appendChild(document.createElement('span'));
+            return el;
+        }
+
+        function typeInInput(text, callback) {
+            let i = 0;
+            tgTypingSpan.textContent = '';
+            const interval = setInterval(() => {
+                tgTypingSpan.textContent += text[i];
+                i++;
+                if (i >= text.length) { clearInterval(interval); callback(); }
+            }, 38);
+        }
+
+        function runTgDemo(index) {
+            if (tgAnimating) return;
+            tgAnimating = true;
+            const example = tgExamples[index];
+            tgBody.textContent = '';
+            tgTypingSpan.textContent = '';
+
+            setTimeout(() => {
+                typeInInput(example.userMsg, () => {
+                    setTimeout(() => {
+                        tgTypingSpan.textContent = '';
+                        tgBody.appendChild(createTgMessage([example.userMsg], 'out'));
+                        tgBody.scrollTop = tgBody.scrollHeight;
+
+                        setTimeout(() => {
+                            const dots = createTgTypingDots();
+                            tgBody.appendChild(dots);
+                            tgBody.scrollTop = tgBody.scrollHeight;
+
+                            setTimeout(() => {
+                                tgBody.removeChild(dots);
+                                tgBody.appendChild(createTgMessage(example.botLines, 'in'));
+                                tgBody.scrollTop = tgBody.scrollHeight;
+                                tgAnimating = false;
+                            }, 1200);
+                        }, 400);
+                    }, 500);
+                });
+            }, 600);
+        }
+
+        runTgDemo(0);
+        setInterval(() => {
+            if (!tgAnimating) {
+                tgCurrentIndex = (tgCurrentIndex + 1) % tgExamples.length;
+                runTgDemo(tgCurrentIndex);
+            }
+        }, 10000);
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        // Scroll-lock steps
+        const stepsContainer = document.querySelector('.steps-scroll-container');
+        const scrollSteps = document.querySelectorAll('.scroll-step');
+        const progressDots = document.querySelectorAll('.progress-dot');
+        const totalSteps = scrollSteps.length;
+
+        function updateScrollSteps() {
+            if (!stepsContainer) return;
+            const r = stepsContainer.getBoundingClientRect();
+            const progress = Math.max(0, Math.min(1, -r.top / (r.height - window.innerHeight)));
+            const stepIndex = Math.min(totalSteps - 1, Math.floor(progress * totalSteps));
+            scrollSteps.forEach((s, i) => s.classList.toggle('active', i === stepIndex));
+            progressDots.forEach((d, i) => d.classList.toggle('active', i === stepIndex));
+            const hint = document.querySelector('.scroll-hint');
+            if (hint) hint.classList.toggle('hidden', stepIndex === totalSteps - 1);
+        }
+
+        window.addEventListener('scroll', updateScrollSteps, { passive: true });
+        updateScrollSteps();
+
+        // Back to top
+        const backToTopBtn = document.getElementById('backToTop');
+        window.addEventListener('scroll', () => {
+            backToTopBtn.classList.toggle('visible', window.scrollY > 400);
+        }, { passive: true });
+        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+        // Waitlist form
+        document.getElementById('waitlist-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const note = document.querySelector('.waitlist-note');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '¡Listo! ✓';
+            submitBtn.style.background = '#10b981';
+            note.textContent = '✅ ¡Listo! Sos parte del acceso anticipado.';
+            note.style.color = '#10b981';
+            this.reset();
+            setTimeout(() => {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Reservar mi lugar';
+                submitBtn.style.background = '';
+                note.textContent = '🎉 Lugar reservado. Te escribimos antes que nadie.';
+                note.style.color = '';
+            }, 3000);
+        });
+
+        // Scroll animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
+        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+        document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
+    </script>
+</body>
+</html>
