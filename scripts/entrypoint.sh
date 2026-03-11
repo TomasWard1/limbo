@@ -19,10 +19,14 @@ log() {
 log "INFO  Limbo container starting"
 
 # ── Validate required env vars ───────────────────────────────────────────────
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-  log "ERROR ANTHROPIC_API_KEY is required"
+# Accept LLM_API_KEY (generic) or ANTHROPIC_API_KEY (backwards compat)
+if [ -z "${LLM_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+  log "ERROR LLM_API_KEY (or ANTHROPIC_API_KEY for backwards compat) is required"
   exit 1
 fi
+
+# Resolve to LLM_API_KEY — prefer explicit, fall back to legacy var
+LLM_API_KEY="${LLM_API_KEY:-$ANTHROPIC_API_KEY}"
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 MODEL_PROVIDER="${MODEL_PROVIDER:-anthropic}"
@@ -36,8 +40,8 @@ mkdir -p /data/db /data/backups /data/logs
 # ── Generate openclaw.json from template ─────────────────────────────────────
 log "INFO  Generating /app/openclaw.json from template"
 
-export MODEL_PROVIDER MODEL_NAME ANTHROPIC_API_KEY TELEGRAM_ENABLED TELEGRAM_BOT_TOKEN
-envsubst '$MODEL_PROVIDER $MODEL_NAME $ANTHROPIC_API_KEY $TELEGRAM_ENABLED $TELEGRAM_BOT_TOKEN' \
+export MODEL_PROVIDER MODEL_NAME LLM_API_KEY TELEGRAM_ENABLED TELEGRAM_BOT_TOKEN
+envsubst '$MODEL_PROVIDER $MODEL_NAME $LLM_API_KEY $TELEGRAM_ENABLED $TELEGRAM_BOT_TOKEN' \
   < /app/openclaw.json.template > /app/openclaw.json
 
 log "INFO  openclaw.json written"

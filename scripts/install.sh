@@ -93,7 +93,7 @@ log "Directory /opt/limbo ready."
 
 # ─── Collect API keys ─────────────────────────────────────────────────────────
 header "Configuration"
-echo "You'll need an Anthropic API key (get one at https://console.anthropic.com)."
+echo "Limbo supports Anthropic (Claude) and OpenAI (Codex/GPT) as model providers."
 echo "Telegram integration is optional — skip by pressing Enter."
 echo ""
 
@@ -118,7 +118,23 @@ prompt_optional() {
   printf -v "$varname" '%s' "${value:-$default}"
 }
 
-prompt_required ANTHROPIC_API_KEY "Anthropic API key (sk-ant-...)"
+# Provider selection
+prompt_optional MODEL_PROVIDER "Model provider (anthropic/openai)" "anthropic"
+
+case "$MODEL_PROVIDER" in
+  openai)
+    DEFAULT_MODEL_NAME="codex-mini-latest"
+    KEY_LABEL="OpenAI API key (sk-...)"
+    ;;
+  *)
+    MODEL_PROVIDER="anthropic"
+    DEFAULT_MODEL_NAME="claude-sonnet-4-6"
+    KEY_LABEL="Anthropic API key (sk-ant-...)"
+    ;;
+esac
+
+prompt_required LLM_API_KEY "$KEY_LABEL"
+prompt_optional MODEL_NAME  "Model name" "$DEFAULT_MODEL_NAME"
 
 prompt_optional TELEGRAM_ENABLED "Enable Telegram bot? (true/false)" "false"
 TELEGRAM_BOT_TOKEN=""
@@ -126,13 +142,10 @@ if [[ "$TELEGRAM_ENABLED" == "true" ]]; then
   prompt_required TELEGRAM_BOT_TOKEN "Telegram bot token"
 fi
 
-prompt_optional MODEL_PROVIDER "Model provider" "anthropic"
-prompt_optional MODEL_NAME     "Model name"     "claude-sonnet-4-6"
-
 # ─── Write .env ───────────────────────────────────────────────────────────────
 header "Writing /opt/limbo/.env..."
 cat > /opt/limbo/.env <<EOF
-ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+LLM_API_KEY=${LLM_API_KEY}
 MODEL_PROVIDER=${MODEL_PROVIDER}
 MODEL_NAME=${MODEL_NAME}
 TELEGRAM_ENABLED=${TELEGRAM_ENABLED}
