@@ -1,6 +1,6 @@
 # How to Use Your Tools
 
-You have 4 vault tools. This document explains when and how to use each one correctly.
+You have 4 vault tools accessible via `mcporter call`. This document explains when and how to use each one correctly.
 
 ## General Rules
 
@@ -15,8 +15,8 @@ You have 4 vault tools. This document explains when and how to use each one corr
 
 Use when: the user asks a question, recalls something, or you need to check if a note already exists.
 
-```
-vault_search(query: string)
+```sh
+mcporter call limbo-vault.vault_search query="your search term"
 ```
 
 - `query` accepts regex or plain keywords
@@ -36,8 +36,8 @@ vault_search(query: string)
 
 Use when: you found a note via search and need its full content.
 
-```
-vault_read(noteId: string)
+```sh
+mcporter call limbo-vault.vault_read noteId="note-id-here"
 ```
 
 - `noteId` is the filename without the `.md` extension
@@ -50,15 +50,14 @@ vault_read(noteId: string)
 
 Use when: the user shares something worth remembering, or asks you to capture/save something.
 
-```
-vault_write_note(
-  id: string,         // unique, alphanumeric + dashes/underscores
-  title: string,      // human-readable, descriptive
-  type: string,       // claim | source | concept | question | person | project | event
-  description: string, // one sentence summarizing the core idea
-  content: string,    // full markdown body
-  map?: string        // MOC this note belongs to (omit if unclear)
-)
+```sh
+mcporter call limbo-vault.vault_write_note \
+  id="note-id" \
+  title="Note Title" \
+  type="claim" \
+  description="One sentence summarizing the core idea." \
+  content="Full markdown body." \
+  map="optional-moc-name"
 ```
 
 **ID conventions:**
@@ -86,12 +85,11 @@ vault_write_note(
 
 Use when: you've written a note that belongs to a Map of Content (MOC), or the user asks to organize notes.
 
-```
-vault_update_map(
-  map: string,       // MOC filename without extension
-  section: string,   // section heading to append under
-  entries: string[]  // markdown link strings, e.g. ["[[note-id|Note Title]]"]
-)
+```sh
+mcporter call limbo-vault.vault_update_map \
+  map="map-name" \
+  section="Section Heading" \
+  entries='["[[note-id|Note Title]]"]'
 ```
 
 - Creates the map file and/or section if they don't exist
@@ -108,16 +106,16 @@ vault_update_map(
 ## Common Patterns
 
 **Capture a new fact:**
-1. `vault_search` to check for duplicates
-2. `vault_write_note` with appropriate type and map
-3. `vault_update_map` if a relevant MOC exists
+1. `mcporter call limbo-vault.vault_search query="..."` to check for duplicates
+2. `mcporter call limbo-vault.vault_write_note ...` with appropriate type and map
+3. `mcporter call limbo-vault.vault_update_map ...` if a relevant MOC exists
 
 **Answer a recall question:**
-1. `vault_search` with relevant keywords
-2. `vault_read` on top results if needed
+1. `mcporter call limbo-vault.vault_search query="..."` with relevant keywords
+2. `mcporter call limbo-vault.vault_read noteId="..."` on top results if needed
 3. Synthesize and respond — cite note IDs when quoting
 
 **Organize a topic:**
-1. `vault_search` to find all related notes
-2. `vault_update_map` to collect them under a coherent section
+1. `mcporter call limbo-vault.vault_search query="..."` to find all related notes
+2. `mcporter call limbo-vault.vault_update_map ...` to collect them under a coherent section
 3. Report what you found and organized

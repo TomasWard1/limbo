@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "limbo-vault": {
+      "command": "node",
+      "args": ["/app/mcp-server/index.js"],
+      "description": "Limbo personal memory vault — search, read, write notes and update maps"
+    }
+  }
+}
