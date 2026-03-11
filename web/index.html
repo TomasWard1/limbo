@@ -1,523 +1,265 @@
 <!DOCTYPE html>
-<html lang="es-AR">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Limbo - Tu memoria personal en Telegram</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Limbo | Remember once, recall instantly</title>
+  <meta name="description" content="Limbo is an open source memory agent. Send one message, it structures your information, and you can ask for it later through Telegram.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <!-- Background Elements -->
-    <div class="bg-container">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
-        <div class="blob blob-4"></div>
-        <div class="geo-grid"></div>
+  <div class="bg-layer" aria-hidden="true">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <div class="grid"></div>
+  </div>
+
+  <header class="site-header">
+    <div class="container header-row">
+      <a class="logo" href="#top">limbo</a>
+      <nav aria-label="Primary">
+        <a href="#how">How it works</a>
+        <a href="#open-source">Open source</a>
+        <a href="#waitlist">Get early access</a>
+      </nav>
     </div>
+  </header>
 
-    <!-- Header -->
-    <header>
-        <div class="container">
-            <div class="header-content">
-                <a href="#" class="logo">limbo</a>
-                <span class="coming-soon-badge">Próximamente en Argentina</span>
-            </div>
-        </div>
-    </header>
-
-    <!-- Hero Section - Two Columns -->
+  <main id="top">
     <section class="hero">
-        <div class="container">
-            <div class="hero-grid">
-                <!-- Left: Text & CTA -->
-                <div class="hero-content">
-                    <h1>Para todo lo que queda en el <span>limbo</span></h1>
-                    <p class="hero-subtitle">Contaselo por Telegram. Cuando lo necesitás, preguntale.</p>
-                    <div class="cta-group">
-                        <a href="#waitlist" class="btn btn-primary">Reservar acceso anticipado</a>
-                        <a href="#how" class="btn btn-secondary">Cómo funciona</a>
-                    </div>
-                </div>
+      <div class="container hero-wrap">
+        <div class="hero-copy reveal">
+          <p class="eyebrow">Open source memory for everyday life</p>
+          <h1>Say it once. <span>Find it instantly.</span></h1>
+          <p class="subtitle" id="heroSubtitle">For developers: self-host Limbo with one command, then save and recall anything from Telegram.</p>
 
-                <!-- Right: Telegram Chat Demo -->
-                <div class="hero-demo">
-                    <div class="demo-float demo-float-1"></div>
-                    <div class="demo-float demo-float-2"></div>
-                    <div class="demo-float demo-float-3"></div>
-                    <div class="demo-card-wrapper">
-                        <div class="tg-phone">
-                            <div class="tg-header">
-                                <div class="tg-header-back">‹</div>
-                                <div class="tg-header-info">
-                                    <div class="tg-avatar">L</div>
-                                    <div class="tg-header-text">
-                                        <div class="tg-name">Limbo</div>
-                                        <div class="tg-status">online</div>
-                                    </div>
-                                </div>
-                                <div class="tg-header-icon">⋮</div>
-                            </div>
-                            <div class="tg-body" id="tg-body">
-                                <!-- Messages injected by JS via safe DOM methods -->
-                            </div>
-                            <div class="tg-input-bar">
-                                <div class="tg-input-field">
-                                    <span class="tg-typing-text" id="tg-typing"></span>
-                                    <span class="tg-cursor">|</span>
-                                </div>
-                                <button class="tg-send-btn" aria-label="Enviar">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <line x1="22" y1="2" x2="11" y2="13"></line>
-                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+          <div class="audience-toggle" role="tablist" aria-label="Audience">
+            <button class="audience-btn is-active" role="tab" aria-selected="true" data-audience="dev">Developers</button>
+            <button class="audience-btn" role="tab" aria-selected="false" data-audience="everyone">Everyone</button>
+          </div>
+
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#waitlist">Join the waitlist</a>
+            <a class="btn btn-ghost" href="#how">See the flow</a>
+          </div>
+
+          <p class="microcopy" id="heroMicrocopy">Install on your server, connect Telegram, and your memory assistant is live.</p>
         </div>
+
+        <aside class="hero-panel reveal">
+          <div class="panel-head">
+            <p class="panel-title">V1 setup in 2 steps</p>
+            <span class="status-pill">Live flow</span>
+          </div>
+
+          <ol class="setup-list">
+            <li>
+              <p class="step-title">1. Install Limbo</p>
+              <div class="command-row">
+                <code id="installCommand">curl -fsSL https://limbo.tomasward.com/install | bash</code>
+                <button id="copyCommand" class="copy-btn" type="button" aria-label="Copy install command">Copy</button>
+              </div>
+            </li>
+            <li>
+              <p class="step-title">2. Connect Telegram</p>
+              <p class="step-body">Open the bot, send your first message, and Limbo starts structuring data automatically.</p>
+            </li>
+          </ol>
+
+          <div class="chat-preview" aria-live="polite" id="chatPreview">
+            <p class="chat-user">"My policy number is 4532-8876 and renewal date is March 15."</p>
+            <p class="chat-ai">Saved. Ask me later: “What is my policy number?”</p>
+          </div>
+        </aside>
+      </div>
     </section>
 
-    <!-- Problem Section -->
-    <section class="problem-section">
-        <div class="container">
-            <div class="section-header animate-on-scroll">
-                <span class="ai-powered-badge">
-                    <span class="ai-icon">✦</span>
-                    Potenciado por IA
-                </span>
-                <h2 class="section-title">Esas cositas que cuando las necesitás, no las encontrás.</h2>
-                <p class="section-subtitle">¿Te suenan?</p>
-            </div>
-            <div class="problem-grid">
-                <div class="problem-card animate-on-scroll">
-                    <span class="problem-emoji">📋</span>
-                    <h3>Número de póliza</h3>
-                    <p>Te lo pidieron para un trámite y perdés 2 horas buscándolo.</p>
-                </div>
-                <div class="problem-card animate-on-scroll">
-                    <span class="problem-emoji">🎫</span>
-                    <h3>Número de trámite</h3>
-                    <p>Ese que te dieron para seguir tu caso. Lo anotaste en un post-it que se te perdió.</p>
-                </div>
-                <div class="problem-card animate-on-scroll">
-                    <span class="problem-emoji">🔗</span>
-                    <h3>Link del drive</h3>
-                    <p>Te lo compartieron por mail hace un mes. Buena suerte encontrándolo.</p>
-                </div>
-                <div class="problem-card animate-on-scroll">
-                    <span class="problem-emoji">🧳</span>
-                    <h3>Código de la valija</h3>
-                    <p>000? 123? Era algo fácil pero ya probaste todo.</p>
-                </div>
-                <div class="problem-card animate-on-scroll">
-                    <span class="problem-emoji">🍷</span>
-                    <h3>Nombre del vino</h3>
-                    <p>Ese que tomaste en la cena pero tenía un nombre raro. Andá a encontrarlo después.</p>
-                </div>
-                <div class="problem-card animate-on-scroll">
-                    <span class="problem-emoji">👕</span>
-                    <h3>Talle de tu vieja</h3>
-                    <p>Para comprarle algo de ropa. ¿Era M o L? No te acordás y no querés preguntar.</p>
-                </div>
-            </div>
+    <section class="clarity-section reveal">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">What Limbo fixes</p>
+          <h2>No more searching across chats, notes, and screenshots.</h2>
         </div>
+        <div class="problem-grid">
+          <article>
+            <h3>Scattered details</h3>
+            <p>Important info lives in random places, and you only need it when you are in a hurry.</p>
+          </article>
+          <article>
+            <h3>Too much friction</h3>
+            <p>Conventional note apps require organizing first. Limbo organizes for you.</p>
+          </article>
+          <article>
+            <h3>No recall confidence</h3>
+            <p>You remember storing it, but not where. Limbo turns memory retrieval into a simple question.</p>
+          </article>
+        </div>
+      </div>
     </section>
 
-    <!-- How It Works - 5 Steps with Scroll Lock -->
-    <section class="how-section-scroll" id="how">
-        <div class="steps-scroll-container">
-            <div class="steps-sticky">
-                <div class="steps-title">
-                    <h2>Así funciona</h2>
-                </div>
-
-                <div class="steps-progress">
-                    <div class="progress-dot active" data-step="0"></div>
-                    <div class="progress-dot" data-step="1"></div>
-                    <div class="progress-dot" data-step="2"></div>
-                    <div class="progress-dot" data-step="3"></div>
-                    <div class="progress-dot" data-step="4"></div>
-                </div>
-
-                <div class="steps-viewport">
-                    <!-- Step 1: Abrís Telegram -->
-                    <div class="scroll-step active" data-step="0">
-                        <div class="scroll-step-inner">
-                            <div class="scroll-step-left">
-                                <div class="scroll-step-number">1</div>
-                                <div class="scroll-step-content">
-                                    <h3>Abrís Telegram</h3>
-                                    <p>Buscás @limbo_bot y empezás una conversación. Sin instalar nada extra, sin registrarte en ningún lado.</p>
-                                </div>
-                            </div>
-                            <div class="scroll-step-visual">
-                                <div class="step-tg-search step-chat-large">
-                                    <div class="step-tg-search-bar">
-                                        <span class="step-tg-search-icon">🔍</span>
-                                        <span class="step-tg-search-text">@limbo_bot<span class="input-cursor"></span></span>
-                                    </div>
-                                    <div class="step-tg-result">
-                                        <div class="step-tg-result-avatar">L</div>
-                                        <div class="step-tg-result-info">
-                                            <div class="step-tg-result-name">Limbo</div>
-                                            <div class="step-tg-result-sub">@limbo_bot · bot</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 2: Le contás algo -->
-                    <div class="scroll-step" data-step="1">
-                        <div class="scroll-step-inner">
-                            <div class="scroll-step-left">
-                                <div class="scroll-step-number">2</div>
-                                <div class="scroll-step-content">
-                                    <h3>Le contás algo</h3>
-                                    <p>Le escribís a Limbo por Telegram, como si le mandaras un mensaje a alguien.</p>
-                                </div>
-                            </div>
-                            <div class="scroll-step-visual">
-                                <div class="step-tg-chat step-chat-large">
-                                    <div class="step-tg-bubble step-tg-bubble-out">
-                                        Mi póliza del auto es 4532-8876, de La Caja Seguros. Vence el 15 de marzo.<span class="input-cursor"></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 3: Limbo lo guarda -->
-                    <div class="scroll-step" data-step="2">
-                        <div class="scroll-step-inner">
-                            <div class="scroll-step-left">
-                                <div class="scroll-step-number">3</div>
-                                <div class="scroll-step-content">
-                                    <h3>Limbo lo guarda</h3>
-                                    <p>Entiende qué guardaste, qué importa, y qué contexto tiene. Lo almacena en tu servidor — ordenado, listo, tuyo.</p>
-                                </div>
-                            </div>
-                            <div class="scroll-step-visual">
-                                <div class="magic-box magic-box-large">
-                                    <div class="magic-box-glow"></div>
-                                    <div class="magic-box-inner">
-                                        <div class="sparkle sparkle-1">✦</div>
-                                        <div class="sparkle sparkle-2">✦</div>
-                                        <div class="sparkle sparkle-3">✦</div>
-                                        <div class="sparkle sparkle-4">✦</div>
-                                        <span class="magic-box-text">AI</span>
-                                    </div>
-                                    <div class="magic-particles">
-                                        <span class="particle p1"></span>
-                                        <span class="particle p2"></span>
-                                        <span class="particle p3"></span>
-                                        <span class="particle p4"></span>
-                                        <span class="particle p5"></span>
-                                        <span class="particle p6"></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 4: Preguntás cuando querés -->
-                    <div class="scroll-step" data-step="3">
-                        <div class="scroll-step-inner">
-                            <div class="scroll-step-left">
-                                <div class="scroll-step-number">4</div>
-                                <div class="scroll-step-content">
-                                    <h3>Preguntás cuando querés</h3>
-                                    <p>Preguntale lo que necesitás, cuando lo necesitás. En dos segundos — aunque lo hayas guardado hace meses.</p>
-                                </div>
-                            </div>
-                            <div class="scroll-step-visual">
-                                <div class="step-tg-chat step-chat-large">
-                                    <div class="step-tg-bubble step-tg-bubble-out">
-                                        ¿Cuál era mi número de póliza?<span class="input-cursor"></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 5: Limbo te responde -->
-                    <div class="scroll-step" data-step="4">
-                        <div class="scroll-step-inner">
-                            <div class="scroll-step-left">
-                                <div class="scroll-step-number">5</div>
-                                <div class="scroll-step-content">
-                                    <h3>Limbo te responde</h3>
-                                    <p>Te da el dato exacto en segundos. Sin abrir apps, sin revisar mails, sin buscar en fotos.</p>
-                                </div>
-                            </div>
-                            <div class="scroll-step-visual">
-                                <div class="step-tg-conversation step-chat-large">
-                                    <div class="step-tg-bubble step-tg-bubble-out">
-                                        ¿Cuál era mi número de póliza?
-                                    </div>
-                                    <div class="step-tg-bubble step-tg-bubble-in">
-                                        Tu póliza del auto es <strong>4532-8876</strong> de La Caja Seguros, vence el <strong>15 de marzo</strong>. ✓
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="scroll-hint">
-                    <span class="scroll-hint-text">Seguí scrolleando</span>
-                    <svg class="scroll-hint-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
-                </div>
-            </div>
+    <section class="how-section" id="how">
+      <div class="container">
+        <div class="section-head reveal">
+          <p class="eyebrow">How it works</p>
+          <h2>From message to memory in seconds.</h2>
         </div>
+        <div class="steps reveal">
+          <article class="step-card">
+            <span>01</span>
+            <h3>Send naturally</h3>
+            <p>Write as you normally would. No tags, no templates.</p>
+          </article>
+          <article class="step-card">
+            <span>02</span>
+            <h3>Limbo extracts context</h3>
+            <p>It identifies names, dates, contacts, IDs, and links while keeping source context.</p>
+          </article>
+          <article class="step-card">
+            <span>03</span>
+            <h3>Ask when needed</h3>
+            <p>Query in plain language and get concise answers on Telegram.</p>
+          </article>
+        </div>
+      </div>
     </section>
 
-    <!-- Roadmap Section -->
-    <section class="roadmap-section">
-        <div class="container">
-            <div class="section-header animate-on-scroll">
-                <h2 class="section-title">Hoy texto. Mañana, todo.</h2>
-                <p class="section-subtitle">Pronto vas a poder mandarle cualquier tipo de contenido a Limbo por Telegram.</p>
-            </div>
-            <div class="roadmap-card animate-on-scroll">
-                <div class="roadmap-list">
-                    <div class="roadmap-item active">
-                        <div class="roadmap-icon">💬</div>
-                        <span class="roadmap-label">Texto</span>
-                        <span class="roadmap-badge">Disponible</span>
-                    </div>
-                    <div class="roadmap-item locked">
-                        <div class="roadmap-icon">📄</div>
-                        <span class="roadmap-label">PDFs</span>
-                        <span class="roadmap-badge">Próximamente</span>
-                    </div>
-                    <div class="roadmap-item locked">
-                        <div class="roadmap-icon">📷</div>
-                        <span class="roadmap-label">Fotos</span>
-                        <span class="roadmap-badge">Próximamente</span>
-                    </div>
-                    <div class="roadmap-item locked">
-                        <div class="roadmap-icon">✉️</div>
-                        <span class="roadmap-label">Email</span>
-                        <span class="roadmap-badge">Próximamente</span>
-                    </div>
-                    <div class="roadmap-item locked">
-                        <div class="roadmap-icon">🎙️</div>
-                        <span class="roadmap-label">Mensajes de voz</span>
-                        <span class="roadmap-badge">Próximamente</span>
-                    </div>
-                </div>
-            </div>
+    <section class="open-source-section" id="open-source">
+      <div class="container os-wrap reveal">
+        <div>
+          <p class="eyebrow">Built in the open</p>
+          <h2>Own your data, inspect the code, contribute improvements.</h2>
+          <p class="subtitle">Limbo is open source and self-hostable. You can run it on your own infrastructure and control your memory vault.</p>
         </div>
+        <div class="oss-card" data-repo="tomasward/limbo">
+          <p class="stars-label">GitHub stars</p>
+          <p class="stars-value" id="starsValue">--</p>
+          <a class="repo-link" href="https://github.com/tomasward/limbo" target="_blank" rel="noreferrer">View repository</a>
+        </div>
+      </div>
     </section>
 
-    <!-- Privacy Section -->
-    <section class="privacy-section">
-        <div class="container">
-            <div class="privacy-card animate-on-scroll">
-                <div class="privacy-icon">🔒</div>
-                <div class="privacy-content">
-                    <h3>¿Y mis datos?</h3>
-                    <p>Limbo procesa y guarda todo en tu propio servidor. Nosotros no vemos tus notas, no las indexamos, no las vendemos. Telegram es solo la interfaz — como el teclado. Tu vault vive en tu máquina.</p>
-                    <p class="privacy-subtext">¿No querés configurar nada? Lo hacemos nosotros por $9/mes.</p>
-                </div>
-            </div>
+    <section class="waitlist" id="waitlist">
+      <div class="container reveal">
+        <div class="waitlist-card">
+          <h2>Want early access?</h2>
+          <p>Join the list and we’ll invite you when onboarding opens.</p>
+          <form id="waitlistForm" class="waitlist-form">
+            <label class="sr-only" for="email">Email</label>
+            <input id="email" name="email" type="email" placeholder="you@company.com" required>
+            <button class="btn btn-primary" type="submit">Notify me</button>
+          </form>
+          <p id="waitlistMessage" class="waitlist-message">No spam. One launch email.</p>
         </div>
+      </div>
     </section>
+  </main>
 
-    <!-- Waitlist Section -->
-    <section class="waitlist-section" id="waitlist">
-        <div class="container">
-            <div class="waitlist-card animate-on-scroll">
-                <div class="waitlist-emoji">⚡</div>
-                <h2>Sé de los primeros en usarlo.</h2>
-                <p>Los primeros 200 tienen acceso anticipado y precio de early adopter.</p>
-                <form class="waitlist-form" id="waitlist-form">
-                    <input type="email" name="email" class="waitlist-input" placeholder="tu@email.com" required>
-                    <button type="submit" class="btn btn-primary">Reservar mi lugar</button>
-                </form>
-                <p class="waitlist-note">🎉 Lugar reservado. Te escribimos antes que nadie.</p>
-            </div>
-        </div>
-    </section>
+  <footer class="site-footer">
+    <div class="container footer-row">
+      <p>© 2026 Limbo</p>
+      <p>Made by Tomas Ward in Argentina</p>
+    </div>
+  </footer>
 
-    <!-- Footer -->
-    <footer>
-        <div class="container">
-            <div class="footer-logo">limbo</div>
-            <p class="footer-text">&copy; 2026 Limbo. Hecho con ❤️ en 🇦🇷 por Tomas Ward.</p>
-        </div>
-    </footer>
+  <script>
+    const audienceContent = {
+      dev: {
+        subtitle: 'For developers: self-host Limbo with one command, then save and recall anything from Telegram.',
+        microcopy: 'Install on your server, connect Telegram, and your memory assistant is live.',
+        chatUser: '"My VPS SSH key is in /home/tomas/.ssh/prod and rollback command is limbo rollback --last."',
+        chatAi: 'Saved. Ask me later: “How do I rollback Limbo?”'
+      },
+      everyone: {
+        subtitle: 'For everyone: send details once in Telegram and ask for them later like chatting with a trusted assistant.',
+        microcopy: 'No folders to maintain. Just send a message and Limbo handles organization.',
+        chatUser: '"My dentist is Dr. Cardenas, visit is on April 9 at 11:30, phone is 11-5544-3322."',
+        chatAi: 'Saved. Ask me later: “When is my dentist appointment?”'
+      }
+    };
 
-    <!-- Back to Top Button -->
-    <button class="back-to-top" id="backToTop" aria-label="Volver arriba">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="18 15 12 9 6 15"></polyline>
-        </svg>
-    </button>
+    const buttons = document.querySelectorAll('.audience-btn');
+    const subtitle = document.getElementById('heroSubtitle');
+    const microcopy = document.getElementById('heroMicrocopy');
+    const chatPreview = document.getElementById('chatPreview');
 
-    <script>
-        // Telegram demo conversation examples (static strings — no user input)
-        const tgExamples = [
-            {
-                userMsg: "Llevé el DeLorean al taller de Av. Rivadavia 8820. DMC DeLorean 1981, patente OUTATIME.",
-                botLines: ["Guardado ✓", "🚗 DeLorean 1981 · patente OUTATIME", "📍 Taller: Av. Rivadavia 8820"]
-            },
-            {
-                userMsg: "Mi póliza del auto es 4532-8876, de La Caja Seguros. Vence el 15 de marzo.",
-                botLines: ["Guardado ✓", "📋 Póliza: 4532-8876", "🏢 La Caja Seguros", "📅 Vence: 15 de marzo"]
-            },
-            {
-                userMsg: "El electricista es Raúl, 11-5544-3322. Cobra $15.000 la visita. Viene los martes.",
-                botLines: ["Guardado ✓", "👷 Raúl · electricista", "📞 11-5544-3322", "💰 $15.000 · martes"]
-            },
-            {
-                userMsg: "El vino de la cena se llamaba Clos de los Siete, Malbec 2019. Lo compramos en Urbano.",
-                botLines: ["Guardado ✓", "🍷 Clos de los Siete · Malbec 2019", "🛒 Comprado en Urbano"]
-            }
-        ];
+    function setAudience(audience) {
+      const content = audienceContent[audience];
+      subtitle.textContent = content.subtitle;
+      microcopy.textContent = content.microcopy;
+      chatPreview.innerHTML = `<p class="chat-user">${content.chatUser}</p><p class="chat-ai">${content.chatAi}</p>`;
 
-        let tgCurrentIndex = 0;
-        const tgBody = document.getElementById('tg-body');
-        const tgTypingSpan = document.getElementById('tg-typing');
-        let tgAnimating = false;
+      buttons.forEach((btn) => {
+        const selected = btn.dataset.audience === audience;
+        btn.classList.toggle('is-active', selected);
+        btn.setAttribute('aria-selected', String(selected));
+      });
+    }
 
-        function createTgMessage(lines, type) {
-            const el = document.createElement('div');
-            el.className = 'tg-message tg-message-' + type;
-            lines.forEach((line, i) => {
-                if (i > 0) el.appendChild(document.createElement('br'));
-                el.appendChild(document.createTextNode(line));
-            });
-            return el;
-        }
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => setAudience(btn.dataset.audience));
+    });
 
-        function createTgTypingDots() {
-            const el = document.createElement('div');
-            el.className = 'tg-message tg-message-in tg-typing-dots';
-            for (let i = 0; i < 3; i++) el.appendChild(document.createElement('span'));
-            return el;
-        }
+    const copyButton = document.getElementById('copyCommand');
+    copyButton.addEventListener('click', async () => {
+      const command = document.getElementById('installCommand').textContent;
+      try {
+        await navigator.clipboard.writeText(command);
+        copyButton.textContent = 'Copied';
+        setTimeout(() => {
+          copyButton.textContent = 'Copy';
+        }, 1400);
+      } catch {
+        copyButton.textContent = 'Copy manually';
+      }
+    });
 
-        function typeInInput(text, callback) {
-            let i = 0;
-            tgTypingSpan.textContent = '';
-            const interval = setInterval(() => {
-                tgTypingSpan.textContent += text[i];
-                i++;
-                if (i >= text.length) { clearInterval(interval); callback(); }
-            }, 38);
-        }
+    async function loadStars() {
+      const card = document.querySelector('.oss-card');
+      const starsValue = document.getElementById('starsValue');
+      if (!card || !starsValue) return;
 
-        function runTgDemo(index) {
-            if (tgAnimating) return;
-            tgAnimating = true;
-            const example = tgExamples[index];
-            tgBody.textContent = '';
-            tgTypingSpan.textContent = '';
+      const repo = card.dataset.repo;
+      try {
+        const response = await fetch(`https://api.github.com/repos/${repo}`);
+        if (!response.ok) throw new Error('GitHub API unavailable');
+        const data = await response.json();
+        starsValue.textContent = Number(data.stargazers_count || 0).toLocaleString();
+      } catch {
+        starsValue.textContent = 'Open';
+      }
+    }
 
-            setTimeout(() => {
-                typeInInput(example.userMsg, () => {
-                    setTimeout(() => {
-                        tgTypingSpan.textContent = '';
-                        tgBody.appendChild(createTgMessage([example.userMsg], 'out'));
-                        tgBody.scrollTop = tgBody.scrollHeight;
+    document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+      anchor.addEventListener('click', (event) => {
+        const target = document.querySelector(anchor.getAttribute('href'));
+        if (!target) return;
+        event.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
 
-                        setTimeout(() => {
-                            const dots = createTgTypingDots();
-                            tgBody.appendChild(dots);
-                            tgBody.scrollTop = tgBody.scrollHeight;
-
-                            setTimeout(() => {
-                                tgBody.removeChild(dots);
-                                tgBody.appendChild(createTgMessage(example.botLines, 'in'));
-                                tgBody.scrollTop = tgBody.scrollHeight;
-                                tgAnimating = false;
-                            }, 1200);
-                        }, 400);
-                    }, 500);
-                });
-            }, 600);
-        }
-
-        runTgDemo(0);
-        setInterval(() => {
-            if (!tgAnimating) {
-                tgCurrentIndex = (tgCurrentIndex + 1) % tgExamples.length;
-                runTgDemo(tgCurrentIndex);
-            }
-        }, 10000);
-
-        // Smooth scroll
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) entry.target.classList.add('in-view');
         });
+      },
+      { threshold: 0.14 }
+    );
 
-        // Scroll-lock steps
-        const stepsContainer = document.querySelector('.steps-scroll-container');
-        const scrollSteps = document.querySelectorAll('.scroll-step');
-        const progressDots = document.querySelectorAll('.progress-dot');
-        const totalSteps = scrollSteps.length;
+    document.querySelectorAll('.reveal').forEach((node) => observer.observe(node));
 
-        function updateScrollSteps() {
-            if (!stepsContainer) return;
-            const r = stepsContainer.getBoundingClientRect();
-            const progress = Math.max(0, Math.min(1, -r.top / (r.height - window.innerHeight)));
-            const stepIndex = Math.min(totalSteps - 1, Math.floor(progress * totalSteps));
-            scrollSteps.forEach((s, i) => s.classList.toggle('active', i === stepIndex));
-            progressDots.forEach((d, i) => d.classList.toggle('active', i === stepIndex));
-            const hint = document.querySelector('.scroll-hint');
-            if (hint) hint.classList.toggle('hidden', stepIndex === totalSteps - 1);
-        }
+    document.getElementById('waitlistForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const message = document.getElementById('waitlistMessage');
+      message.textContent = 'Thanks. You are on the list.';
+      event.target.reset();
+    });
 
-        window.addEventListener('scroll', updateScrollSteps, { passive: true });
-        updateScrollSteps();
-
-        // Back to top
-        const backToTopBtn = document.getElementById('backToTop');
-        window.addEventListener('scroll', () => {
-            backToTopBtn.classList.toggle('visible', window.scrollY > 400);
-        }, { passive: true });
-        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-
-        // Waitlist form
-        document.getElementById('waitlist-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const note = document.querySelector('.waitlist-note');
-            submitBtn.disabled = true;
-            submitBtn.textContent = '¡Listo! ✓';
-            submitBtn.style.background = '#10b981';
-            note.textContent = '✅ ¡Listo! Sos parte del acceso anticipado.';
-            note.style.color = '#10b981';
-            this.reset();
-            setTimeout(() => {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Reservar mi lugar';
-                submitBtn.style.background = '';
-                note.textContent = '🎉 Lugar reservado. Te escribimos antes que nadie.';
-                note.style.color = '';
-            }, 3000);
-        });
-
-        // Scroll animations
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
-        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
-        document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
-    </script>
+    loadStars();
+  </script>
 </body>
 </html>
