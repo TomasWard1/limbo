@@ -61,6 +61,16 @@ log "INFO  Migrations OK"
 export MCPORTER_CONFIG=/app/mcporter.json
 log "INFO  mcporter configured — MCPORTER_CONFIG=$MCPORTER_CONFIG"
 
+# ── Point OpenClaw at our rendered config ─────────────────────────────────────
+export OPENCLAW_CONFIG_PATH=/app/openclaw.json
+
+# ── Gateway auth token (generate if not pre-set) ─────────────────────────────
+if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
+  OPENCLAW_GATEWAY_TOKEN="$(head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 32)"
+  log "INFO  Generated OPENCLAW_GATEWAY_TOKEN (not pre-set)"
+fi
+export OPENCLAW_GATEWAY_TOKEN
+
 # ── Start OpenClaw gateway ────────────────────────────────────────────────────
-log "INFO  Starting OpenClaw gateway"
-exec openclaw serve --config /app/openclaw.json
+log "INFO  Starting OpenClaw gateway (token auth, loopback)"
+exec openclaw gateway run --port 18789 --bind loopback
