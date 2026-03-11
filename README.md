@@ -30,6 +30,28 @@ Limbo binds to `127.0.0.1:18789`. Connect via the OpenClaw gateway or Telegram b
 
 ---
 
+## One-Line Installer
+
+Canonical installer URL:
+
+```sh
+https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh
+```
+
+Run directly:
+
+```sh
+curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh | bash
+```
+
+Run with explicit sudo escalation:
+
+```sh
+sudo bash <(curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh)
+```
+
+---
+
 ## Release Channel (GHCR)
 
 Stable deploys should use a pinned semver image tag via `LIMBO_IMAGE_TAG`.
