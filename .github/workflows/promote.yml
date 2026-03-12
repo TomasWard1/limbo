@@ -1,0 +1,64 @@
+name: Promote staging to main
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine bump type from staging commits
+        id: bump
+        run: |
+          COMMITS=$(git log origin/main..origin/staging --pretty=format:"%s" 2>/dev/null || echo "")
+          echo "--- Commits on staging not on main ---"
+          echo "$COMMITS"
+
+          if echo "$COMMITS" | grep -qE "^feat(\(.+\))?!:|BREAKING CHANGE"; then
+            TYPE="feat!"
+          elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+            TYPE="feat"
+          elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:"; then
+            TYPE="fix"
+          else
+            TYPE="chore"
+          fi
+          echo "type=$TYPE" >> "$GITHUB_OUTPUT"
+
+      - name: Check for existing PR
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh pr list --base main --head staging --json number --jq '.[0].number // empty')
+          echo "pr_number=$existing" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR to main
+        if: steps.check.outputs.pr_number == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUMP_TYPE: ${{ steps.bump.outputs.type }}
+        run: |
+          gh pr create \
+            --base main \
+            --head staging \
+            --title "${BUMP_TYPE}: promote staging to main" \
+            --body "Automated promotion PR from staging. Merge after CI passes."
+
+      - name: Update existing PR title
+        if: steps.check.outputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUMP_TYPE: ${{ steps.bump.outputs.type }}
+          PR_NUMBER: ${{ steps.check.outputs.pr_number }}
+        run: |
+          gh pr edit "$PR_NUMBER" \
+            --title "${BUMP_TYPE}: promote staging to main"
