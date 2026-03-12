@@ -6,3 +6,8 @@ node_modules/
 *.log
 data/
 .worktrees/
+.vercel
+
+# Agent runtime data (personal memory, daily notes, plans)
+agents/*/life/
+agents/*/memory/

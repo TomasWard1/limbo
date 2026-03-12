@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # install.sh — Limbo one-line installer
-# Usage: curl -fsSL https://get.limbo.ar | bash
+# Usage: curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh | bash
 set -euo pipefail
+
+INSTALLER_URL="https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh"
+COMPOSE_URL="https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/docker-compose.yml"
 
 # ─── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -22,7 +25,7 @@ header "=== Limbo Installer ==="
 
 # Root check
 if [[ $EUID -ne 0 ]]; then
-  die "This script must be run as root. Try: sudo bash <(curl -fsSL https://get.limbo.ar)"
+  die "This script must be run as root. Try: sudo bash <(curl -fsSL ${INSTALLER_URL})"
 fi
 
 # OS detection — Ubuntu / Debian only
@@ -144,26 +147,41 @@ fi
 
 # ─── Write .env ───────────────────────────────────────────────────────────────
 header "Writing /opt/limbo/.env..."
+LIMBO_IMAGE_TAG="${LIMBO_IMAGE_TAG:-1.0.0}"
 cat > /opt/limbo/.env <<EOF
 LLM_API_KEY=${LLM_API_KEY}
 MODEL_PROVIDER=${MODEL_PROVIDER}
 MODEL_NAME=${MODEL_NAME}
 TELEGRAM_ENABLED=${TELEGRAM_ENABLED}
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+LIMBO_IMAGE_TAG=${LIMBO_IMAGE_TAG}
 EOF
 chmod 600 /opt/limbo/.env
 ok ".env written."
 
 # ─── Download docker-compose.yml ──────────────────────────────────────────────
 header "Downloading docker-compose.yml..."
-COMPOSE_URL="https://raw.githubusercontent.com/tomasward1/limbo/main/docker-compose.yml"
 curl -fsSL "$COMPOSE_URL" -o /opt/limbo/docker-compose.yml
 ok "docker-compose.yml downloaded."
 
 # ─── Start Limbo ─────────────────────────────────────────────────────────────
 header "Starting Limbo..."
 cd /opt/limbo
-docker compose pull -q
+if docker compose pull -q; then
+  ok "Pulled image from GHCR."
+else
+  warn "Could not pull ghcr.io image (likely private or unavailable). Falling back to source build."
+  SRC_DIR="/opt/limbo/src"
+  rm -rf "$SRC_DIR"
+  if ! command -v git &>/dev/null; then
+    log "Installing git for source fallback..."
+    apt-get update -qq
+    apt-get install -y -qq git
+  fi
+  git clone --depth 1 https://github.com/tomasward1/limbo.git "$SRC_DIR"
+  docker build -t "ghcr.io/tomasward1/limbo:${LIMBO_IMAGE_TAG}" "$SRC_DIR"
+  ok "Built image locally: ghcr.io/tomasward1/limbo:${LIMBO_IMAGE_TAG}"
+fi
 docker compose up -d
 ok "Container started."
 

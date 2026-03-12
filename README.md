@@ -30,6 +30,56 @@ Limbo binds to `127.0.0.1:18789`. Connect via the OpenClaw gateway or Telegram b
 
 ---
 
+## One-Line Installer
+
+Canonical installer URL:
+
+```sh
+https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh
+```
+
+Run directly:
+
+```sh
+curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh | bash
+```
+
+Run with explicit sudo escalation:
+
+```sh
+sudo bash <(curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh)
+```
+
+---
+
+## Release Channel (GHCR)
+
+Stable deploys should use a pinned semver image tag via `LIMBO_IMAGE_TAG`.
+
+- Release workflow source: `.github/workflows/release-ghcr.yml`
+- Published tags per release tag `vX.Y.Z`:
+  - `ghcr.io/tomasward1/limbo:X.Y.Z`
+  - `ghcr.io/tomasward1/limbo:X`
+  - `ghcr.io/tomasward1/limbo:latest`
+
+Create a release tag:
+
+```sh
+git tag -a v1.0.0 -m "Limbo v1.0.0"
+git push origin v1.0.0
+```
+
+Verify public pull (no credentials):
+
+```sh
+docker logout ghcr.io
+docker manifest inspect ghcr.io/tomasward1/limbo:1.0.0
+docker pull ghcr.io/tomasward1/limbo:1.0.0
+```
+
+If GHCR pull is denied (for example, private package or temporary registry policy), the installer automatically falls back to building from source on the target host.
+
+---
 ## Environment Variables
 
 Copy `.env.example` to `.env` and set:
@@ -42,6 +92,7 @@ Copy `.env.example` to `.env` and set:
 | `MODEL_NAME` | no | `claude-sonnet-4-6` | Model name (e.g. `claude-sonnet-4-6`, `codex-mini-latest`, `gpt-4o`) |
 | `TELEGRAM_ENABLED` | no | `false` | Enable Telegram bot integration |
 | `TELEGRAM_BOT_TOKEN` | no | — | Telegram bot token (required if `TELEGRAM_ENABLED=true`) |
+| `TELEGRAM_AUTO_PAIR_FIRST_DM` | no | `true` | Auto-approves the first Telegram DM sender and persists access (MVP-friendly onboarding) |
 
 > \* Either `LLM_API_KEY` **or** `ANTHROPIC_API_KEY` is required. `LLM_API_KEY` takes precedence if both are set.
 
