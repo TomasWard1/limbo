@@ -1,5 +1,5 @@
 {
-  "name": "limbo",
+  "name": "limbo-ai",
   "version": "1.0.0",
   "description": "Your personal AI memory agent — install and manage Limbo via npx",
   "type": "commonjs",
