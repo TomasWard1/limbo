@@ -17,7 +17,7 @@ const LIMBO_DIR = path.join(os.homedir(), '.limbo');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
-const DEFAULT_TAG = 'latest';
+const DEFAULT_TAG = require('./package.json').version;
 const PORT = 18789;
 
 // OpenClaw compatibility snapshots from official docs:
@@ -348,6 +348,7 @@ async function selectMenu(question, options, lang) {
 
   return new Promise((resolve) => {
     let selectedIndex = 0;
+    let lastRenderLineCount = 0;
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     readline.emitKeypressEvents(process.stdin, rl);
     const previousRawMode = process.stdin.isRaw;
@@ -361,9 +362,20 @@ async function selectMenu(question, options, lang) {
     }
 
     function draw() {
+      const output = renderMenu(question, options, selectedIndex, lang);
+      if (lastRenderLineCount > 0) {
+        readline.moveCursor(process.stdout, 0, -lastRenderLineCount);
+      }
+      for (let i = 0; i < lastRenderLineCount; i++) {
+        readline.clearLine(process.stdout, 0);
+        if (i < lastRenderLineCount - 1) readline.moveCursor(process.stdout, 0, 1);
+      }
+      if (lastRenderLineCount > 0) {
+        readline.moveCursor(process.stdout, 0, -Math.max(lastRenderLineCount - 1, 0));
+      }
       readline.cursorTo(process.stdout, 0);
-      readline.clearScreenDown(process.stdout);
-      process.stdout.write(`${renderMenu(question, options, selectedIndex, lang)}\n`);
+      process.stdout.write(output);
+      lastRenderLineCount = output.split('\n').length;
     }
 
     function onKeypress(_, key = {}) {
