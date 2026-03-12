@@ -44,7 +44,11 @@ jobs:
       - name: Create PR to main
         if: steps.check.outputs.pr_number == ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN cannot create PRs unless the repo setting
+          # "Allow GitHub Actions to create and approve pull requests" is enabled.
+          # Use a fine-grained PAT (LIMBO_PAT) with pull_requests:write + contents:read
+          # to bypass that restriction. See: Settings > Actions > General.
+          GH_TOKEN: ${{ secrets.LIMBO_PAT || secrets.GITHUB_TOKEN }}
           BUMP_TYPE: ${{ steps.bump.outputs.type }}
         run: |
           gh pr create \
