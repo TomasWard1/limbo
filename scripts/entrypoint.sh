@@ -42,6 +42,39 @@ if [ "$MODEL_PROVIDER" = "anthropic" ] && [ -n "$LLM_API_KEY" ] && [ -z "$ANTHRO
   ANTHROPIC_API_KEY="$LLM_API_KEY"
 fi
 
+# ── Validate and resolve API key ─────────────────────────────────────────────
+# Accept LLM_API_KEY (generic) or ANTHROPIC_API_KEY (backwards compat).
+# For OpenRouter, also accept OPENROUTER_API_KEY directly.
+case "$MODEL_PROVIDER" in
+  openrouter)
+    # Prefer explicit OPENROUTER_API_KEY, then fall back to LLM_API_KEY
+    LLM_API_KEY="${LLM_API_KEY:-${OPENROUTER_API_KEY:-}}"
+    if [ -z "$LLM_API_KEY" ]; then
+      log "ERROR LLM_API_KEY (or OPENROUTER_API_KEY) is required for MODEL_PROVIDER=openrouter"
+      exit 1
+    fi
+    export OPENROUTER_API_KEY="$LLM_API_KEY"
+    ;;
+  openai)
+    # Prefer explicit OPENAI_API_KEY, then fall back to LLM_API_KEY
+    LLM_API_KEY="${LLM_API_KEY:-${OPENAI_API_KEY:-}}"
+    if [ -z "$LLM_API_KEY" ]; then
+      log "ERROR LLM_API_KEY (or OPENAI_API_KEY) is required for MODEL_PROVIDER=openai"
+      exit 1
+    fi
+    export OPENAI_API_KEY="$LLM_API_KEY"
+    ;;
+  *)
+    # anthropic (default) — accept LLM_API_KEY or legacy ANTHROPIC_API_KEY
+    LLM_API_KEY="${LLM_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+    if [ -z "$LLM_API_KEY" ]; then
+      log "ERROR LLM_API_KEY (or ANTHROPIC_API_KEY for backwards compat) is required"
+      exit 1
+    fi
+    export ANTHROPIC_API_KEY="$LLM_API_KEY"
+    ;;
+esac
+
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
 mkdir -p /data/db /data/backups /data/logs /data/vault /data/config "$OPENCLAW_STATE_DIR"
 
