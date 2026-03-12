@@ -86,15 +86,18 @@ Copy `.env.example` to `.env` and set:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `LLM_API_KEY` | **yes*** | — | API key for your chosen model provider (Anthropic or OpenAI) |
-| `ANTHROPIC_API_KEY` | **yes*** | — | Legacy alias for `LLM_API_KEY` — accepted for backwards compatibility |
-| `MODEL_PROVIDER` | no | `anthropic` | Model provider: `anthropic` or `openai` |
-| `MODEL_NAME` | no | `claude-sonnet-4-6` | Model name (e.g. `claude-sonnet-4-6`, `codex-mini-latest`, `gpt-4o`) |
+| `AUTH_MODE` | no | `api-key` | `api-key` or `subscription` |
+| `OPENAI_API_KEY` | no* | — | OpenAI API key for `MODEL_PROVIDER=openai` |
+| `ANTHROPIC_API_KEY` | no* | — | Anthropic API key for `MODEL_PROVIDER=anthropic` |
+| `LLM_API_KEY` | no | — | Legacy generic key path for older installs |
+| `MODEL_PROVIDER` | no | `anthropic` | Model provider: `anthropic`, `openai`, or `openai-codex` |
+| `MODEL_NAME` | no | `claude-opus-4-6` | Model name (e.g. `claude-opus-4-6`, `claude-sonnet-4-6`, `gpt-5.4`) |
 | `TELEGRAM_ENABLED` | no | `false` | Enable Telegram bot integration |
 | `TELEGRAM_BOT_TOKEN` | no | — | Telegram bot token (required if `TELEGRAM_ENABLED=true`) |
 | `TELEGRAM_AUTO_PAIR_FIRST_DM` | no | `true` | Auto-approves the first Telegram DM sender and persists access (MVP-friendly onboarding) |
+| `OPENCLAW_GATEWAY_TOKEN` | no | generated | Stable gateway token for OpenClaw-compatible clients |
 
-> \* Either `LLM_API_KEY` **or** `ANTHROPIC_API_KEY` is required. `LLM_API_KEY` takes precedence if both are set.
+> \* API keys are required only for `AUTH_MODE=api-key`. Subscription auth uses OpenClaw auth profiles instead.
 
 ---
 

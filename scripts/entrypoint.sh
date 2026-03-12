@@ -19,24 +19,31 @@ log() {
 log "INFO  Limbo container starting"
 
 # ── Validate required env vars ───────────────────────────────────────────────
-# Accept LLM_API_KEY (generic) or ANTHROPIC_API_KEY (backwards compat)
-if [ -z "${LLM_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-  log "ERROR LLM_API_KEY (or ANTHROPIC_API_KEY for backwards compat) is required"
-  exit 1
-fi
-
-# Resolve to LLM_API_KEY — prefer explicit, fall back to legacy var
-LLM_API_KEY="${LLM_API_KEY:-$ANTHROPIC_API_KEY}"
+# API key auth is optional now because OpenClaw can also use persisted auth profiles.
+# Keep the legacy LLM_API_KEY path for backwards compatibility.
+LLM_API_KEY="${LLM_API_KEY:-}"
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 MODEL_PROVIDER="${MODEL_PROVIDER:-anthropic}"
-MODEL_NAME="${MODEL_NAME:-claude-sonnet-4-6}"
+MODEL_NAME="${MODEL_NAME:-claude-opus-4-6}"
 TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TELEGRAM_AUTO_PAIR_FIRST_DM="${TELEGRAM_AUTO_PAIR_FIRST_DM:-true}"
+OPENAI_API_KEY="${OPENAI_API_KEY:-}"
+ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
+OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/home/limbo/.openclaw}"
+OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-$OPENCLAW_STATE_DIR/openclaw.json}"
+
+if [ "$MODEL_PROVIDER" = "openai" ] && [ -n "$LLM_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
+  OPENAI_API_KEY="$LLM_API_KEY"
+fi
+
+if [ "$MODEL_PROVIDER" = "anthropic" ] && [ -n "$LLM_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+  ANTHROPIC_API_KEY="$LLM_API_KEY"
+fi
 
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
-mkdir -p /data/db /data/backups /data/logs /data/vault
+mkdir -p /data/db /data/backups /data/logs /data/vault /data/config "$OPENCLAW_STATE_DIR"
 
 # ── Bootstrap workspace (first-run: seed from baked-in template) ──────────────
 if [ ! -d /data/workspace ]; then
@@ -44,14 +51,16 @@ if [ ! -d /data/workspace ]; then
   cp -r /app/workspace /data/workspace
 fi
 
-# ── Generate openclaw.json from template ─────────────────────────────────────
-log "INFO  Generating /app/openclaw.json from template"
-
-export MODEL_PROVIDER MODEL_NAME LLM_API_KEY TELEGRAM_ENABLED TELEGRAM_BOT_TOKEN
-envsubst '$MODEL_PROVIDER $MODEL_NAME $LLM_API_KEY $TELEGRAM_ENABLED $TELEGRAM_BOT_TOKEN' \
-  < /app/openclaw.json.template > /app/openclaw.json
-
-log "INFO  openclaw.json written"
+# ── Generate OpenClaw config only if one does not exist already ──────────────
+if [ ! -f "$OPENCLAW_CONFIG_PATH" ]; then
+  log "INFO  No persisted OpenClaw config found — generating fallback config"
+  export MODEL_PROVIDER MODEL_NAME TELEGRAM_ENABLED TELEGRAM_BOT_TOKEN OPENAI_API_KEY ANTHROPIC_API_KEY OPENCLAW_STATE_DIR OPENCLAW_CONFIG_PATH
+  envsubst '$MODEL_PROVIDER $MODEL_NAME $TELEGRAM_ENABLED $TELEGRAM_BOT_TOKEN' \
+    < /app/openclaw.json.template > "$OPENCLAW_CONFIG_PATH"
+  log "INFO  OpenClaw config written to $OPENCLAW_CONFIG_PATH"
+else
+  log "INFO  Using persisted OpenClaw config at $OPENCLAW_CONFIG_PATH"
+fi
 
 # ── Run migrations ────────────────────────────────────────────────────────────
 log "INFO  Running migration runner"
@@ -60,10 +69,9 @@ log "INFO  Migrations OK"
 
 # ── Configure mcporter ────────────────────────────────────────────────────────
 export MCPORTER_CONFIG=/app/mcporter.json
+export OPENCLAW_STATE_DIR
 log "INFO  mcporter configured — MCPORTER_CONFIG=$MCPORTER_CONFIG"
-
-# ── Point OpenClaw at our rendered config ─────────────────────────────────────
-export OPENCLAW_CONFIG_PATH=/app/openclaw.json
+export OPENCLAW_CONFIG_PATH
 
 # ── Gateway auth token (generate if not pre-set) ─────────────────────────────
 if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
