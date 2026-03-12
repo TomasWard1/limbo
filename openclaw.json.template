@@ -7,7 +7,7 @@
   },
   "agents": {
     "defaults": {
-      "model": "${MODEL_PROVIDER}/${MODEL_NAME}",
+      "model": { "primary": "${MODEL_PROVIDER}/${MODEL_NAME}" },
       "workspace": "/data/workspace"
     }
   },

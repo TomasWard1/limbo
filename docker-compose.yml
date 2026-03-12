@@ -1,13 +1,17 @@
 services:
   limbo:
-    image: ghcr.io/tomasward1/limbo:${LIMBO_IMAGE_TAG:-1.0.0}
+    image: ghcr.io/tomasward1/limbo:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:18789:18789"
     volumes:
       - limbo-data:/data
+      - limbo-openclaw-state:/home/limbo/.openclaw
     env_file:
       - .env
+    environment:
+      OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
+      OPENCLAW_STATE_DIR: /home/limbo/.openclaw
     healthcheck:
       test:
         [
@@ -21,3 +25,4 @@ services:
 
 volumes:
   limbo-data:
+  limbo-openclaw-state:
