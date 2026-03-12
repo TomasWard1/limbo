@@ -4,7 +4,7 @@
   "description": "Your personal AI memory agent — install and manage Limbo via npx",
   "type": "commonjs",
   "bin": {
-    "limbo": "./cli.js"
+    "limbo": "cli.js"
   },
   "engines": {
     "node": ">=18"
@@ -23,6 +23,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TomasWard1/limbo.git"
+    "url": "git+https://github.com/TomasWard1/limbo.git"
   }
 }
