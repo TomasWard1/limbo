@@ -756,20 +756,47 @@
   if (chatMockup) chatObserver.observe(chatMockup);
 
   // ── Waitlist form ──────────────────────────────────────────
+  var WAITLIST_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzN7OPKpZtQ12kAc1iV-UwUnJrJwhB7eNxheBOqcC0kuakTunZFa0QIrtnmdwEn0TIo/exec';
+
   window.handleWaitlist = function(e, formId) {
     e.preventDefault();
     var form = document.getElementById(formId);
     var btn = form.querySelector('.waitlist-submit');
     var input = form.querySelector('.waitlist-input');
+    var email = input.value.trim();
+    var originalBtnHTML = btn.innerHTML;
+
     btn.disabled = true;
-    btn.innerHTML = state.lang === 'es' ? '¡Listo! ✓' : 'Done! ✓';
-    btn.style.background = '#3D8A5A';
-    input.value = '';
-    setTimeout(function() {
-      btn.disabled = false;
-      btn.style.background = '';
-      btn.innerHTML = state.lang === 'es' ? 'Unirse a la lista' : 'Join Waitlist';
-    }, 3000);
+    btn.innerHTML = state.lang === 'es' ? 'Enviando...' : 'Sending...';
+
+    var formData = new FormData();
+    formData.append('email', email);
+
+    fetch(WAITLIST_SCRIPT_URL, { method: 'POST', body: formData })
+      .then(function(res) { return res.json(); })
+      .then(function(result) {
+        if (result.status === 'success') {
+          btn.innerHTML = state.lang === 'es' ? '¡Listo! ✓' : 'Done! ✓';
+          btn.style.background = '#3D8A5A';
+          input.value = '';
+          setTimeout(function() {
+            btn.disabled = false;
+            btn.style.background = '';
+            btn.innerHTML = originalBtnHTML;
+          }, 3000);
+        } else {
+          throw new Error('Submission failed');
+        }
+      })
+      .catch(function() {
+        btn.innerHTML = state.lang === 'es' ? 'Error - Intentá de nuevo' : 'Error - Try again';
+        btn.style.background = '#ef4444';
+        setTimeout(function() {
+          btn.disabled = false;
+          btn.style.background = '';
+          btn.innerHTML = originalBtnHTML;
+        }, 3000);
+      });
   };
 
   // ── GitHub stars ───────────────────────────────────────────
