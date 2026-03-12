@@ -23,7 +23,7 @@ This will:
 2. Write `~/.limbo/.env` and `~/.limbo/docker-compose.yml`
 3. Pull the latest Limbo image and start the container
 
-Limbo binds to `127.0.0.1:18789`. Connect via the OpenClaw gateway or Telegram bot.
+Limbo binds to `127.0.0.1:18789`.
 
 ### Available commands
 
@@ -40,27 +40,39 @@ npx limbo-ai start --reconfigure   # Change API keys or settings
 
 ## Updating
 
-To pull the latest Limbo image and restart:
-
 ```sh
 npx limbo-ai update
 ```
 
-This runs `docker compose pull` followed by `docker compose up -d` in `~/.limbo`. Your vault data is persisted in the `limbo-data` Docker volume and is not affected by updates.
+Pulls the latest Limbo image and restarts the container. Your vault data is persisted in the `limbo-data` Docker volume and is not affected.
 
 ---
 
-## Agent Instructions
+## Connecting
 
-Limbo exposes an MCP server on the running container. To connect an AI agent (Claude Code, Claude Desktop, or any OpenClaw-compatible client) to your Limbo instance, point it at the WebSocket gateway:
+The easiest way to talk to Limbo is via **Telegram** — set up once, works from any device.
+
+For everything else, Limbo speaks over WebSocket at `ws://localhost:18789` via the OpenClaw gateway. Any OpenClaw-compatible client can connect there directly.
+
+### Telegram (recommended)
+
+Set `TELEGRAM_ENABLED=true` and `TELEGRAM_BOT_TOKEN` in `~/.limbo/.env`, then restart:
+
+```sh
+npx limbo-ai start --reconfigure
+```
+
+Message your bot and Limbo will respond.
+
+### Without Telegram
+
+Connect any [OpenClaw](https://openclaw.dev)-compatible client to:
 
 ```
 ws://localhost:18789
 ```
 
-### Claude Code (MCP config)
-
-Add to your project's `.claude/mcp.json` or `~/.claude/mcp.json`:
+This includes Claude Code — add Limbo to your MCP config:
 
 ```json
 {
@@ -70,45 +82,6 @@ Add to your project's `.claude/mcp.json` or `~/.claude/mcp.json`:
     }
   }
 }
-```
-
-### OpenClaw (direct)
-
-Point any OpenClaw-compatible client at `ws://localhost:18789`.
-
-### Telegram
-
-Set `TELEGRAM_ENABLED=true` and `TELEGRAM_BOT_TOKEN` in `~/.limbo/.env`, then restart:
-
-```sh
-npx limbo-ai start --reconfigure
-```
-
----
-
-## Release Channel (GHCR)
-
-Stable deploys should use a pinned semver image tag via `LIMBO_IMAGE_TAG`.
-
-- Release workflow source: `.github/workflows/release-ghcr.yml`
-- Published tags per release tag `vX.Y.Z`:
-  - `ghcr.io/tomasward1/limbo:X.Y.Z`
-  - `ghcr.io/tomasward1/limbo:X`
-  - `ghcr.io/tomasward1/limbo:latest`
-
-Create a release tag:
-
-```sh
-git tag -a v1.0.0 -m "Limbo v1.0.0"
-git push origin v1.0.0
-```
-
-Verify public pull (no credentials):
-
-```sh
-docker logout ghcr.io
-docker manifest inspect ghcr.io/tomasward1/limbo:1.0.0
-docker pull ghcr.io/tomasward1/limbo:1.0.0
 ```
 
 ---
@@ -153,12 +126,13 @@ Full tool specs in `workspace/TOOLS.md`.
 │              Docker Container           │
 │                                         │
 │  ┌─────────────┐    ┌────────────────┐  │
-│  │  OpenClaw   │◄──►│  Claude (LLM)  │  │
-│  │  Gateway    │    └────────┬───────┘  │
-│  │  :18789     │             │          │
-│  └──────┬──────┘    ┌────────▼───────┐  │
-│         │           │  MCP Server    │  │
-│  Telegram Bot        │  limbo-vault  │  │
+│  │  OpenClaw   │◄──►│  LLM (Claude   │  │
+│  │  Gateway    │    │  or OpenAI)    │  │
+│  │  :18789     │    └────────┬───────┘  │
+│  └──────┬──────┘             │          │
+│         │           ┌────────▼───────┐  │
+│  Telegram Bot        │  MCP Server   │  │
+│         │           │  limbo-vault  │  │
 │         │           └────────┬───────┘  │
 │         └────────────────────┤          │
 │                              ▼          │
@@ -167,7 +141,7 @@ Full tool specs in `workspace/TOOLS.md`.
 └─────────────────────────────────────────┘
 ```
 
-- **OpenClaw** — gateway that wraps the Claude API with MCP tool support and optional Telegram integration
+- **OpenClaw** — gateway that handles client connections, routes to the LLM, and integrates MCP tools
 - **MCP server** — Node.js server providing vault read/write tools
 - **Vault** — plain markdown files with YAML frontmatter, persisted in a named Docker volume
 - **Migrations** — lightweight Node.js migration runner for vault schema changes
@@ -214,3 +188,7 @@ docker run --rm -e LLM_API_KEY=sk-ant-... -p 18789:18789 limbo:dev
 ```sh
 node migrations/index.js
 ```
+
+---
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for release and deployment process.
