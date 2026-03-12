@@ -22,7 +22,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Update npm for trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.6.2
 
       - name: Determine version bump
         id: bump
@@ -70,6 +70,8 @@ jobs:
 
       - name: Publish
         if: steps.bump.outputs.type != 'none'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public
 
       - name: Commit version bump and tag
