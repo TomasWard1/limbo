@@ -1,0 +1,26 @@
+# Dev and CI files
+.github/
+.worktrees/
+agents/
+docs/
+web/
+
+# Docker files (not needed for npm CLI)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Config and templates
+openclaw.json.template
+mcporter.json
+vercel.json
+.env*
+
+# Workspace (baked into Docker, not npm)
+workspace/
+
+# Internal files
+migrations/
+scripts/
+PROJECT.md
+CLAUDE.md
