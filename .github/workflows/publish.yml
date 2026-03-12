@@ -76,6 +76,14 @@ jobs:
           echo "new_tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing version: $VERSION (bump: ${{ steps.bump.outputs.type }})"
 
+      - name: Normalize image name
+        if: steps.bump.outputs.type != 'none'
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          echo "name=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU (multi-arch)
         if: steps.bump.outputs.type != 'none'
         uses: docker/setup-qemu-action@v3
@@ -100,19 +108,20 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.new_version }}
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.minor_version }}
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.major_version }}
-            ghcr.io/${{ github.repository }}:latest
+            ${{ steps.image.outputs.name }}:${{ steps.version.outputs.new_version }}
+            ${{ steps.image.outputs.name }}:${{ steps.version.outputs.minor_version }}
+            ${{ steps.image.outputs.name }}:${{ steps.version.outputs.major_version }}
+            ${{ steps.image.outputs.name }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Smoke test published image
         if: steps.bump.outputs.type != 'none'
         env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
           IMAGE_VERSION: ${{ steps.version.outputs.new_version }}
         run: |
-          IMAGE="ghcr.io/${{ github.repository }}:${IMAGE_VERSION}"
+          IMAGE="${IMAGE_NAME}:${IMAGE_VERSION}"
           echo "Pulling $IMAGE for smoke test..."
           docker pull --platform linux/amd64 "$IMAGE"
 
