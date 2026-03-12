@@ -1,15 +1,21 @@
-name: Publish to npm
+name: Release
 
 on:
   push:
     branches: [main]
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
-  publish:
+  release:
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,9 +33,6 @@ jobs:
       - name: Determine version bump
         id: bump
         run: |
-          REMOTE=$(npm view limbo-ai version 2>/dev/null || echo "0.0.0")
-          echo "remote=$REMOTE" >> "$GITHUB_OUTPUT"
-
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$LAST_TAG" ]; then
             RANGE="HEAD"
@@ -55,20 +58,76 @@ jobs:
             echo "type=none" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set version from npm + bump
+      - name: Stop if no releasable changes
+        if: steps.bump.outputs.type == 'none'
+        run: echo "No releasable changes found on main."
+
+      - name: Set version from package.json + bump
         if: steps.bump.outputs.type != 'none'
         id: version
-        env:
-          REMOTE: ${{ steps.bump.outputs.remote }}
-          BUMP_TYPE: ${{ steps.bump.outputs.type }}
         run: |
-          npm version "$REMOTE" --no-git-tag-version --allow-same-version
-          npm version "$BUMP_TYPE" --no-git-tag-version
+          npm version "${{ steps.bump.outputs.type }}" --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f1-2)
           echo "new_version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Publishing version: $VERSION (was $REMOTE, bump: $BUMP_TYPE)"
+          echo "major_version=$MAJOR" >> "$GITHUB_OUTPUT"
+          echo "minor_version=$MINOR" >> "$GITHUB_OUTPUT"
+          echo "new_tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: $VERSION (bump: ${{ steps.bump.outputs.type }})"
 
-      - name: Publish
+      - name: Set up QEMU (multi-arch)
+        if: steps.bump.outputs.type != 'none'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.bump.outputs.type != 'none'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.bump.outputs.type != 'none'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push GHCR image
+        if: steps.bump.outputs.type != 'none'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.new_version }}
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.minor_version }}
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.major_version }}
+            ghcr.io/${{ github.repository }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test published image
+        if: steps.bump.outputs.type != 'none'
+        env:
+          IMAGE_VERSION: ${{ steps.version.outputs.new_version }}
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}:${IMAGE_VERSION}"
+          echo "Pulling $IMAGE for smoke test..."
+          docker pull --platform linux/amd64 "$IMAGE"
+
+          CID=$(docker run -d \
+            -p 18789:18789 \
+            -e ANTHROPIC_API_KEY=smoke-test-key \
+            "$IMAGE")
+
+          sleep 8
+          docker logs "$CID" || true
+          docker stop "$CID" || true
+          docker rm "$CID" || true
+          echo "Smoke test passed (container started successfully)"
+
+      - name: Publish to npm
         if: steps.bump.outputs.type != 'none'
         run: npm publish --provenance --access public
 
@@ -83,3 +142,25 @@ jobs:
           git commit -m "chore: release v${VERSION} [skip ci]"
           git tag "v${VERSION}"
           git push origin main --follow-tags
+
+      - name: Generate changelog
+        if: steps.version.outputs.new_version != ''
+        env:
+          TAG: v${{ steps.version.outputs.new_version }}
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges > /tmp/changelog.md
+          else
+            git log HEAD --pretty=format:"- %s (%h)" --no-merges > /tmp/changelog.md
+          fi
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.new_version != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.new_version }}
+          name: "Limbo v${{ steps.version.outputs.new_version }}"
+          body_path: /tmp/changelog.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

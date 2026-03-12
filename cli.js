@@ -17,7 +17,7 @@ const LIMBO_DIR = path.join(os.homedir(), '.limbo');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
-const DEFAULT_TAG = 'latest';
+const DEFAULT_TAG = require('./package.json').version;
 const PORT = 18789;
 
 // OpenClaw compatibility snapshots from official docs:
