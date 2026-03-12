@@ -754,12 +754,14 @@ nav.site-nav {
 
 .chat-mockup {
   width: 380px;
+  height: 480px;
   background: var(--bg-2);
   border: 1px solid #222222;
   border-radius: var(--r-xl);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .chat-header {
@@ -790,10 +792,13 @@ nav.site-nav {
 }
 
 .chat-body {
+  flex: 1;
+  min-height: 0;
   padding: 20px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow-y: auto;
 }
 
 .chat-msg {
@@ -1294,7 +1299,7 @@ body.lang-es [data-lang="en"] { display: none; }
   .comp-cell-feature { font-size: 13px; }
   .comp-col-header   { font-size: 11px; }
 
-  .chat-mockup { width: 100%; max-width: 360px; }
+  .chat-mockup { width: 100%; max-width: 360px; height: 460px; }
 
   .terminal { padding: 16px; }
 
