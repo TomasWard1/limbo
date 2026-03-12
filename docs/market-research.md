@@ -10,7 +10,7 @@
 
 The Personal Knowledge Management (PKM) software market is growing fast — $2.45B in 2024, projected to reach $9.12B by 2033 (15.8% CAGR). The broader knowledge management space is even larger ($20-35B depending on scope), but the consumer/indie PKM segment is the relevant battleground for Limbo.
 
-The market is bifurcated: established players (Notion, Obsidian) own the structured note-taking space, while a new wave of AI-native memory tools (Mem.ai, Limitless, Rewind) is emerging but struggling with the privacy/cloud tension. **Limbo's local-first, agent-native architecture positions it in a gap that nobody owns yet.**
+The market is trifurcated: (1) established players (Notion, Obsidian) own structured note-taking, (2) AI-native memory tools (Mem.ai, Limitless) struggle with the privacy/cloud tension, and (3) **LLM-native memory systems (ChatGPT Memory, Claude Memory, Gemini, Copilot) are the biggest threat** — not because they're good memory tools, but because they're free, zero-friction, and already installed for 300M+ users. **Limbo's positioning must be "on top of" these systems, not "instead of."** Local-first + structured knowledge + AI-agnostic access is a gap nobody owns.
 
 ---
 
@@ -101,23 +101,89 @@ Key driver: AI integration is becoming the primary differentiator. The "memory l
 
 **Strategic implication for Latin American market:** Memorae's dominance in Spanish-language conversational reminders validates the Telegram/WhatsApp-first interface pattern for LatAm users. The gap: Memorae has no self-hosting, no knowledge graph, and no open-source option. Limbo + Relied Cloud partnership could own the "power user" segment in LatAm that Memorae doesn't serve.
 
+### Tier 5: LLM-Native Memory (The "Good Enough" Competitors)
+
+These are the most dangerous competitors — not because they're better, but because they're **already installed**. When someone says "I just use my Claude/ChatGPT chats as my memory," these are what they mean.
+
+**ChatGPT Memory (OpenAI)**
+- Included with all tiers: Free (limited), Plus $20/month, Pro $200/month
+- Two mechanisms: (1) "Saved Memories" — explicit facts you tell it to remember, persisted as a user profile injected into every prompt. (2) "Chat History" — full conversation search across all past chats, with direct links back to original conversations.
+- April 2025 upgrade: ChatGPT can now reference all past conversations, not just saved memories. March 2026: persistent memory for Android, searchable history going back 1+ year.
+- Automatic by default — ChatGPT builds a profile from conversations without explicit user action.
+- **Strength:** Zero friction. Already has 300M+ weekly users. Memory "just works" in the background. Search across a year of conversations. No setup, no vault, no Docker.
+- **Weakness:** Cloud-only, no local option. Data retained indefinitely by OpenAI unless manually deleted. GDPR compliance questioned — 2024 EU audit found 63% of user data contained PII with only 22% of users aware of opt-out. July 2025: search engines indexed thousands of ChatGPT conversation links, exposing private queries. No knowledge graph or structured navigation. No semantic connections between memories. Cannot export or own your data in a usable format. Memory is a flat list of facts, not a connected knowledge base. Rate-limited context — long conversations still hit token limits.
+- **Positioning:** "Your AI already remembers" — the default for people who don't think about memory as a category.
+- **Source:** [OpenAI Memory FAQ](https://help.openai.com/en/articles/8590148-memory-faq), [TechRadar](https://www.techradar.com/ai-platforms-assistants/chatgpt/after-todays-big-memory-upgrade-chatgpt-can-now-remember-conversations-from-a-year-ago-and-link-you-directly-to-them)
+
+**Claude Memory (Anthropic)**
+- Free for all users (expanded March 2026, previously paid-only since Oct 2025). Pro $20/month, Max $100-200/month.
+- Architecture: on-demand tool calls — Claude searches raw conversation history in real time rather than pre-computing summaries. Memory is visible as explicit tool calls (you can see when Claude is searching past chats).
+- Key feature: memory import tool — can import conversations from ChatGPT and other providers, assimilating context within 24 hours.
+- Projects feature provides scoped memory — separate memory contexts per project.
+- **Strength:** Transparent memory access (visible tool calls, not hidden profile injection). Project-scoped memory prevents context bleed. Import tool lowers switching costs from ChatGPT. Free tier with memory is aggressive competitive move.
+- **Weakness:** Cloud-only. Rate limits are aggressive — Pro users get ~45 messages/5 hours, forcing new conversations that break accumulated context. No knowledge graph or structured navigation. No local option. No self-hosting. Memory is conversational history, not a curated knowledge base. Cannot create, organize, or navigate notes — just search past chats.
+- **Positioning:** "AI that builds on previous context" — competing directly with ChatGPT for the "good enough" memory crowd.
+- **Source:** [Claude Help Center](https://support.claude.com/en/articles/11817273-use-claude-s-chat-search-and-memory-to-build-on-previous-context), [Digital Trends](https://www.digitaltrends.com/computing/claude-makes-its-ai-memory-feature-free-for-all-users-in-battle-against-chatgpt/), [Simon Willison comparison](https://simonwillison.net/2025/Sep/12/claude-memory/)
+
+**Google Gemini Memory**
+- Available with Gemini Advanced ($20/month as part of Google One AI Premium).
+- Massive context window (up to 1M tokens) reduces the need for explicit memory in single conversations.
+- Memory feature learns preferences across conversations ("I prefer Python for data science").
+- Voice chats can now reference memory (January 2026 update).
+- **Strength:** Google ecosystem integration (Gmail, Drive, Calendar). Enormous context window means less "forgetting" mid-conversation. Enterprise-grade controls for memory management.
+- **Weakness:** Cloud-only, tied to Google ecosystem. Memory is preference-based, not knowledge-based. No structured note-taking or navigation. No self-hosting. Privacy concerns inherent to Google's data model.
+- **Positioning:** "AI that knows you through Google" — leverages existing Google data rather than building new memory.
+- **Source:** [Gemini Apps Community](https://support.google.com/gemini/thread/366495040/gemini-user-memory), [VentureBeat](https://venturebeat.com/orchestration/google-pm-open-sources-always-on-memory-agent-ditching-vector-databases-for)
+
+**Microsoft Copilot Memory**
+- Available with Microsoft 365 Copilot ($30/user/month) and Copilot Pro ($20/month). GA since July 2025.
+- Picks up contextual details from conversations (preferences, projects, working patterns).
+- January 2026: voice chats can reference stored memories.
+- Deeply integrated with Microsoft 365 (Word, Excel, Teams, Outlook).
+- **Strength:** Enterprise distribution — already deployed in millions of M365 seats. Reads across your documents, emails, calendar. Memory is work-context-aware.
+- **Weakness:** Enterprise-only pricing. Tied to Microsoft ecosystem. Not designed for personal knowledge management. No self-hosting. Memory scope is limited to M365 context. Reported reliability issues (users report memory doesn't persist consistently).
+- **Positioning:** "AI that knows your work" — enterprise productivity, not personal second brain.
+- **Source:** [Microsoft Community Hub](https://techcommunity.microsoft.com/blog/microsoft365copilotblog/introducing-copilot-memory-a-more-productive-and-personalized-ai-for-the-way-you/4432059), [GitHub Changelog](https://github.blog/changelog/2026-03-04-copilot-memory-now-on-by-default-for-pro-and-pro-users-in-public-preview/)
+
+**Assessment — LLM-Native Memory as Competitor:**
+
+This is the biggest competitive threat Limbo faces — not because these systems are better memory tools, but because they're **"good enough" and already there**. When a friend says "I just keep everything in my Claude chats," he's using a system that:
+- Requires zero setup
+- Has no learning curve
+- Is "free" (bundled with the AI subscription he's already paying for)
+- Kinda-sorta works for basic recall
+
+**But here's where they all fail:**
+
+1. **No structure.** Chat history is a chronological stream, not a knowledge base. You can search it, but you can't navigate it, connect ideas, or build on them over time.
+2. **No ownership.** Your memories live on someone else's servers. You can't export them meaningfully, back them up, or guarantee they won't be used for training.
+3. **No connections.** A memory that "Sarah likes Thai food" has no link to "Sarah works at Notion" or "met Sarah at the AI conference in March." In Limbo, these are connected nodes in a knowledge graph.
+4. **No agent interop.** ChatGPT memory only works in ChatGPT. Claude memory only works in Claude. If you switch providers (or want to use both), your memory doesn't come with you. Limbo is provider-agnostic — any AI can read your vault via MCP.
+5. **No privacy guarantee.** All LLM-native memory is cloud-based, proprietary, and subject to the provider's data policies. ChatGPT's GDPR issues, Google's data model, and Microsoft's enterprise telemetry all create trust concerns for sensitive personal knowledge.
+6. **Decay over time.** Chat-based memory degrades as conversation history grows. Rate limits force new conversations. Old context gets summarized and compressed, losing detail. Limbo's vault is persistent and lossless.
+
+**Strategic implication:** Limbo must position itself not against these systems but **on top of them** — as the memory layer that persists regardless of which AI you're talking to today. The pitch is: "ChatGPT Memory is for ChatGPT. Limbo is for *you*."
+
 ---
 
 ## Key Differentiators: Where Limbo Wins
 
-| Factor | Limbo | Notion | Obsidian | Mem.ai | Rewind |
-|--------|-------|--------|---------|--------|--------|
-| Local-first (data never leaves) | ✅ | ❌ | ✅ | ❌ | ❌ (pivoted) |
-| Conversational interface | ✅ | ❌ | ❌ | Partial | ❌ |
-| AI-native memory | ✅ | Partial | ❌ | ✅ | ✅ |
-| Semantic search | ✅ | Partial | Plugin | ✅ | ✅ |
-| Maps of Content / navigation | ✅ | Manual | Manual | ❌ | ❌ |
-| Self-hosted / Docker | ✅ | ❌ | N/A | ❌ | ❌ |
-| Open source potential | ✅ | ❌ | ❌ | ❌ | ❌ |
-| WhatsApp / mobile interface | ❌ (Telegram) | ❌ | ❌ | ❌ | ❌ |
-| Cross-platform agent access | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Factor | Limbo | ChatGPT Memory | Claude Memory | Notion | Obsidian | Mem.ai | Gemini | Copilot |
+|--------|-------|---------------|--------------|--------|---------|--------|--------|---------|
+| Local-first (data never leaves) | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Conversational interface | ✅ | ✅ | ✅ | ❌ | ❌ | Partial | ✅ | ✅ |
+| Structured knowledge base | ✅ | ❌ | ❌ | ✅ | ✅ | Partial | ❌ | ❌ |
+| AI-native memory | ✅ | ✅ | ✅ | Partial | ❌ | ✅ | ✅ | ✅ |
+| Semantic search | ✅ | ✅ | ✅ | Partial | Plugin | ✅ | ✅ | ✅ |
+| Connected knowledge graph | ✅ | ❌ | ❌ | Manual | Manual | ❌ | ❌ | ❌ |
+| Maps of Content / navigation | ✅ | ❌ | ❌ | Manual | Manual | ❌ | ❌ | ❌ |
+| Self-hosted / Docker | ✅ | ❌ | ❌ | ❌ | N/A | ❌ | ❌ | ❌ |
+| Open source potential | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| AI-provider agnostic | ✅ | ❌ | ❌ | N/A | Plugin | ❌ | ❌ | ❌ |
+| Data portability / export | ✅ | ❌ | Partial | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Cross-platform agent access (MCP) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-**The core thesis:** Obsidian owns local-first but has no AI. Mem.ai has AI but no privacy. Nobody has both + conversational access. That's Limbo's moat.
+**The core thesis (updated):** The biggest "competitor" is people using ChatGPT/Claude chats as their memory — it's free, zero-friction, and "good enough." But chat history is not a knowledge base. Limbo wins where it matters: your memories are structured, connected, owned by you, and accessible from any AI. Obsidian owns local-first but has no AI. Mem.ai has AI but no privacy. ChatGPT has memory but no structure. **Nobody has all four: local-first + AI-native + structured knowledge + conversational access.** That's Limbo's moat.
 
 ---
 
