@@ -219,19 +219,19 @@ ${c.green}${c.bold}╚═══════════════════�
 }
 
 function cmdStop() {
-  if (!fs.existsSync(COMPOSE_FILE)) die('Limbo is not installed. Run: npx limbo start');
+  if (!fs.existsSync(COMPOSE_FILE)) die('Limbo is not installed. Run: npx limbo-ai start');
   log('Stopping Limbo...');
   run('docker compose down');
   ok('Stopped.');
 }
 
 function cmdLogs() {
-  if (!fs.existsSync(COMPOSE_FILE)) die('Limbo is not installed. Run: npx limbo start');
+  if (!fs.existsSync(COMPOSE_FILE)) die('Limbo is not installed. Run: npx limbo-ai start');
   run('docker compose logs -f');
 }
 
 function cmdUpdate() {
-  if (!fs.existsSync(COMPOSE_FILE)) die('Limbo is not installed. Run: npx limbo start');
+  if (!fs.existsSync(COMPOSE_FILE)) die('Limbo is not installed. Run: npx limbo-ai start');
   log('Pulling latest image...');
   run('docker compose pull -q');
   log('Restarting...');
@@ -252,7 +252,7 @@ function cmdHelp() {
 ${c.bold}limbo${c.reset} — personal AI memory agent
 
 ${c.bold}Usage:${c.reset}
-  npx limbo [command]
+  npx limbo-ai [command]
 
 ${c.bold}Commands:${c.reset}
   start         Install and start Limbo (default if no command given)
