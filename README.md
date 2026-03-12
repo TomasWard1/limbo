@@ -10,44 +10,78 @@ Limbo is a second brain with a conversational interface. It stores atomic notes 
 
 ---
 
-## Quick Start (Docker Compose)
+## Quick Start
+
+Requires [Docker Desktop](https://docs.docker.com/get-docker/) and Node.js 18+.
 
 ```sh
-# 1. Copy the env template
-cp .env.example .env
-
-# 2. Fill in your credentials (see Environment Variables below)
-$EDITOR .env
-
-# 3. Start
-docker compose up -d
-
-# 4. Check health
-docker compose ps
+npx limbo-ai start
 ```
+
+This will:
+1. Prompt for your API key (Anthropic or OpenAI)
+2. Write `~/.limbo/.env` and `~/.limbo/docker-compose.yml`
+3. Pull the latest Limbo image and start the container
 
 Limbo binds to `127.0.0.1:18789`. Connect via the OpenClaw gateway or Telegram bot.
 
+### Available commands
+
+```sh
+npx limbo-ai start        # Install and start (default if no command given)
+npx limbo-ai stop         # Stop the container
+npx limbo-ai update       # Pull latest image and restart
+npx limbo-ai status       # Show container status
+npx limbo-ai logs         # Tail container logs
+npx limbo-ai start --reconfigure   # Change API keys or settings
+```
+
 ---
 
-## One-Line Installer
+## Updating
 
-Canonical installer URL:
+To pull the latest Limbo image and restart:
 
 ```sh
-https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh
+npx limbo-ai update
 ```
 
-Run directly:
+This runs `docker compose pull` followed by `docker compose up -d` in `~/.limbo`. Your vault data is persisted in the `limbo-data` Docker volume and is not affected by updates.
 
-```sh
-curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh | bash
+---
+
+## Agent Instructions
+
+Limbo exposes an MCP server on the running container. To connect an AI agent (Claude Code, Claude Desktop, or any OpenClaw-compatible client) to your Limbo instance, point it at the WebSocket gateway:
+
+```
+ws://localhost:18789
 ```
 
-Run with explicit sudo escalation:
+### Claude Code (MCP config)
+
+Add to your project's `.claude/mcp.json` or `~/.claude/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "limbo": {
+      "url": "ws://localhost:18789"
+    }
+  }
+}
+```
+
+### OpenClaw (direct)
+
+Point any OpenClaw-compatible client at `ws://localhost:18789`.
+
+### Telegram
+
+Set `TELEGRAM_ENABLED=true` and `TELEGRAM_BOT_TOKEN` in `~/.limbo/.env`, then restart:
 
 ```sh
-sudo bash <(curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh)
+npx limbo-ai start --reconfigure
 ```
 
 ---
@@ -77,12 +111,11 @@ docker manifest inspect ghcr.io/tomasward1/limbo:1.0.0
 docker pull ghcr.io/tomasward1/limbo:1.0.0
 ```
 
-If GHCR pull is denied (for example, private package or temporary registry policy), the installer automatically falls back to building from source on the target host.
-
 ---
+
 ## Environment Variables
 
-Copy `.env.example` to `.env` and set:
+Managed automatically by `npx limbo-ai start`, stored in `~/.limbo/.env`.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -181,13 +214,3 @@ docker run --rm -e LLM_API_KEY=sk-ant-... -p 18789:18789 limbo:dev
 ```sh
 node migrations/index.js
 ```
-
----
-
-## Connecting
-
-**Via OpenClaw (direct):**
-Point any OpenClaw-compatible client at `ws://localhost:18789`.
-
-**Via Telegram:**
-Set `TELEGRAM_ENABLED=true` and `TELEGRAM_BOT_TOKEN` in `.env`, then message your bot.
