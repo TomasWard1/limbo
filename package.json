@@ -1,0 +1,28 @@
+{
+  "name": "limbo",
+  "version": "1.0.0",
+  "description": "Your personal AI memory agent — install and manage Limbo via npx",
+  "type": "commonjs",
+  "bin": {
+    "limbo": "./cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node cli.js start"
+  },
+  "keywords": [
+    "limbo",
+    "ai",
+    "memory",
+    "agent",
+    "openclaw",
+    "personal"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TomasWard1/limbo.git"
+  }
+}
