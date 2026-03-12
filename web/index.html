@@ -26,7 +26,7 @@
       <a href="#" class="nav-logo">limbo</a>
       <a href="https://github.com/TomasWard1/limbo" target="_blank" rel="noopener" class="star-badge" id="starBadge">
         <svg class="icon-star" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-        <span id="starCount"><span data-lang="en">Star on GitHub</span><span data-lang="es">Estrella en GitHub</span></span>
+        <span id="starCount"><span data-lang="en">Star on GitHub</span><span data-lang="es">Favorito en GitHub</span></span>
       </a>
     </div>
     <div class="nav-right">
@@ -96,17 +96,19 @@
     <span data-lang="en">Quick Start</span><span data-lang="es">Inicio rápido</span>
   </span>
   <div class="terminal" style="width:min(720px,100%)">
-    <div class="terminal-dots">
+    <div class="terminal-titlebar">
       <div class="terminal-dot"></div>
       <div class="terminal-dot"></div>
       <div class="terminal-dot"></div>
     </div>
-    <div class="terminal-comment"># One command.</div>
-    <div class="terminal-cmd">
-      <span class="terminal-cmd-text">$ npx limbo-ai</span>
-      <button class="terminal-copy" aria-label="Copy command" data-copy="npx limbo-ai">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-      </button>
+    <div class="terminal-body">
+      <div class="terminal-comment"># One command.</div>
+      <div class="terminal-cmd">
+        <span class="terminal-cmd-text">$ npx limbo-ai</span>
+        <button class="terminal-copy" aria-label="Copy command" data-copy="npx limbo-ai">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+      </div>
     </div>
   </div>
   <p class="qs-note">
@@ -118,7 +120,7 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
       <span data-lang="en">Star on GitHub</span><span data-lang="es">Estrella en GitHub</span>
     </a>
-    <a href="https://github.com/TomasWard1/limbo#readme" target="_blank" rel="noopener" class="btn btn-secondary" style="border-color:transparent;padding-left:0">
+    <a href="https://github.com/TomasWard1/limbo#readme" target="_blank" rel="noopener" class="btn btn-secondary">
       <span data-lang="en">Read the docs →</span><span data-lang="es">Leer la documentación →</span>
     </a>
   </div>
@@ -146,7 +148,7 @@
 <!-- ============================================================
      HOW IT WORKS
      ============================================================ -->
-<section class="section">
+<section class="section" id="how-it-works">
   <div class="section-inner">
     <div class="section-header">
       <span class="section-label anim">
@@ -334,11 +336,18 @@
         <div class="comp-cell comp-no">✗</div>
       </div>
       <div class="comp-row">
-        <div class="comp-cell-feature"><span data-lang="en">Remembers &amp; connects ideas</span><span data-lang="es">Recuerda y conecta ideas</span></div>
+        <div class="comp-cell-feature"><span data-lang="en">Proactive — reminds you unprompted</span><span data-lang="es">Proactivo — te avisa sin que lo pidas</span></div>
         <div class="comp-cell comp-yes">✓</div>
         <div class="comp-cell comp-no">✗</div>
-        <div class="comp-cell comp-partial"><span data-lang="en">Manual</span><span data-lang="es">Manual</span></div>
-        <div class="comp-cell comp-partial"><span data-lang="en">Manual</span><span data-lang="es">Manual</span></div>
+        <div class="comp-cell comp-no">✗</div>
+        <div class="comp-cell comp-no">✗</div>
+      </div>
+      <div class="comp-row">
+        <div class="comp-cell-feature"><span data-lang="en">Always on, 24/7</span><span data-lang="es">Activo 24/7</span></div>
+        <div class="comp-cell comp-yes">✓</div>
+        <div class="comp-cell comp-no">✗</div>
+        <div class="comp-cell comp-no">✗</div>
+        <div class="comp-cell comp-no">✗</div>
       </div>
       <div class="comp-row">
         <div class="comp-cell-feature"><span data-lang="en">Works with any AI</span><span data-lang="es">Funciona con cualquier IA</span></div>
@@ -450,7 +459,6 @@
         <a href="https://github.com/TomasWard1/limbo#readme" target="_blank" rel="noopener" class="footer-link">
           <span data-lang="en">Docs</span><span data-lang="es">Docs</span>
         </a>
-        <a href="https://t.me/limbo_bot" target="_blank" rel="noopener" class="footer-link">Telegram</a>
       </nav>
     </div>
     <div class="footer-divider"></div>
@@ -483,15 +491,15 @@
       en: {
         subtitle: 'Your second brain, locally.',
         ctas: [
-          { cls: 'btn btn-primary', href: '#quick-start', icon: 'terminal', label: 'Quick Start' },
+          { cls: 'btn btn-primary', href: '#sectionQuickStartDev', icon: 'terminal', label: 'Quick Start' },
           { cls: 'btn btn-secondary', href: 'https://github.com/TomasWard1/limbo', icon: 'github', label: 'Star on GitHub', external: true }
         ]
       },
       es: {
         subtitle: 'Tu segundo cerebro, local.',
         ctas: [
-          { cls: 'btn btn-primary', href: '#quick-start', icon: 'terminal', label: 'Inicio rápido' },
-          { cls: 'btn btn-secondary', href: 'https://github.com/TomasWard1/limbo', icon: 'github', label: 'Estrella en GitHub', external: true }
+          { cls: 'btn btn-primary', href: '#sectionQuickStartDev', icon: 'terminal', label: 'Inicio rápido' },
+          { cls: 'btn btn-secondary', href: 'https://github.com/TomasWard1/limbo', icon: 'github', label: 'Favorito en GitHub', external: true }
         ]
       }
     },
@@ -499,14 +507,14 @@
       en: {
         subtitle: 'Your personal memory.',
         ctas: [
-          { cls: 'btn btn-primary', href: '#final-cta', icon: 'mail', label: 'Join Waitlist' },
+          { cls: 'btn btn-primary', href: '#finalCtaAll', icon: 'mail', label: 'Join Waitlist' },
           { cls: 'btn btn-secondary', href: '#how-it-works', icon: 'arrow-down', label: 'See how it works' }
         ]
       },
       es: {
         subtitle: 'Tu memoria personal.',
         ctas: [
-          { cls: 'btn btn-primary', href: '#final-cta', icon: 'mail', label: 'Unirse a la lista' },
+          { cls: 'btn btn-primary', href: '#finalCtaAll', icon: 'mail', label: 'Unirse a la lista' },
           { cls: 'btn btn-secondary', href: '#how-it-works', icon: 'arrow-down', label: 'Ver cómo funciona' }
         ]
       }
@@ -587,6 +595,7 @@
 
     renderHero();
     updateUrl();
+    if (chatIsVisible) startChatAnimation();
   }
 
   // ── Apply language ─────────────────────────────────────────
@@ -603,6 +612,7 @@
     document.documentElement.lang = lang;
     renderHero();
     updateUrl();
+    if (chatIsVisible) startChatAnimation();
   }
 
   function updateUrl() {
@@ -668,7 +678,8 @@
     { type: 'bot',  text: 'Atomic Habits — Juan recommended it.\n\u201cChanged his life.\u201d', link: 'View on Amazon →' }
   ];
 
-  var chatAnimated = false;
+  var chatTimers = [];
+  var chatIsVisible = false;
 
   function buildChatMsg(msg) {
     var wrap = document.createElement('div');
@@ -698,15 +709,20 @@
     return wrap;
   }
 
+  function resetChat() {
+    chatTimers.forEach(clearTimeout);
+    chatTimers = [];
+    var body = document.getElementById('chatBody');
+    if (body) body.innerHTML = '';
+  }
+
   function animateChat() {
-    if (chatAnimated) return;
-    chatAnimated = true;
     var body = document.getElementById('chatBody');
     if (!body) return;
 
     var delay = 400;
     chatMessages.forEach(function(msg) {
-      setTimeout(function() {
+      var t = setTimeout(function() {
         var el = buildChatMsg(msg);
         body.appendChild(el);
         requestAnimationFrame(function() {
@@ -716,14 +732,23 @@
         });
         body.scrollTop = body.scrollHeight;
       }, delay);
+      chatTimers.push(t);
       delay += msg.type === 'bot' ? 1200 : msg.type === 'time' ? 600 : 500;
     });
   }
 
+  function startChatAnimation() {
+    resetChat();
+    animateChat();
+  }
+
   var chatObserver = new IntersectionObserver(function(entries) {
-    if (entries[0].isIntersecting) {
-      animateChat();
-      chatObserver.disconnect();
+    var entry = entries[0];
+    chatIsVisible = entry.isIntersecting;
+    if (entry.isIntersecting) {
+      startChatAnimation();
+    } else {
+      resetChat();
     }
   }, { threshold: 0.3 });
 
@@ -772,21 +797,21 @@
   function renderStars(n) {
     var el = document.getElementById('starCount');
     if (n > 0) {
-      el.innerHTML = '<span data-lang="en">&#9733; ' + n + ' stars</span><span data-lang="es">&#9733; ' + n + ' estrellas</span>';
+      el.innerHTML = '<span data-lang="en">&#9733; ' + n + ' stars</span><span data-lang="es">&#9733; ' + n + ' favoritos</span>';
     }
   }
 
-  // ── Smooth scroll for anchor links ─────────────────────────
-  document.querySelectorAll('a[href^="#"]').forEach(function(a) {
-    a.addEventListener('click', function(e) {
-      var id = this.getAttribute('href').slice(1);
-      if (!id) return;
-      var target = document.getElementById(id);
-      if (target) {
-        e.preventDefault();
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
+  // ── Smooth scroll for anchor links (event delegation) ──────
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    var id = a.getAttribute('href').slice(1);
+    if (!id) return;
+    var target = document.getElementById(id);
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   });
 
   // ── Init ───────────────────────────────────────────────────

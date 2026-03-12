@@ -430,30 +430,50 @@ button {
    ============================================================ */
 
 .terminal {
-  background: var(--bg-2);
-  border: 1px solid var(--border-sub);
+  background: #0A0A0A;
+  border: 1px solid #333333;
   border-radius: var(--r-md);
-  padding: 24px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  text-align: left;
+}
+
+.terminal-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  background: #161616;
+  border-bottom: 1px solid #252525;
+}
+
+.terminal-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.terminal-dot:nth-child(1) { background: #FF5F56; }
+.terminal-dot:nth-child(2) { background: #FEBC2E; }
+.terminal-dot:nth-child(3) { background: #28C840; }
+
+.terminal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .terminal-dots {
   display: flex;
   gap: 6px;
 }
-.terminal-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--border);
-}
 
 .terminal-comment {
   font-family: var(--mono);
   font-size: 14px;
-  color: var(--text-dim);
+  color: #555555;
 }
 
 .terminal-cmd {
@@ -463,7 +483,7 @@ button {
 }
 .terminal-cmd-text {
   font-family: var(--mono);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--accent);
   flex: 1;
@@ -907,6 +927,8 @@ nav.site-nav {
 
 .comp-table {
   width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
   border: 1px solid var(--border-sub);
   border-radius: var(--r-md);
   overflow: hidden;
