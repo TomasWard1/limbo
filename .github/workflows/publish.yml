@@ -21,6 +21,9 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
+
       - name: Determine version bump
         id: bump
         run: |
@@ -36,6 +39,8 @@ jobs:
 
           # Use --first-parent to only see merge commits on main,
           # not individual commits from feature branches via staging.
+          # Parse full commit message (subject + body) since GitHub merge
+          # commits have the PR title in the body.
           COMMITS=$(git log "$RANGE" --first-parent --pretty=format:"%B" 2>/dev/null || echo "")
           echo "--- First-parent commits since last tag ---"
           echo "$COMMITS"
@@ -66,8 +71,6 @@ jobs:
       - name: Publish
         if: steps.bump.outputs.type != 'none'
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Commit version bump and tag
         if: steps.version.outputs.new_version != ''
