@@ -10,79 +10,85 @@ Limbo is a second brain with a conversational interface. It stores atomic notes 
 
 ---
 
-## Quick Start (Docker Compose)
+## Quick Start
+
+Requires [Docker Desktop](https://docs.docker.com/get-docker/) and Node.js 18+.
 
 ```sh
-# 1. Copy the env template
-cp .env.example .env
-
-# 2. Fill in your credentials (see Environment Variables below)
-$EDITOR .env
-
-# 3. Start
-docker compose up -d
-
-# 4. Check health
-docker compose ps
+npx limbo-ai start
 ```
 
-Limbo binds to `127.0.0.1:18789`. Connect via the OpenClaw gateway or Telegram bot.
+This will:
+1. Prompt for your API key (Anthropic or OpenAI)
+2. Write `~/.limbo/.env` and `~/.limbo/docker-compose.yml`
+3. Pull the latest Limbo image and start the container
 
----
+Limbo binds to `127.0.0.1:18789`.
 
-## One-Line Installer
-
-Canonical installer URL:
-
-```sh
-https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh
-```
-
-Run directly:
+### Available commands
 
 ```sh
-curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh | bash
-```
-
-Run with explicit sudo escalation:
-
-```sh
-sudo bash <(curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh)
+npx limbo-ai start        # Install and start (default if no command given)
+npx limbo-ai stop         # Stop the container
+npx limbo-ai update       # Pull latest image and restart
+npx limbo-ai status       # Show container status
+npx limbo-ai logs         # Tail container logs
+npx limbo-ai start --reconfigure   # Change API keys or settings
 ```
 
 ---
 
-## Release Channel (GHCR)
-
-Stable deploys should use a pinned semver image tag via `LIMBO_IMAGE_TAG`.
-
-- Release workflow source: `.github/workflows/release-ghcr.yml`
-- Published tags per release tag `vX.Y.Z`:
-  - `ghcr.io/tomasward1/limbo:X.Y.Z`
-  - `ghcr.io/tomasward1/limbo:X`
-  - `ghcr.io/tomasward1/limbo:latest`
-
-Create a release tag:
+## Updating
 
 ```sh
-git tag -a v1.0.0 -m "Limbo v1.0.0"
-git push origin v1.0.0
+npx limbo-ai update
 ```
 
-Verify public pull (no credentials):
-
-```sh
-docker logout ghcr.io
-docker manifest inspect ghcr.io/tomasward1/limbo:1.0.0
-docker pull ghcr.io/tomasward1/limbo:1.0.0
-```
-
-If GHCR pull is denied (for example, private package or temporary registry policy), the installer automatically falls back to building from source on the target host.
+Pulls the latest Limbo image and restarts the container. Your vault data is persisted in the `limbo-data` Docker volume and is not affected.
 
 ---
+
+## Connecting
+
+The easiest way to talk to Limbo is via **Telegram** — set up once, works from any device.
+
+For everything else, Limbo speaks over WebSocket at `ws://localhost:18789` via the OpenClaw gateway. Any OpenClaw-compatible client can connect there directly.
+
+### Telegram (recommended)
+
+Set `TELEGRAM_ENABLED=true` and `TELEGRAM_BOT_TOKEN` in `~/.limbo/.env`, then restart:
+
+```sh
+npx limbo-ai start --reconfigure
+```
+
+Message your bot and Limbo will respond.
+
+### Without Telegram
+
+Connect any [OpenClaw](https://openclaw.dev)-compatible client to:
+
+```
+ws://localhost:18789
+```
+
+This includes Claude Code — add Limbo to your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "limbo": {
+      "url": "ws://localhost:18789"
+    }
+  }
+}
+```
+
+---
+
 ## Environment Variables
 
-Copy `.env.example` to `.env` and set:
+Managed automatically by `npx limbo-ai start`, stored in `~/.limbo/.env`.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -120,12 +126,13 @@ Full tool specs in `workspace/TOOLS.md`.
 │              Docker Container           │
 │                                         │
 │  ┌─────────────┐    ┌────────────────┐  │
-│  │  OpenClaw   │◄──►│  Claude (LLM)  │  │
-│  │  Gateway    │    └────────┬───────┘  │
-│  │  :18789     │             │          │
-│  └──────┬──────┘    ┌────────▼───────┐  │
-│         │           │  MCP Server    │  │
-│  Telegram Bot        │  limbo-vault  │  │
+│  │  OpenClaw   │◄──►│  LLM (Claude   │  │
+│  │  Gateway    │    │  or OpenAI)    │  │
+│  │  :18789     │    └────────┬───────┘  │
+│  └──────┬──────┘             │          │
+│         │           ┌────────▼───────┐  │
+│  Telegram Bot        │  MCP Server   │  │
+│         │           │  limbo-vault  │  │
 │         │           └────────┬───────┘  │
 │         └────────────────────┤          │
 │                              ▼          │
@@ -134,7 +141,7 @@ Full tool specs in `workspace/TOOLS.md`.
 └─────────────────────────────────────────┘
 ```
 
-- **OpenClaw** — gateway that wraps the Claude API with MCP tool support and optional Telegram integration
+- **OpenClaw** — gateway that handles client connections, routes to the LLM, and integrates MCP tools
 - **MCP server** — Node.js server providing vault read/write tools
 - **Vault** — plain markdown files with YAML frontmatter, persisted in a named Docker volume
 - **Migrations** — lightweight Node.js migration runner for vault schema changes
@@ -184,10 +191,4 @@ node migrations/index.js
 
 ---
 
-## Connecting
-
-**Via OpenClaw (direct):**
-Point any OpenClaw-compatible client at `ws://localhost:18789`.
-
-**Via Telegram:**
-Set `TELEGRAM_ENABLED=true` and `TELEGRAM_BOT_TOKEN` in `.env`, then message your bot.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for release and deployment process.

@@ -96,7 +96,14 @@ log "Directory /opt/limbo ready."
 
 # ─── Collect API keys ─────────────────────────────────────────────────────────
 header "Configuration"
-echo "Limbo supports Anthropic (Claude) and OpenAI (Codex/GPT) as model providers."
+echo "Limbo supports multiple AI providers. Choose one:"
+echo "  1) Anthropic API key      (pay-per-use, sk-ant-...)"
+echo "  2) OpenAI / Codex API key (pay-per-use, sk-...)"
+echo "  3) OpenRouter API key     (100+ models, sk-or-...)"
+echo "  4) Claude Code / Codex subscription"
+echo "     (OAuth — run scripts/setup.sh on a local machine first,"
+echo "      then copy the generated .env to this server)"
+echo ""
 echo "Telegram integration is optional — skip by pressing Enter."
 echo ""
 
@@ -122,12 +129,26 @@ prompt_optional() {
 }
 
 # Provider selection
-prompt_optional MODEL_PROVIDER "Model provider (anthropic/openai)" "anthropic"
+read -rp "  Choice [1-4, default 1]: " PROVIDER_CHOICE
+PROVIDER_CHOICE="${PROVIDER_CHOICE:-1}"
 
-case "$MODEL_PROVIDER" in
-  openai)
+case "$PROVIDER_CHOICE" in
+  2)
+    MODEL_PROVIDER="openai"
     DEFAULT_MODEL_NAME="codex-mini-latest"
     KEY_LABEL="OpenAI API key (sk-...)"
+    ;;
+  3)
+    MODEL_PROVIDER="openrouter"
+    DEFAULT_MODEL_NAME="auto"
+    KEY_LABEL="OpenRouter API key (sk-or-...)"
+    ;;
+  4)
+    echo ""
+    echo -e "${YELLOW}OAuth-based subscription auth requires a browser.${NC}"
+    echo "Run scripts/setup.sh on your local machine to complete OAuth,"
+    echo "then copy the generated .env file to this server and re-run."
+    die "OAuth auth must be set up locally. See scripts/setup.sh."
     ;;
   *)
     MODEL_PROVIDER="anthropic"
