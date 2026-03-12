@@ -71,6 +71,8 @@ jobs:
       - name: Publish
         if: steps.bump.outputs.type != 'none'
         run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Commit version bump and tag
         if: steps.version.outputs.new_version != ''
