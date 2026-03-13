@@ -60,6 +60,10 @@ RUN chmod +x /entrypoint.sh
 # The actual subdirectories are created by entrypoint.sh on first run
 RUN mkdir -p /data && chown limbo:limbo /data
 
+# Pre-create the OpenClaw state dir so the named volume initialises with limbo ownership.
+# Without this, Docker creates the volume mount point as root:root, blocking openclaw writes.
+RUN mkdir -p /home/limbo/.openclaw && chown limbo:limbo /home/limbo/.openclaw
+
 # Make /app writable by limbo so entrypoint can write openclaw.json
 RUN chown limbo:limbo /app
 
