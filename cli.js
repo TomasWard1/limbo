@@ -813,8 +813,15 @@ function applyOpenClawConfig(cfg) {
   ok(t(cfg.language, 'configFlowDone'));
 }
 
-// Strip ANSI escape sequences so URL/text matching works on TTY output.
-const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\r/g, '');
+// Strip ANSI/VT100 escape sequences so cursor-positioning codes don't scatter
+// characters across the terminal.  Handles:
+//   - CSI sequences: ESC [ <param bytes 0x30-0x3F> <intermediate 0x20-0x2F> <final 0x40-0x7E>
+//     (covers colour, cursor movement, erase, and private-mode sequences like \x1b[?25l)
+//   - Two-character ESC sequences: ESC <0x40-0x5F>  (e.g. ESC M, ESC =)
+const stripAnsi = (str) => str
+  .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+  .replace(/\x1b[@-Z\\-_]/g, '')
+  .replace(/\r/g, '');
 
 // Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
 // --tty is required so openclaw sees a TTY inside the container and runs the auth wizard.
