@@ -832,6 +832,21 @@ const AUTH_URL_RE = /https?:\/\/[^\s"'<>\]]+/g;
 // clack/prompt decorations. Used to suppress animation frame scatter from OpenClaw TUI output.
 const TUI_CHROME_RE = /^[\s\u2500-\u257f\u2580-\u259f\u25a0-\u25ff\u2600-\u26ff\u2190-\u21ff\u2700-\u27bf\u2800-\u28ff]*$/u;
 
+// Pure helper: flush complete lines from a raw buffer.
+// Normalises \r\n → \n, splits on \n, and within each segment keeps only the LAST
+// \r-separated piece — that's the final rendered state after TUI in-place overwrites.
+// Returns the lines to emit and the leftover incomplete segment.
+function flushStreamLines(buf) {
+  const normalized = buf.replace(/\r\n/g, '\n');
+  const segments = normalized.split('\n');
+  const remaining = segments.pop(); // no trailing \n yet
+  const lines = segments.map((seg) => {
+    const frames = seg.split('\r');
+    return frames[frames.length - 1]; // last frame = final rendered content
+  });
+  return { lines, remaining };
+}
+
 // Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
 // --tty is required so openclaw sees a TTY inside the container and runs the auth wizard.
 // We pipe stdout/stderr to filter content while the container gets a proper PTY allocation.
@@ -848,22 +863,12 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
 
     const handleData = (data) => {
       buf += data.toString();
-      // Split only on \n (or \r\n) — NOT on bare \r.
-      // Bare \r is a carriage-return used for in-place TUI animation (typewriter effect):
-      // e.g. "│  Y\r│  Yo\r│  You\r...\r│  You are running in a remote environment\n"
-      // Splitting on \r would turn every animation frame into a separate emitLine call,
-      // printing one letter per line and scattering them across the terminal.
-      // Instead we split on \n and collapse \r-frames inside processLine().
-      const lines = buf.split(/\r?\n/);
-      buf = lines.pop(); // hold incomplete last line
-      for (const line of lines) processLine(line);
-    };
-
-    // Take the last \r-segment of a line — i.e. the final visual state after any
-    // carriage-return animation, discarding all intermediate frames.
-    const processLine = (raw) => {
-      const finalFrame = raw.split('\r').pop() || '';
-      emitLine(finalFrame);
+      // flushStreamLines keeps only the final \r frame per \n-terminated line,
+      // discarding all intermediate TUI animation states (character-by-character
+      // reveals, spinner frames) that would otherwise scatter across the terminal.
+      const { lines, remaining } = flushStreamLines(buf);
+      buf = remaining;
+      for (const line of lines) emitLine(line);
     };
 
     const emitLine = (rawLine) => {
@@ -889,7 +894,11 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
     proc.stdout.on('data', handleData);
     proc.stderr.on('data', handleData);
     proc.on('close', (code) => {
-      if (buf.trim()) processLine(buf);
+      if (buf.trim()) {
+        // Append a synthetic \n to flush the remaining buffer through flushStreamLines.
+        const { lines } = flushStreamLines(buf + '\n');
+        for (const line of lines) emitLine(line);
+      }
       resolve(code ?? 1);
     });
     proc.on('error', () => resolve(1));
@@ -1131,5 +1140,5 @@ if (require.main === module) {
   });
 } else {
   // Exported for unit testing — not part of the public CLI API.
-  module.exports = { stripAnsi, AUTH_URL_RE, TUI_CHROME_RE };
+  module.exports = { stripAnsi, AUTH_URL_RE, TUI_CHROME_RE, flushStreamLines };
 }
