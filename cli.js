@@ -828,7 +828,8 @@ function streamFilteredAuth(dockerArgs) {
 
     const handleData = (data) => {
       buf += data.toString();
-      const lines = buf.split('\n');
+      // Split on \r\n, \n, or bare \r — TUIs use carriage returns for in-place redraws
+      const lines = buf.split(/\r?\n|\r/);
       buf = lines.pop(); // hold incomplete last line
       for (const line of lines) emitLine(line);
     };
@@ -836,18 +837,13 @@ function streamFilteredAuth(dockerArgs) {
     const emitLine = (rawLine) => {
       const line = stripAnsi(rawLine);
       const urls = line.match(urlRe) || [];
-      if (urls.length > 0) {
-        for (const url of urls) {
-          if (!seenUrls.has(url)) {
-            seenUrls.add(url);
-            console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
-          }
+      // Whitelist-only: only emit URLs — everything else is branding or TUI chrome
+      for (const url of urls) {
+        if (!seenUrls.has(url)) {
+          seenUrls.add(url);
+          console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
         }
-        return;
       }
-      // Suppress lines that only contain internal gateway/runtime branding
-      if (/openclaw/i.test(line)) return;
-      if (line.trim()) console.log(`   ${line}`);
     };
 
     proc.stdout.on('data', handleData);
