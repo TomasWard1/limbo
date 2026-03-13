@@ -809,8 +809,12 @@ function applyOpenClawConfig(cfg) {
   ok(t(cfg.language, 'configFlowDone'));
 }
 
+// Strip ANSI escape sequences so URL/text matching works on TTY output.
+const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\r/g, '');
+
 // Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
-// Uses async spawn so URLs appear in real-time (spawnSync would buffer until exit).
+// --tty is required so openclaw sees a TTY inside the container and runs the auth wizard.
+// We pipe stdout/stderr to filter content while the container gets a proper PTY allocation.
 function streamFilteredAuth(dockerArgs) {
   return new Promise((resolve) => {
     const proc = spawn('docker', dockerArgs, {
@@ -829,7 +833,8 @@ function streamFilteredAuth(dockerArgs) {
       for (const line of lines) emitLine(line);
     };
 
-    const emitLine = (line) => {
+    const emitLine = (rawLine) => {
+      const line = stripAnsi(rawLine);
       const urls = line.match(urlRe) || [];
       if (urls.length > 0) {
         for (const url of urls) {
@@ -870,8 +875,9 @@ async function runSubscriptionAuthFlow(cfg) {
 
   let exitCode;
   if (cfg.providerFamily === 'openai') {
-    // Stream output and extract OAuth URL so the user never sees "openclaw"
-    exitCode = await streamFilteredAuth(['compose', 'run', '--rm', '--entrypoint', 'openclaw', 'limbo', ...authArgs]);
+    // --tty allocates a PTY inside the container so openclaw's auth wizard runs correctly.
+    // We still pipe stdout/stderr to filter out branding and highlight the OAuth URL.
+    exitCode = await streamFilteredAuth(['compose', 'run', '--tty', '--rm', '--entrypoint', 'openclaw', 'limbo', ...authArgs]);
   } else {
     // Anthropic paste-token is interactive (user pastes a token); keep stdio inherited
     const authResult = runOpenClaw(authArgs);
