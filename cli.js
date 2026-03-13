@@ -116,7 +116,7 @@ const TEXT = {
     telegramQuestion: 'Want to speak to Limbo through Telegram?',
     telegramBotFatherSteps: [
       'To create a Telegram bot:',
-      '  1. Open Telegram and search for @BotFather',
+      '  1. Open @BotFather: https://t.me/BotFather',
       '  2. Send the command: /newbot',
       '  3. Choose a display name for your bot (e.g. "My Limbo")',
       '  4. Choose a username ending in "bot" (e.g. "my_limbo_bot")',
@@ -205,7 +205,7 @@ const TEXT = {
     telegramQuestion: 'Quieres hablar con Limbo por Telegram?',
     telegramBotFatherSteps: [
       'Para crear un bot de Telegram:',
-      '  1. Abri Telegram y busca @BotFather',
+      '  1. Abri @BotFather: https://t.me/BotFather',
       '  2. Manda el comando: /newbot',
       '  3. Elegí un nombre para tu bot (ej: "Mi Limbo")',
       '  4. Elegí un username que termine en "bot" (ej: "mi_limbo_bot")',
