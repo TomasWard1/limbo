@@ -814,12 +814,15 @@ function applyOpenClawConfig(cfg) {
 }
 
 // Strip all ANSI/VT100 escape sequences from a string.
-// Handles: standard CSI (ESC [ ... letter), private-use CSI (ESC [ ? ... letter),
-// OSC sequences (ESC ] ... BEL/ST), and two-char ESC sequences (ESC + single char).
+// Uses standards-based ECMA-48 byte ranges:
+//   CSI: ESC [ <param bytes 0x30-0x3F>* <intermediate bytes 0x20-0x2F>* <final byte 0x40-0x7E>
+//   Two-char ESC: ESC <0x40-0x5F>  (e.g. ESC M, ESC =, ESC 7/8 save/restore cursor)
+//   OSC: ESC ] <any> BEL|ST
+// Covers private-mode sequences like \x1b[?25l (hide cursor) that the old [0-9;]* missed.
 const stripAnsi = (str) => str
-  .replace(/\x1b\[[0-9;?!<=>]*[A-Za-z@[\\\]^_`{|}~]/g, '') // CSI sequences (incl. ?-prefixed)
-  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')        // OSC sequences
-  .replace(/\x1b[^[\]]/g, '')                                 // other two-char ESC sequences
+  .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')  // CSI sequences (all parameter byte combos)
+  .replace(/\x1b[@-Z\\-_]/g, '')             // two-char ESC sequences
+  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
   .replace(/\r/g, '');
 
 // Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
