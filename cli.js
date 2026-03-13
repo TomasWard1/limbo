@@ -20,6 +20,8 @@ const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
 const DEFAULT_TAG = require('./package.json').version;
 const PORT = 18789;
+// OpenClaw's OAuth callback server port — must be exposed when running auth inside Docker
+const OPENCLAW_AUTH_PORT = 1453;
 
 // OpenClaw compatibility snapshots from official docs:
 // - https://docs.openclaw.ai/providers/openai
@@ -817,7 +819,8 @@ const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\r
 // Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
 // --tty is required so openclaw sees a TTY inside the container and runs the auth wizard.
 // We pipe stdout/stderr to filter content while the container gets a proper PTY allocation.
-function streamFilteredAuth(dockerArgs) {
+// onUrl: optional callback invoked with each unique URL as it appears (e.g. to auto-open browser).
+function streamFilteredAuth(dockerArgs, onUrl = null) {
   return new Promise((resolve) => {
     const proc = spawn('docker', dockerArgs, {
       cwd: LIMBO_DIR,
@@ -839,13 +842,19 @@ function streamFilteredAuth(dockerArgs) {
     const emitLine = (rawLine) => {
       const line = stripAnsi(rawLine);
       const urls = line.match(urlRe) || [];
-      // Whitelist-only: only emit URLs — everything else is branding or TUI chrome
-      for (const url of urls) {
-        if (!seenUrls.has(url)) {
-          seenUrls.add(url);
-          console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
+      if (urls.length > 0) {
+        for (const url of urls) {
+          if (!seenUrls.has(url)) {
+            seenUrls.add(url);
+            console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
+            if (onUrl) onUrl(url);
+          }
         }
+        return; // don't double-print the line containing the URL
       }
+      // Suppress OpenClaw branding; show everything else (prompts, status, interactive questions)
+      if (/openclaw/i.test(line)) return;
+      if (line.trim()) console.log(`   ${line}`);
     };
 
     proc.stdout.on('data', handleData);
@@ -874,8 +883,16 @@ async function runSubscriptionAuthFlow(cfg) {
   let exitCode;
   if (cfg.providerFamily === 'openai') {
     // --tty allocates a PTY inside the container so openclaw's auth wizard runs correctly.
+    // -p exposes the OAuth callback port so the browser redirect reaches the in-container server.
     // We still pipe stdout/stderr to filter out branding and highlight the OAuth URL.
-    exitCode = await streamFilteredAuth(['compose', 'run', '--tty', '--rm', '--entrypoint', 'openclaw', 'limbo', ...authArgs]);
+    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open';
+    exitCode = await streamFilteredAuth(
+      ['compose', 'run', '--tty', '--rm', '-p', `${OPENCLAW_AUTH_PORT}:${OPENCLAW_AUTH_PORT}`, '--entrypoint', 'openclaw', 'limbo', ...authArgs],
+      (url) => {
+        // Auto-open the browser so the user doesn't need to copy/paste the URL
+        try { spawnSync(opener, [url], { stdio: 'ignore', timeout: 3000 }); } catch {}
+      },
+    );
   } else {
     // Anthropic paste-token is interactive (user pastes a token); keep stdio inherited
     const authResult = runOpenClaw(authArgs);
