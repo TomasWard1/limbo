@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // cli.js — Limbo CLI
 // Orchestrates the Docker-based Limbo runtime.
-// Zero npm dependencies — pure Node.js stdlib.
 'use strict';
 
 const { execSync, spawnSync } = require('child_process');
@@ -278,6 +277,22 @@ function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+let clackPromise;
+
+async function getClack() {
+  if (!clackPromise) clackPromise = import('@clack/prompts');
+  return clackPromise;
+}
+
+async function maybeHandleClackCancel(value) {
+  const { cancel, isCancel } = await getClack();
+  if (isCancel(value)) {
+    cancel('Setup cancelled.');
+    process.exit(130);
+  }
+  return value;
+}
+
 function hasDocker() {
   const result = spawnSync('docker', ['compose', 'version'], { stdio: 'pipe' });
   return result.status === 0;
@@ -311,23 +326,32 @@ function createPromptInterface() {
   return readline.createInterface({ input: process.stdin, output: process.stdout });
 }
 
-async function promptValidated(rl, question, validate, errorMessage) {
+async function promptValidated(question, validate, errorMessage) {
+  if (process.stdin.isTTY && process.stdout.isTTY) {
+    const { text } = await getClack();
+    while (true) {
+      const value = await maybeHandleClackCancel(await text({
+        message: question.trim(),
+        validate: (input) => {
+          const validation = validate(String(input ?? ''));
+          return validation.ok ? undefined : (validation.message || errorMessage);
+        },
+      }));
+      const validation = validate(String(value));
+      if (validation.ok) return validation.value;
+    }
+  }
+
+  const rl = createPromptInterface();
   while (true) {
     const value = (await prompt(rl, question)).trim();
     const validation = validate(value);
-    if (validation.ok) return validation.value;
+    if (validation.ok) {
+      rl.close();
+      return validation.value;
+    }
     warn(validation.message || errorMessage);
   }
-}
-
-function renderMenu(question, options, selectedIndex, lang) {
-  const lines = [`${c.bold}${question}${c.reset}`, `${c.dim}${t(lang, 'menuHelp')}${c.reset}`, ''];
-  options.forEach((option, index) => {
-    const prefix = index === selectedIndex ? `${c.green}>${c.reset}` : ' ';
-    lines.push(`${prefix} ${option.label}`);
-    if (option.description) lines.push(`   ${c.dim}${option.description}${c.reset}`);
-  });
-  return lines.join('\n');
 }
 
 async function selectMenu(question, options, lang) {
@@ -345,68 +369,16 @@ async function selectMenu(question, options, lang) {
       warn('Pick one of the listed options.');
     }
   }
-
-  return new Promise((resolve) => {
-    let selectedIndex = 0;
-    let lastRenderLineCount = 0;
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    readline.emitKeypressEvents(process.stdin, rl);
-    const previousRawMode = process.stdin.isRaw;
-    process.stdin.setRawMode(true);
-
-    function cleanup() {
-      process.stdin.off('keypress', onKeypress);
-      process.stdin.setRawMode(Boolean(previousRawMode));
-      rl.close();
-      process.stdout.write('\n');
-    }
-
-    function draw() {
-      const output = renderMenu(question, options, selectedIndex, lang);
-      if (lastRenderLineCount > 0) {
-        readline.moveCursor(process.stdout, 0, -lastRenderLineCount);
-      }
-      for (let i = 0; i < lastRenderLineCount; i++) {
-        readline.clearLine(process.stdout, 0);
-        if (i < lastRenderLineCount - 1) readline.moveCursor(process.stdout, 0, 1);
-      }
-      if (lastRenderLineCount > 0) {
-        readline.moveCursor(process.stdout, 0, -Math.max(lastRenderLineCount - 1, 0));
-      }
-      readline.cursorTo(process.stdout, 0);
-      process.stdout.write(output);
-      lastRenderLineCount = output.split('\n').length;
-    }
-
-    function onKeypress(_, key = {}) {
-      if (key.name === 'up' || key.name === 'k') {
-        selectedIndex = selectedIndex === 0 ? options.length - 1 : selectedIndex - 1;
-        draw();
-        return;
-      }
-
-      if (key.name === 'down' || key.name === 'j') {
-        selectedIndex = selectedIndex === options.length - 1 ? 0 : selectedIndex + 1;
-        draw();
-        return;
-      }
-
-      if (key.name === 'return') {
-        const value = options[selectedIndex];
-        cleanup();
-        resolve(value);
-        return;
-      }
-
-      if (key.ctrl && key.name === 'c') {
-        cleanup();
-        process.exit(130);
-      }
-    }
-
-    process.stdin.on('keypress', onKeypress);
-    draw();
-  });
+  const { select } = await getClack();
+  const selectedValue = await maybeHandleClackCancel(await select({
+    message: question,
+    options: options.map((option) => ({
+      value: option.value,
+      label: option.label,
+      hint: option.description,
+    })),
+  }));
+  return options.find((option) => option.value === selectedValue) || options[0];
 }
 
 function parseEnvFile() {
@@ -516,14 +488,11 @@ async function collectConfig(existingEnv = {}) {
 
   const modelName = await chooseModel(language, providerFamily, accessMethod);
   const provider = getModelCatalog(providerFamily, accessMethod).provider;
-
-  const rl = createPromptInterface();
   let apiKey = '';
 
   if (accessMethod === 'api-key') {
     if (providerFamily === 'openai') {
       apiKey = await promptValidated(
-        rl,
         t(language, 'openAiApiKeyPrompt'),
         (value) => {
           if (!value) return { ok: false, message: t(language, 'requiredField') };
@@ -533,7 +502,6 @@ async function collectConfig(existingEnv = {}) {
       );
     } else {
       apiKey = await promptValidated(
-        rl,
         t(language, 'anthropicApiKeyPrompt'),
         (value) => {
           if (!value) return { ok: false, message: t(language, 'requiredField') };
@@ -552,13 +520,10 @@ async function collectConfig(existingEnv = {}) {
   let telegramToken = '';
   if (telegramChoice.value === 'true') {
     telegramToken = await promptValidated(
-      rl,
       t(language, 'telegramTokenPrompt'),
       (value) => value ? { ok: true, value } : { ok: false, message: t(language, 'requiredField') },
     );
   }
-
-  rl.close();
 
   return {
     language,
