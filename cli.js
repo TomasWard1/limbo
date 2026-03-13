@@ -256,6 +256,7 @@ const TEXT = {
     anthropicSubscriptionIntro: 'Generate a Claude setup-token on any machine with `claude setup-token`, then paste it into the next step.',
     authFlowStart: 'Starting authentication...',
     authFlowDone: 'Authentication complete.',
+    modelConnected: (model) => `Model connected: ${model}`,
     authFlowFailed: 'Authentication did not complete successfully.',
     authStatusFailed: 'Provider auth is still missing or invalid. Try running with --reconfigure.',
     configFlowStart: 'Applying configuration...',
@@ -348,6 +349,7 @@ const TEXT = {
     anthropicSubscriptionIntro: 'Genera un Claude setup-token en cualquier maquina con `claude setup-token` y pegalo en el siguiente paso.',
     authFlowStart: 'Iniciando autenticacion...',
     authFlowDone: 'Autenticacion completada.',
+    modelConnected: (model) => `Modelo conectado: ${model}`,
     authFlowFailed: 'La autenticacion no termino correctamente.',
     authStatusFailed: 'La autenticacion del provider sigue siendo invalida o no esta configurada. Proba con --reconfigure.',
     configFlowStart: 'Aplicando configuracion...',
@@ -828,7 +830,8 @@ function streamFilteredAuth(dockerArgs) {
 
     const handleData = (data) => {
       buf += data.toString();
-      const lines = buf.split('\n');
+      // Split on \r\n, \n, or bare \r — TUIs use carriage returns for in-place redraws
+      const lines = buf.split(/\r?\n|\r/);
       buf = lines.pop(); // hold incomplete last line
       for (const line of lines) emitLine(line);
     };
@@ -836,18 +839,13 @@ function streamFilteredAuth(dockerArgs) {
     const emitLine = (rawLine) => {
       const line = stripAnsi(rawLine);
       const urls = line.match(urlRe) || [];
-      if (urls.length > 0) {
-        for (const url of urls) {
-          if (!seenUrls.has(url)) {
-            seenUrls.add(url);
-            console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
-          }
+      // Whitelist-only: only emit URLs — everything else is branding or TUI chrome
+      for (const url of urls) {
+        if (!seenUrls.has(url)) {
+          seenUrls.add(url);
+          console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
         }
-        return;
       }
-      // Suppress lines that only contain internal gateway/runtime branding
-      if (/openclaw/i.test(line)) return;
-      if (line.trim()) console.log(`   ${line}`);
     };
 
     proc.stdout.on('data', handleData);
@@ -897,7 +895,7 @@ async function runSubscriptionAuthFlow(cfg) {
     die(t(cfg.language, 'authStatusFailed'));
   }
 
-  ok(t(cfg.language, 'authFlowDone'));
+  ok(t(cfg.language, 'modelConnected', `${cfg.provider}/${cfg.modelName}`));
 }
 
 function printSuccess(cfg, gatewayToken) {
