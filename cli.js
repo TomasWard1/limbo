@@ -842,14 +842,19 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
     const emitLine = (rawLine) => {
       const line = stripAnsi(rawLine);
       const urls = line.match(urlRe) || [];
-      // Whitelist-only: only emit URLs — everything else is branding or TUI chrome
-      for (const url of urls) {
-        if (!seenUrls.has(url)) {
-          seenUrls.add(url);
-          console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
-          if (onUrl) onUrl(url);
+      if (urls.length > 0) {
+        for (const url of urls) {
+          if (!seenUrls.has(url)) {
+            seenUrls.add(url);
+            console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
+            if (onUrl) onUrl(url);
+          }
         }
+        return; // don't double-print the line containing the URL
       }
+      // Suppress OpenClaw branding; show everything else (prompts, status, interactive questions)
+      if (/openclaw/i.test(line)) return;
+      if (line.trim()) console.log(`   ${line}`);
     };
 
     proc.stdout.on('data', handleData);
