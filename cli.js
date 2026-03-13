@@ -821,9 +821,16 @@ function applyOpenClawConfig(cfg) {
 // Covers private-mode sequences like \x1b[?25l (hide cursor) that the old [0-9;]* missed.
 const stripAnsi = (str) => str
   .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')  // CSI sequences (all parameter byte combos)
+  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences (must run before two-char ESC to claim \x1b])
   .replace(/\x1b[@-Z\\-_]/g, '')             // two-char ESC sequences
-  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
   .replace(/\r/g, '');
+
+// Matches OAuth/browser URLs emitted by OpenClaw during auth flows.
+const AUTH_URL_RE = /https?:\/\/[^\s"'<>\]]+/g;
+
+// Matches lines consisting entirely of TUI chrome: spinner glyphs, box-drawing chars, and
+// clack/prompt decorations. Used to suppress animation frame scatter from OpenClaw TUI output.
+const TUI_CHROME_RE = /^[\s\u2500-\u257f\u2580-\u259f\u25a0-\u25ff\u2600-\u26ff◇◆●○◈→←↑↓⠀-\u28ff]*$/u;
 
 // Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
 // --tty is required so openclaw sees a TTY inside the container and runs the auth wizard.
@@ -836,7 +843,6 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
       stdio: ['inherit', 'pipe', 'pipe'],
     });
 
-    const urlRe = /https?:\/\/[^\s"'<>\]]+/g;
     const seenUrls = new Set();
     let buf = '';
 
@@ -850,7 +856,7 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
 
     const emitLine = (rawLine) => {
       const line = stripAnsi(rawLine);
-      const urls = line.match(urlRe) || [];
+      const urls = line.match(AUTH_URL_RE) || [];
       if (urls.length > 0) {
         for (const url of urls) {
           if (!seenUrls.has(url)) {
@@ -867,8 +873,7 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
       // OpenClaw's TUI writes animation frames separated by \r — after our \r-split, each
       // frame becomes a short line (often a single char). We filter these out so they don't
       // scatter across the terminal as individual console.log lines.
-      const tuiChrome = /^[\s\u2500-\u257f\u2580-\u259f\u25a0-\u25ff\u2600-\u26ff◇◆●○◈→←↑↓⠀-\u28ff]*$/u;
-      if (tuiChrome.test(line)) return;
+      if (TUI_CHROME_RE.test(line)) return;
       if (line.trim()) console.log(`   ${line}`);
     };
 
@@ -1093,24 +1098,29 @@ ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-const [,, cmd = 'start'] = process.argv;
+if (require.main === module) {
+  const [,, cmd = 'start'] = process.argv;
 
-(async () => {
-  switch (cmd) {
-    case 'start':
-    case 'install': await cmdStart(); break;
-    case 'stop':    cmdStop(); break;
-    case 'logs':    cmdLogs(); break;
-    case 'update':  cmdUpdate(); break;
-    case 'status':  cmdStatus(); break;
-    case 'help':
-    case '--help':
-    case '-h':      cmdHelp(); break;
-    default:
-      warn(t('en', 'unknownCommand', cmd));
-      cmdHelp();
-      process.exit(1);
-  }
-})().catch((err) => {
-  die(err.message || String(err));
-});
+  (async () => {
+    switch (cmd) {
+      case 'start':
+      case 'install': await cmdStart(); break;
+      case 'stop':    cmdStop(); break;
+      case 'logs':    cmdLogs(); break;
+      case 'update':  cmdUpdate(); break;
+      case 'status':  cmdStatus(); break;
+      case 'help':
+      case '--help':
+      case '-h':      cmdHelp(); break;
+      default:
+        warn(t('en', 'unknownCommand', cmd));
+        cmdHelp();
+        process.exit(1);
+    }
+  })().catch((err) => {
+    die(err.message || String(err));
+  });
+} else {
+  // Exported for unit testing — not part of the public CLI API.
+  module.exports = { stripAnsi, AUTH_URL_RE, TUI_CHROME_RE };
+}
