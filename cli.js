@@ -813,8 +813,14 @@ function applyOpenClawConfig(cfg) {
   ok(t(cfg.language, 'configFlowDone'));
 }
 
-// Strip ANSI escape sequences so URL/text matching works on TTY output.
-const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\r/g, '');
+// Strip all ANSI/VT100 escape sequences from a string.
+// Handles: standard CSI (ESC [ ... letter), private-use CSI (ESC [ ? ... letter),
+// OSC sequences (ESC ] ... BEL/ST), and two-char ESC sequences (ESC + single char).
+const stripAnsi = (str) => str
+  .replace(/\x1b\[[0-9;?!<=>]*[A-Za-z@[\\\]^_`{|}~]/g, '') // CSI sequences (incl. ?-prefixed)
+  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')        // OSC sequences
+  .replace(/\x1b[^[\]]/g, '')                                 // other two-char ESC sequences
+  .replace(/\r/g, '');
 
 // Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
 // --tty is required so openclaw sees a TTY inside the container and runs the auth wizard.
@@ -852,8 +858,14 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
         }
         return; // don't double-print the line containing the URL
       }
-      // Suppress OpenClaw branding; show everything else (prompts, status, interactive questions)
+      // Suppress OpenClaw branding
       if (/openclaw/i.test(line)) return;
+      // Suppress TUI chrome: lines that are only spinner/decoration/box-drawing chars.
+      // OpenClaw's TUI writes animation frames separated by \r — after our \r-split, each
+      // frame becomes a short line (often a single char). We filter these out so they don't
+      // scatter across the terminal as individual console.log lines.
+      const tuiChrome = /^[\s\u2500-\u257f\u2580-\u259f\u25a0-\u25ff\u2600-\u26ff◇◆●○◈→←↑↓⠀-\u28ff]*$/u;
+      if (tuiChrome.test(line)) return;
       if (line.trim()) console.log(`   ${line}`);
     };
 
