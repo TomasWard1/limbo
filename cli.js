@@ -14,6 +14,7 @@ const readline = require('readline');
 
 const LIMBO_DIR = path.join(os.homedir(), '.limbo');
 const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
+const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
@@ -64,12 +65,25 @@ const COMPOSE_CONTENT = `services:
   limbo:
     image: ${GHCR_IMAGE}:${DEFAULT_TAG}
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 200
+    tmpfs:
+      - /tmp:size=100M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
       - ./vault:/data/vault
       - limbo-openclaw-state:/home/limbo/.openclaw
+    secrets:
+      - llm_api_key
+      - telegram_bot_token
+      - gateway_token
     env_file:
       - .env
     environment:
@@ -85,6 +99,98 @@ const COMPOSE_CONTENT = `services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+secrets:
+  llm_api_key:
+    file: ./secrets/llm_api_key
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token
+  gateway_token:
+    file: ./secrets/gateway_token
+
+volumes:
+  limbo-data:
+  limbo-openclaw-state:
+`;
+
+// Hardened variant: adds Squid egress proxy sidecar with domain allowlist
+const COMPOSE_CONTENT_HARDENED = `services:
+  limbo:
+    image: ${GHCR_IMAGE}:${DEFAULT_TAG}
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 200
+    tmpfs:
+      - /tmp:size=100M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
+    ports:
+      - "127.0.0.1:${PORT}:${PORT}"
+    volumes:
+      - limbo-data:/data
+      - ./vault:/data/vault
+      - limbo-openclaw-state:/home/limbo/.openclaw
+    secrets:
+      - llm_api_key
+      - telegram_bot_token
+      - gateway_token
+    env_file:
+      - .env
+    environment:
+      OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
+      OPENCLAW_STATE_DIR: /home/limbo/.openclaw
+      HTTP_PROXY: http://squid:3128
+      HTTPS_PROXY: http://squid:3128
+      NO_PROXY: "127.0.0.1,localhost"
+    networks:
+      - internal
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
+          done=(c)=>{try{s.destroy()}catch{};process.exit(c)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  squid:
+    image: ubuntu/squid:latest
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /var/spool/squid:size=50M
+      - /var/log/squid:size=10M
+      - /var/run:size=5M
+    networks:
+      - internal
+      - external
+    volumes:
+      - ./squid/squid.conf:/etc/squid/squid.conf:ro
+      - ./squid/allowed-domains.txt:/etc/squid/allowed-domains.txt:ro
+
+networks:
+  internal:
+    internal: true
+  external:
+
+secrets:
+  llm_api_key:
+    file: ./secrets/llm_api_key
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token
+  gateway_token:
+    file: ./secrets/gateway_token
 
 volumes:
   limbo-data:
@@ -126,6 +232,7 @@ const TEXT = {
     ],
     telegramTokenSafe: 'Your token is stored locally in ~/.limbo/.env and never sent anywhere.',
     telegramTokenPrompt: '  Telegram bot token: ',
+    telegramAutoPairQuestion: 'Auto-approve the first Telegram DM? (Convenient but less secure)',
     yes: 'Yes',
     no: 'No',
     configuration: 'Configuration',
@@ -179,6 +286,7 @@ const TEXT = {
     helpStatus: 'Show container status',
     helpHelp: 'Show this help',
     helpReconfigure: 'Reconfigure auth and onboarding settings (use with start)',
+    securityNotice: 'Security notice: Limbo runs AI agents inside a Docker container with access to your API keys and vault data. The container can make network requests to AI provider APIs. Do not store sensitive secrets (passwords, private keys) in your vault notes.',
     unknownCommand: (cmd) => `Unknown command: ${cmd}`,
   },
   es: {
@@ -215,6 +323,7 @@ const TEXT = {
     ],
     telegramTokenSafe: 'Tu token se guarda localmente en ~/.limbo/.env y nunca se envia a ningun servidor externo.',
     telegramTokenPrompt: '  Telegram bot token: ',
+    telegramAutoPairQuestion: 'Auto-aprobar el primer DM de Telegram? (Conveniente pero menos seguro)',
     yes: 'Si',
     no: 'No',
     configuration: 'Configuracion',
@@ -268,6 +377,7 @@ const TEXT = {
     helpStatus: 'Muestra el estado del container',
     helpHelp: 'Muestra esta ayuda',
     helpReconfigure: 'Reconfigura auth y onboarding (usar con start)',
+    securityNotice: 'Aviso de seguridad: Limbo corre agentes de IA dentro de un container Docker con acceso a tus API keys y datos del vault. El container puede hacer requests a las APIs de los proveedores de IA. No guardes secretos sensibles (passwords, claves privadas) en las notas del vault.',
     unknownCommand: (cmd) => `Comando desconocido: ${cmd}`,
   },
 };
@@ -433,15 +543,35 @@ function normalizeConfig(cfg, existingEnv = {}) {
     LLM_API_KEY: cfg.apiKey || (cfg.keepExisting ? existingEnv.LLM_API_KEY || '' : ''),
     TELEGRAM_ENABLED: cfg.telegramEnabled || existingEnv.TELEGRAM_ENABLED || 'false',
     TELEGRAM_BOT_TOKEN: cfg.telegramToken || (cfg.keepExisting ? existingEnv.TELEGRAM_BOT_TOKEN || '' : ''),
-    TELEGRAM_AUTO_PAIR_FIRST_DM: existingEnv.TELEGRAM_AUTO_PAIR_FIRST_DM || 'true',
+    TELEGRAM_AUTO_PAIR_FIRST_DM: cfg.telegramAutoPair || existingEnv.TELEGRAM_AUTO_PAIR_FIRST_DM || 'false',
     OPENCLAW_GATEWAY_TOKEN: gatewayToken,
   };
 
   return base;
 }
 
+function writeSecretFile(name, value) {
+  fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
+  const filePath = path.join(SECRETS_DIR, name);
+  fs.writeFileSync(filePath, value || '', { mode: 0o600 });
+}
+
+function writeSecrets(cfg, existingEnv = {}) {
+  const normalized = normalizeConfig(cfg, existingEnv);
+  writeSecretFile('llm_api_key', normalized.LLM_API_KEY);
+  writeSecretFile('telegram_bot_token', normalized.TELEGRAM_BOT_TOKEN);
+  writeSecretFile('gateway_token', normalized.OPENCLAW_GATEWAY_TOKEN);
+}
+
+const SECRET_KEYS = new Set([
+  'LLM_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY',
+  'TELEGRAM_BOT_TOKEN', 'OPENCLAW_GATEWAY_TOKEN',
+]);
+
 function writeEnv(cfg, existingEnv = {}) {
+  writeSecrets(cfg, existingEnv);
   const content = Object.entries(normalizeConfig(cfg, existingEnv))
+    .filter(([key]) => !SECRET_KEYS.has(key))
     .map(([key, value]) => `${key}=${value}`)
     .join('\n') + '\n';
   fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
@@ -542,6 +672,7 @@ async function collectConfig(existingEnv = {}) {
   ], language);
 
   let telegramToken = '';
+  let telegramAutoPair = 'false';
   if (telegramChoice.value === 'true') {
     console.log('');
     TEXT[language].telegramBotFatherSteps.forEach((line) => console.log(`  ${c.dim}${line}${c.reset}`));
@@ -551,6 +682,11 @@ async function collectConfig(existingEnv = {}) {
       t(language, 'telegramTokenPrompt'),
       (value) => value ? { ok: true, value } : { ok: false, message: t(language, 'requiredField') },
     );
+    const autoPairChoice = await selectMenu(t(language, 'telegramAutoPairQuestion'), [
+      { label: t(language, 'no'), value: 'false' },
+      { label: t(language, 'yes'), value: 'true' },
+    ], language);
+    telegramAutoPair = autoPairChoice.value;
   }
 
   return {
@@ -562,21 +698,50 @@ async function collectConfig(existingEnv = {}) {
     apiKey,
     telegramEnabled: telegramChoice.value,
     telegramToken,
+    telegramAutoPair,
     gatewayToken: existingEnv.OPENCLAW_GATEWAY_TOKEN || generateGatewayToken(),
   };
 }
 
-function ensureComposeFile() {
+function ensureComposeFile(hardened = false) {
   fs.mkdirSync(LIMBO_DIR, { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'maps'), { recursive: true });
-  fs.writeFileSync(COMPOSE_FILE, COMPOSE_CONTENT);
+  fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
+  // Ensure secret files exist (Docker Compose secrets require the files to be present)
+  for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token']) {
+    const fp = path.join(SECRETS_DIR, name);
+    if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o600 });
+  }
+  if (hardened) {
+    // Copy squid config files for egress filtering
+    const squidDir = path.join(LIMBO_DIR, 'squid');
+    fs.mkdirSync(squidDir, { recursive: true });
+    const srcSquidDir = path.join(__dirname, 'squid');
+    for (const file of ['squid.conf', 'allowed-domains.txt']) {
+      const src = path.join(srcSquidDir, file);
+      const dest = path.join(squidDir, file);
+      if (fs.existsSync(src)) fs.copyFileSync(src, dest);
+    }
+  }
+  fs.writeFileSync(COMPOSE_FILE, hardened ? COMPOSE_CONTENT_HARDENED : COMPOSE_CONTENT);
+}
+
+function readSecretFile(name) {
+  const fp = path.join(SECRETS_DIR, name);
+  try { return fs.readFileSync(fp, 'utf8').trim(); } catch { return ''; }
 }
 
 function ensureGatewayToken(existingEnv) {
-  if (existingEnv.OPENCLAW_GATEWAY_TOKEN) return existingEnv.OPENCLAW_GATEWAY_TOKEN;
+  // Check secret file first, then legacy env
+  const fromFile = readSecretFile('gateway_token');
+  if (fromFile) return fromFile;
+  if (existingEnv.OPENCLAW_GATEWAY_TOKEN) {
+    writeSecretFile('gateway_token', existingEnv.OPENCLAW_GATEWAY_TOKEN);
+    return existingEnv.OPENCLAW_GATEWAY_TOKEN;
+  }
   writeEnv({ keepExisting: true }, existingEnv);
-  return parseEnvFile().OPENCLAW_GATEWAY_TOKEN;
+  return readSecretFile('gateway_token');
 }
 
 function pullOrBuildImage(lang) {
@@ -702,7 +867,8 @@ ${c.green}${c.bold}╚═══════════════════�
 async function cmdStart() {
   if (!hasDocker()) die(t('en', 'dockerMissing'));
 
-  ensureComposeFile();
+  const hardened = process.argv.includes('--hardened');
+  ensureComposeFile(hardened);
 
   const existingEnv = parseEnvFile();
   const alreadyHasEnv = fs.existsSync(ENV_FILE);
@@ -767,10 +933,12 @@ async function cmdStart() {
     ok(t(cfg.language, 'healthy'));
   }
 
+  console.log(`\n  ${c.yellow}⚠  ${t(cfg.language, 'securityNotice')}${c.reset}\n`);
+
   printSuccess({
     language: cfg.language,
     telegramEnabled: mergedEnv.TELEGRAM_ENABLED || cfg.telegramEnabled || 'false',
-  }, parseEnvFile().OPENCLAW_GATEWAY_TOKEN);
+  }, readSecretFile('gateway_token') || mergedEnv.OPENCLAW_GATEWAY_TOKEN);
 }
 
 function cmdStop() {
@@ -819,6 +987,7 @@ ${c.bold}Commands:${c.reset}
 
 ${c.bold}Flags:${c.reset}
   --reconfigure  Reconfigure auth and onboarding settings (use with start)
+  --hardened     Enable egress proxy (restricts outbound to AI provider APIs only)
 
 ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 `);

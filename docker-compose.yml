@@ -1,13 +1,27 @@
 services:
   limbo:
-    image: ghcr.io/tomasward1/limbo:latest
+    # This file is a development reference. The CLI generates a versioned copy at install time.
+    image: ghcr.io/tomasward1/limbo:1.0.0
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 200
+    tmpfs:
+      - /tmp:size=100M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
     ports:
       - "127.0.0.1:18789:18789"
     volumes:
       - limbo-data:/data
       - ./vault:/data/vault
       - limbo-openclaw-state:/home/limbo/.openclaw
+    secrets:
+      - llm_api_key
+      - telegram_bot_token
+      - gateway_token
     env_file:
       - .env
     environment:
@@ -23,6 +37,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+secrets:
+  llm_api_key:
+    file: ./secrets/llm_api_key
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token
+  gateway_token:
+    file: ./secrets/gateway_token
 
 volumes:
   limbo-data:
