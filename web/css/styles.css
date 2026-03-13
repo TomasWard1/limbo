@@ -25,18 +25,19 @@
   /* Accent (coral) */
   --accent:       #E8846C;
   --accent-hover: #D6735B;
+  --accent-fg:    #0D0D0D; /* dark text for use on accent-colored backgrounds — 7.36:1 contrast */
 
   /* Text */
   --text:         #FFFFFF;
   --text-sub:     #9C9B99;
   --text-muted:   #888888;
-  --text-dim:     #555555;
+  --text-dim:     #7A7A7A; /* was #555555 — bumped for WCAG AA on dark bg (4.53:1) */
   --text-nav:     #CCCCCC;
 
-  /* Semantic */
-  --success:      #3D8A5A;
-  --danger:       #8B3A3A;
-  --warning:      #8B7A3A;
+  /* Semantic — all brightened for WCAG AA compliance */
+  --success:      #3E8F5D; /* was #3D8A5A — 4.76:1 on bg-2 */
+  --danger:       #C45C5C; /* was #8B3A3A — 4.66:1 on bg */
+  --warning:      #A08745; /* was #8B7A3A — 5.44:1 on bg-2 */
 
   /* Layout */
   --page-max:     1440px;
@@ -192,7 +193,7 @@ button {
 
 .btn-primary {
   background: var(--accent);
-  color: var(--text);
+  color: var(--accent-fg);
   border-color: var(--accent);
 }
 .btn-primary:hover {
@@ -222,7 +223,7 @@ button {
   border-radius: var(--r-pill);
   padding: 8px 16px;
   background: var(--accent);
-  color: var(--text);
+  color: var(--accent-fg);
   border: 1px solid rgba(255,255,255,0.12);
   box-shadow: 0 1px 4px rgba(232,132,108,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
   transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
@@ -393,7 +394,7 @@ button {
   border-radius: var(--r-pill);
   font-size: 16px;
   font-weight: 500;
-  color: #666666;
+  color: #858585;
   cursor: pointer;
   transition: all 200ms ease;
   background: transparent;
@@ -401,7 +402,7 @@ button {
 }
 .segment-tab.active {
   background: var(--accent);
-  color: var(--text);
+  color: var(--accent-fg);
   font-weight: 600;
 }
 
@@ -422,7 +423,7 @@ button {
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #666666;
+  color: #858585;
   cursor: pointer;
   transition: all 150ms ease;
   background: transparent;
@@ -481,7 +482,7 @@ button {
 .terminal-comment {
   font-family: var(--mono);
   font-size: 14px;
-  color: #555555;
+  color: #7A7A7A;
 }
 
 .terminal-cmd {
@@ -560,7 +561,7 @@ button {
 }
 .waitlist-submit {
   background: var(--accent);
-  color: var(--text);
+  color: var(--accent-fg);
   border: none;
   border-radius: var(--r-pill);
   padding: 14px 28px;
@@ -738,7 +739,7 @@ nav.site-nav {
 
 .qs-note {
   font-size: 16px;
-  color: #666666;
+  color: #7A7A7A;
   max-width: 600px;
 }
 
@@ -827,7 +828,7 @@ nav.site-nav {
 
 .chat-bubble.user {
   background: var(--accent);
-  color: var(--text);
+  color: var(--accent-fg);
   border-radius: 16px 16px 4px 16px;
   max-width: 260px;
 }
@@ -876,7 +877,7 @@ nav.site-nav {
 
 .chat-input-placeholder {
   font-size: 16px;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 .chat-send-btn {
@@ -893,7 +894,7 @@ nav.site-nav {
 .chat-send-btn svg {
   width: 16px;
   height: 16px;
-  color: white;
+  color: var(--accent-fg);
 }
 
 /* Typing indicator */
@@ -982,7 +983,7 @@ nav.site-nav {
   text-align: center;
   font-size: 12px;
   font-weight: 600;
-  color: #666666;
+  color: #808080;
 }
 
 .comp-col-header.limbo {
@@ -1017,7 +1018,7 @@ nav.site-nav {
 
 .powered-strip-label {
   font-size: 16px;
-  color: #444444;
+  color: #7A7A7A;
 }
 
 .powered-item {
@@ -1040,7 +1041,7 @@ nav.site-nav {
 .powered-item-text {
   font-size: 16px;
   font-weight: 500;
-  color: #777777;
+  color: #808080;
 }
 
 .powered-divider {
@@ -1071,7 +1072,7 @@ nav.site-nav {
 
 .final-cta-sub {
   font-size: 18px;
-  color: #666666;
+  color: #7A7A7A;
 }
 
 .final-cta-btns {
@@ -1119,7 +1120,7 @@ footer {
 
 .footer-link {
   font-size: 14px;
-  color: #444444;
+  color: #7A7A7A;
   transition: color 150ms ease;
 }
 .footer-link:hover {
@@ -1134,7 +1135,7 @@ footer {
 
 .footer-bottom {
   font-size: 16px;
-  color: #444444;
+  color: #7A7A7A;
   text-align: center;
 }
 
