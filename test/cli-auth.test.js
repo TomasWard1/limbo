@@ -6,7 +6,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { stripAnsi, AUTH_URL_RE, TUI_CHROME_RE } = require('../cli.js');
+const { stripAnsi, AUTH_URL_RE, TUI_CHROME_RE, flushStreamLines } = require('../cli.js');
 
 // ─── stripAnsi ────────────────────────────────────────────────────────────────
 
@@ -182,4 +182,69 @@ test('AUTH_URL_RE: URL deduplication — same URL seen twice is emitted once', (
   assert.equal(emitted.length, 2, 'duplicate URL should only be emitted once');
   assert.equal(emitted[0], url);
   assert.equal(emitted[1], 'https://example.com/other');
+});
+
+// ─── flushStreamLines (animation scatter regression) ──────────────────────────
+
+test('flushStreamLines: emits only final \\r frame — suppresses scatter', () => {
+  // This is the exact pattern that caused the diagonal scatter seen in the screenshot:
+  // clack's character-by-character reveal writes each progressive state separated by \r.
+  // Before the fix, every frame was emitted as a separate line causing staircase output.
+  const buf = '│ Y\r│ Yo\r│ You\r│ Your URL: https://auth.example.com\n';
+  const { lines, remaining } = flushStreamLines(buf);
+  assert.equal(remaining, '');
+  assert.equal(lines.length, 1, 'only the final frame should be emitted');
+  assert.equal(lines[0], '│ Your URL: https://auth.example.com');
+});
+
+test('flushStreamLines: handles spinner animation (pure chrome final frame)', () => {
+  // Spinner that completes and clears the line — final state is empty/chrome
+  const buf = '⠋\r⠙\r⠹\r⠸\r \n';
+  const { lines } = flushStreamLines(buf);
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0], ' '); // final frame (space = cleared); TUI_CHROME_RE will suppress it
+});
+
+test('flushStreamLines: normalises \\r\\n to single newline', () => {
+  const buf = 'line one\r\nline two\r\n';
+  const { lines, remaining } = flushStreamLines(buf);
+  assert.equal(remaining, '');
+  assert.deepEqual(lines, ['line one', 'line two']);
+});
+
+test('flushStreamLines: holds incomplete segment in remaining', () => {
+  const buf = 'complete line\nstill coming';
+  const { lines, remaining } = flushStreamLines(buf);
+  assert.deepEqual(lines, ['complete line']);
+  assert.equal(remaining, 'still coming');
+});
+
+test('flushStreamLines: accumulating chunks yields same result as one chunk', () => {
+  // Simulate data arriving in two chunks mid-animation-frame
+  const chunk1 = '│ Y\r│ Yo\r';
+  const chunk2 = '│ You\r│ Your URL: https://auth.example.com\n';
+
+  // Chunk 1 alone: no complete \n-terminated line yet
+  const r1 = flushStreamLines(chunk1);
+  assert.deepEqual(r1.lines, []);
+  assert.equal(r1.remaining, '│ Y\r│ Yo\r');
+
+  // Chunk 2 appended to remaining: yields only the final frame
+  const r2 = flushStreamLines(r1.remaining + chunk2);
+  assert.equal(r2.lines.length, 1);
+  assert.equal(r2.lines[0], '│ Your URL: https://auth.example.com');
+  assert.equal(r2.remaining, '');
+});
+
+test('flushStreamLines: multiple \\n-terminated lines processed independently', () => {
+  // Two different lines, each with animation frames
+  const buf = '⠋ Loading...\r⠙ Loading...\r Done!\nEnter code: \r\n';
+  const { lines } = flushStreamLines(buf);
+  assert.deepEqual(lines, [' Done!', 'Enter code: ']);
+});
+
+test('flushStreamLines: empty buffer returns no lines', () => {
+  const { lines, remaining } = flushStreamLines('');
+  assert.deepEqual(lines, []);
+  assert.equal(remaining, '');
 });
