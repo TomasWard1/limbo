@@ -76,7 +76,7 @@ case "$MODEL_PROVIDER" in
 esac
 
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
-mkdir -p /data/db /data/backups /data/logs /data/vault /data/config "$OPENCLAW_STATE_DIR"
+mkdir -p /data/db /data/backups /data/logs /data/vault/notes /data/vault/maps /data/config "$OPENCLAW_STATE_DIR"
 
 # ── Bootstrap workspace (first-run: seed from baked-in template) ──────────────
 if [ ! -d /data/workspace ]; then

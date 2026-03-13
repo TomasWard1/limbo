@@ -14,6 +14,19 @@ function sanitizeName(name) {
 }
 
 /**
+ * Builds frontmatter for a new map file.
+ */
+function buildMapFrontmatter(name) {
+  const lines = [
+    "---",
+    `description: "${name.replace(/-/g, " ")}"`,
+    "type: moc",
+    "---",
+  ];
+  return lines.join("\n");
+}
+
+/**
  * Finds or creates a section in markdown content.
  * Returns the updated content string.
  */
@@ -42,8 +55,9 @@ function upsertSection(content, section, entries) {
 
 /**
  * vault_update_map(map, section, entries): appends entries to a MOC section.
- * Creates the section if it doesn't exist.
- * Entries are markdown link strings, e.g. ["[[note-id|Note Title]]"]
+ * Creates the map file and/or section if they don't exist.
+ * New maps are created with proper YAML frontmatter.
+ * Entries are markdown link strings, e.g. ["- [[note-id|Note Title]]"]
  *
  * @param {string} map - map filename without extension
  * @param {string} section - section heading text
@@ -64,8 +78,8 @@ export async function vaultUpdateMap(map, section, entries) {
     existing = await readFile(filePath, "utf8");
   } catch (err) {
     if (err.code !== "ENOENT") throw err;
-    // New map — start with a title
-    existing = `# ${map}\n`;
+    // New map — start with frontmatter and title
+    existing = `${buildMapFrontmatter(map)}\n\n# ${map}\n`;
   }
 
   const updated = upsertSection(existing, section, entries);

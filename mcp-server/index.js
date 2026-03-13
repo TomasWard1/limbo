@@ -13,7 +13,7 @@ import { vaultUpdateMap } from "./tools/update-map.js";
 const server = new Server(
   {
     name: "limbo-vault",
-    version: "1.0.0",
+    version: "1.1.0",
   },
   {
     capabilities: {
@@ -29,13 +29,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "vault_search",
       description:
-        "Search notes in the vault by regex query. Returns matching notes with titles, snippets, and relevance scores.",
+        "Search notes in the vault by keyword query. Recursively searches all subdirectories. Returns matching notes with titles, snippets, relevance scores, and domain (subdirectory).",
       inputSchema: {
         type: "object",
         properties: {
           query: {
             type: "string",
-            description: "Regex or keyword query to search across all vault notes",
+            description: "Keyword query to search across all vault notes",
           },
         },
         required: ["query"],
@@ -44,13 +44,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "vault_read",
       description:
-        "Read the full content of a vault note by ID. Returns raw markdown including YAML frontmatter.",
+        "Read the full content of a vault note by ID. Searches recursively through subdirectories. Returns raw markdown including YAML frontmatter.",
       inputSchema: {
         type: "object",
         properties: {
           noteId: {
             type: "string",
-            description: "The note ID (filename without .md extension)",
+            description: "The note ID (filename without .md extension). Searched recursively across all subdirectories.",
           },
         },
         required: ["noteId"],
@@ -59,16 +59,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "vault_write_note",
       description:
-        "Create or overwrite a vault note with YAML frontmatter. Required fields: id, title, type, description, content. Optional: map.",
+        "Create or overwrite a vault note with YAML frontmatter. Supports subdirectory organization — creates the subdirectory if it doesn't exist.",
       inputSchema: {
         type: "object",
         properties: {
           id: { type: "string", description: "Unique note identifier (alphanumeric, dashes, underscores)" },
           title: { type: "string", description: "Human-readable note title" },
-          type: { type: "string", description: "Note type, e.g. claim, source, concept, question" },
-          description: { type: "string", description: "One-sentence description of the note's claim or content" },
+          type: { type: "string", description: "Note type: gotcha, decision, config-fact, pattern, tool-knowledge, research-finding, personal-fact" },
+          description: { type: "string", description: "One-sentence falsifiable description of the note's claim" },
           content: { type: "string", description: "Full markdown body of the note" },
-          map: { type: "string", description: "Optional: name of the MOC this note belongs to" },
+          subdirectory: { type: "string", description: "Optional subdirectory under notes/ (e.g. 'openclaw', 'research', 'aios/infrastructure'). Created if it doesn't exist." },
+          status: { type: "string", description: "Optional: current, outdated, superseded. Defaults to none." },
+          domain: { type: "string", description: "Optional: knowledge domain (e.g. openclaw, aios, research, personal)" },
+          source: { type: "string", description: "Optional: provenance (e.g. limbo, claude-code, web)" },
+          topics: {
+            type: "array",
+            items: { type: "string" },
+            description: "Optional: map references as wikilinks, e.g. [\"[[openclaw-map]]\"]",
+          },
         },
         required: ["id", "title", "type", "description", "content"],
       },
@@ -76,13 +84,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "vault_update_map",
       description:
-        "Append entries to a section in a Map of Content (MOC). Creates the map file and/or section if they don't exist.",
+        "Append entries to a section in a Map of Content (MOC). Creates the map file (with frontmatter) and/or section if they don't exist. Maps live in vault/maps/.",
       inputSchema: {
         type: "object",
         properties: {
           map: {
             type: "string",
-            description: "Map filename without extension (alphanumeric, dashes, underscores)",
+            description: "Map filename without extension (e.g. 'openclaw-map', 'ai-research-map')",
           },
           section: {
             type: "string",
@@ -91,7 +99,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           entries: {
             type: "array",
             items: { type: "string" },
-            description: "Markdown link strings to append, e.g. [\"[[note-id|Note Title]]\"]",
+            description: "Markdown link strings to append, e.g. [\"- [[note-id|Note Title]]\"]",
           },
         },
         required: ["map", "section", "entries"],
@@ -128,7 +136,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "vault_write_note": {
         const result = await vaultWriteNote(args);
         return {
-          content: [{ type: "text", text: `Note written: ${result.id}` }],
+          content: [{ type: "text", text: `Note written: ${result.id} → ${result.path}` }],
         };
       }
 
