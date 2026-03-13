@@ -1,17 +1,56 @@
-import { readdir, readFile } from "fs/promises";
-import { join, basename } from "path";
+import { readdir, readFile, stat } from "fs/promises";
+import { join, basename, relative } from "path";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const NOTES_DIR = join(VAULT_PATH, "notes");
 
 /**
- * Extracts the title from YAML frontmatter or first H1 heading.
+ * Recursively collects all .md files under a directory.
+ * Returns array of { filePath, domain } where domain is the relative subdirectory.
+ */
+async function walkNotes(dir, base = dir) {
+  const entries = [];
+  let items;
+  try {
+    items = await readdir(dir);
+  } catch {
+    return entries;
+  }
+
+  for (const item of items) {
+    // Skip hidden directories and _meta
+    if (item.startsWith(".") || item === "_meta") continue;
+
+    const full = join(dir, item);
+    let s;
+    try {
+      s = await stat(full);
+    } catch {
+      continue;
+    }
+
+    if (s.isDirectory()) {
+      const sub = await walkNotes(full, base);
+      entries.push(...sub);
+    } else if (item.endsWith(".md")) {
+      const rel = relative(base, dir);
+      entries.push({ filePath: full, domain: rel || null });
+    }
+  }
+  return entries;
+}
+
+/**
+ * Extracts the title from YAML frontmatter, falling back to description or first H1.
  */
 function extractTitle(content) {
   const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
   if (fmMatch) {
     const titleMatch = fmMatch[1].match(/^title:\s*["']?(.+?)["']?\s*$/m);
     if (titleMatch) return titleMatch[1];
+    // Fallback: use description if no title field
+    const descMatch = fmMatch[1].match(/^description:\s*["']?(.+?)["']?\s*$/m);
+    if (descMatch) return descMatch[1];
   }
   const h1Match = content.match(/^#\s+(.+)$/m);
   if (h1Match) return h1Match[1];
@@ -35,33 +74,27 @@ function extractSnippet(content, regex, maxLen = 150) {
 }
 
 /**
- * vault_search(query): regex search across all .md files in /data/vault/notes/.
- * Returns [{noteId, title, snippet, score}] sorted by score desc.
+ * vault_search(query): recursive search across all .md files in vault/notes/.
+ * Returns [{noteId, title, snippet, score, domain}] sorted by score desc.
  *
  * NOTE: Current implementation is a linear scan (O(n) per query). This is fine
  * for small vaults (hundreds of notes), but will need optimization at scale —
  * consider an inverted index (e.g. SQLite FTS5) when the vault grows large.
  */
 export async function vaultSearch(query) {
-  let files;
-  try {
-    files = await readdir(NOTES_DIR);
-  } catch {
-    return [];
+  if (query.length > 200) {
+    throw new Error("Search query too long (max 200 characters)");
   }
 
-  const mdFiles = files.filter((f) => f.endsWith(".md"));
-  let regex;
-  try {
-    regex = new RegExp(query, "gi");
-  } catch {
-    // Fallback to literal search if invalid regex
-    regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-  }
+  const files = await walkNotes(NOTES_DIR);
+  if (files.length === 0) return [];
+
+  // Always escape user input to prevent ReDoS from pathological patterns
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(escaped, "gi");
 
   const results = [];
-  for (const file of mdFiles) {
-    const filePath = join(NOTES_DIR, file);
+  for (const { filePath, domain } of files) {
     let content;
     try {
       content = await readFile(filePath, "utf8");
@@ -72,12 +105,12 @@ export async function vaultSearch(query) {
     const matches = content.match(regex);
     if (!matches) continue;
 
-    const noteId = basename(file, ".md");
+    const noteId = basename(filePath, ".md");
     const title = extractTitle(content) || noteId;
     const score = matches.length;
     const snippet = extractSnippet(content, regex);
 
-    results.push({ noteId, title, snippet, score });
+    results.push({ noteId, title, snippet, score, domain });
   }
 
   results.sort((a, b) => b.score - a.score);

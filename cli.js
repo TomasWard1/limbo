@@ -114,6 +114,17 @@ const TEXT = {
     invalidOpenAIKey: 'OpenAI API keys usually start with "sk-".',
     invalidAnthropicKey: 'Anthropic API keys usually start with "sk-ant-".',
     telegramQuestion: 'Want to speak to Limbo through Telegram?',
+    telegramBotFatherSteps: [
+      'To create a Telegram bot:',
+      '  1. Open Telegram and search for @BotFather',
+      '  2. Send the command: /newbot',
+      '  3. Choose a display name for your bot (e.g. "My Limbo")',
+      '  4. Choose a username ending in "bot" (e.g. "my_limbo_bot")',
+      '  5. BotFather will reply with a token like:',
+      '       123456789:AAFxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      '  6. Copy that token and paste it below.',
+    ],
+    telegramTokenSafe: 'Your token is stored locally in ~/.limbo/.env and never sent anywhere.',
     telegramTokenPrompt: '  Telegram bot token: ',
     yes: 'Yes',
     no: 'No',
@@ -192,6 +203,17 @@ const TEXT = {
     invalidOpenAIKey: 'Las API keys de OpenAI normalmente empiezan con "sk-".',
     invalidAnthropicKey: 'Las API keys de Anthropic normalmente empiezan con "sk-ant-".',
     telegramQuestion: 'Quieres hablar con Limbo por Telegram?',
+    telegramBotFatherSteps: [
+      'Para crear un bot de Telegram:',
+      '  1. Abri Telegram y busca @BotFather',
+      '  2. Manda el comando: /newbot',
+      '  3. Elegí un nombre para tu bot (ej: "Mi Limbo")',
+      '  4. Elegí un username que termine en "bot" (ej: "mi_limbo_bot")',
+      '  5. BotFather te va a responder con un token como este:',
+      '       123456789:AAFxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      '  6. Copiá ese token y pegalo abajo.',
+    ],
+    telegramTokenSafe: 'Tu token se guarda localmente en ~/.limbo/.env y nunca se envia a ningun servidor externo.',
     telegramTokenPrompt: '  Telegram bot token: ',
     yes: 'Si',
     no: 'No',
@@ -521,6 +543,10 @@ async function collectConfig(existingEnv = {}) {
 
   let telegramToken = '';
   if (telegramChoice.value === 'true') {
+    console.log('');
+    TEXT[language].telegramBotFatherSteps.forEach((line) => console.log(`  ${c.dim}${line}${c.reset}`));
+    console.log(`  ${c.yellow}${TEXT[language].telegramTokenSafe}${c.reset}`);
+    console.log('');
     telegramToken = await promptValidated(
       t(language, 'telegramTokenPrompt'),
       (value) => value ? { ok: true, value } : { ok: false, message: t(language, 'requiredField') },
