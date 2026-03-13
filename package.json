@@ -13,7 +13,8 @@
     "@clack/prompts": "^1.1.0"
   },
   "scripts": {
-    "start": "node cli.js start"
+    "start": "node cli.js start",
+    "test": "node --test test/**/*.test.js"
   },
   "keywords": [
     "limbo",

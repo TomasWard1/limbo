@@ -820,10 +820,32 @@ function applyOpenClawConfig(cfg) {
 //   OSC: ESC ] <any> BEL|ST
 // Covers private-mode sequences like \x1b[?25l (hide cursor) that the old [0-9;]* missed.
 const stripAnsi = (str) => str
-  .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')  // CSI sequences (all parameter byte combos)
-  .replace(/\x1b[@-Z\\-_]/g, '')             // two-char ESC sequences
-  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
+  .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')          // CSI sequences (all parameter byte combos)
+  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences (before two-char — shares \x1b] prefix)
+  .replace(/\x1b[^[\]]/g, '')                         // two-char ESC sequences (e.g. ESC 7/8 save/restore)
   .replace(/\r/g, '');
+
+// Matches OAuth/browser URLs emitted by OpenClaw during auth flows.
+const AUTH_URL_RE = /https?:\/\/[^\s"'<>\]]+/g;
+
+// Matches lines consisting entirely of TUI chrome: spinner glyphs, box-drawing chars, and
+// clack/prompt decorations. Used to suppress animation frame scatter from OpenClaw TUI output.
+const TUI_CHROME_RE = /^[\s\u2500-\u257f\u2580-\u259f\u25a0-\u25ff\u2600-\u26ff\u2190-\u21ff\u2700-\u27bf\u2800-\u28ff]*$/u;
+
+// Pure helper: flush complete lines from a raw buffer.
+// Normalises \r\n → \n, splits on \n, and within each segment keeps only the LAST
+// \r-separated piece — that's the final rendered state after TUI in-place overwrites.
+// Returns the lines to emit and the leftover incomplete segment.
+function flushStreamLines(buf) {
+  const normalized = buf.replace(/\r\n/g, '\n');
+  const segments = normalized.split('\n');
+  const remaining = segments.pop(); // no trailing \n yet
+  const lines = segments.map((seg) => {
+    const frames = seg.split('\r');
+    return frames[frames.length - 1]; // last frame = final rendered content
+  });
+  return { lines, remaining };
+}
 
 // Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
 // --tty is required so openclaw sees a TTY inside the container and runs the auth wizard.
@@ -836,21 +858,22 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
       stdio: ['inherit', 'pipe', 'pipe'],
     });
 
-    const urlRe = /https?:\/\/[^\s"'<>\]]+/g;
     const seenUrls = new Set();
     let buf = '';
 
     const handleData = (data) => {
       buf += data.toString();
-      // Split on \r\n, \n, or bare \r — TUIs use carriage returns for in-place redraws
-      const lines = buf.split(/\r?\n|\r/);
-      buf = lines.pop(); // hold incomplete last line
+      // flushStreamLines keeps only the final \r frame per \n-terminated line,
+      // discarding all intermediate TUI animation states (character-by-character
+      // reveals, spinner frames) that would otherwise scatter across the terminal.
+      const { lines, remaining } = flushStreamLines(buf);
+      buf = remaining;
       for (const line of lines) emitLine(line);
     };
 
     const emitLine = (rawLine) => {
       const line = stripAnsi(rawLine);
-      const urls = line.match(urlRe) || [];
+      const urls = line.match(AUTH_URL_RE) || [];
       if (urls.length > 0) {
         for (const url of urls) {
           if (!seenUrls.has(url)) {
@@ -863,19 +886,19 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
       }
       // Suppress OpenClaw branding
       if (/openclaw/i.test(line)) return;
-      // Suppress TUI chrome: lines that are only spinner/decoration/box-drawing chars.
-      // OpenClaw's TUI writes animation frames separated by \r — after our \r-split, each
-      // frame becomes a short line (often a single char). We filter these out so they don't
-      // scatter across the terminal as individual console.log lines.
-      const tuiChrome = /^[\s\u2500-\u257f\u2580-\u259f\u25a0-\u25ff\u2600-\u26ff◇◆●○◈→←↑↓⠀-\u28ff]*$/u;
-      if (tuiChrome.test(line)) return;
+      // Suppress TUI chrome: lines consisting only of spinner/decoration/box-drawing chars.
+      if (TUI_CHROME_RE.test(line)) return;
       if (line.trim()) console.log(`   ${line}`);
     };
 
     proc.stdout.on('data', handleData);
     proc.stderr.on('data', handleData);
     proc.on('close', (code) => {
-      if (buf.trim()) emitLine(buf);
+      if (buf.trim()) {
+        // Append a synthetic \n to flush the remaining buffer through flushStreamLines.
+        const { lines } = flushStreamLines(buf + '\n');
+        for (const line of lines) emitLine(line);
+      }
       resolve(code ?? 1);
     });
     proc.on('error', () => resolve(1));
@@ -1093,24 +1116,29 @@ ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-const [,, cmd = 'start'] = process.argv;
+if (require.main === module) {
+  const [,, cmd = 'start'] = process.argv;
 
-(async () => {
-  switch (cmd) {
-    case 'start':
-    case 'install': await cmdStart(); break;
-    case 'stop':    cmdStop(); break;
-    case 'logs':    cmdLogs(); break;
-    case 'update':  cmdUpdate(); break;
-    case 'status':  cmdStatus(); break;
-    case 'help':
-    case '--help':
-    case '-h':      cmdHelp(); break;
-    default:
-      warn(t('en', 'unknownCommand', cmd));
-      cmdHelp();
-      process.exit(1);
-  }
-})().catch((err) => {
-  die(err.message || String(err));
-});
+  (async () => {
+    switch (cmd) {
+      case 'start':
+      case 'install': await cmdStart(); break;
+      case 'stop':    cmdStop(); break;
+      case 'logs':    cmdLogs(); break;
+      case 'update':  cmdUpdate(); break;
+      case 'status':  cmdStatus(); break;
+      case 'help':
+      case '--help':
+      case '-h':      cmdHelp(); break;
+      default:
+        warn(t('en', 'unknownCommand', cmd));
+        cmdHelp();
+        process.exit(1);
+    }
+  })().catch((err) => {
+    die(err.message || String(err));
+  });
+} else {
+  // Exported for unit testing — not part of the public CLI API.
+  module.exports = { stripAnsi, AUTH_URL_RE, TUI_CHROME_RE, flushStreamLines };
+}
