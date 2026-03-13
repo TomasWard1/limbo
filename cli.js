@@ -13,6 +13,7 @@ const readline = require('readline');
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const LIMBO_DIR = path.join(os.homedir(), '.limbo');
+const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
@@ -67,6 +68,7 @@ const COMPOSE_CONTENT = `services:
       - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
+      - ./vault:/data/vault
       - limbo-openclaw-state:/home/limbo/.openclaw
     env_file:
       - .env
@@ -540,6 +542,8 @@ async function collectConfig(existingEnv = {}) {
 
 function ensureComposeFile() {
   fs.mkdirSync(LIMBO_DIR, { recursive: true });
+  fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
+  fs.mkdirSync(path.join(VAULT_DIR, 'maps'), { recursive: true });
   fs.writeFileSync(COMPOSE_FILE, COMPOSE_CONTENT);
 }
 
@@ -651,6 +655,7 @@ ${c.green}${c.bold}╚═══════════════════�
   ${c.bold}${t(cfg.language, 'gateway')}:${c.reset}        ws://127.0.0.1:${PORT}
   ${c.bold}${t(cfg.language, 'gatewayToken')}:${c.reset}  ${gatewayToken}
   ${c.bold}${t(cfg.language, 'data')}:${c.reset}           ${LIMBO_DIR}
+  ${c.bold}Vault:${c.reset}          ${VAULT_DIR}
   ${c.bold}${t(cfg.language, 'logs')}:${c.reset}           limbo logs
   ${c.bold}${t(cfg.language, 'stop')}:${c.reset}           limbo stop
   ${c.bold}${t(cfg.language, 'update')}:${c.reset}         limbo update
