@@ -100,7 +100,7 @@ Managed automatically by `npx limbo-ai start`, stored in `~/.limbo/.env`.
 | `MODEL_NAME` | no | `claude-opus-4-6` | Model name (e.g. `claude-opus-4-6`, `claude-sonnet-4-6`, `gpt-5.4`) |
 | `TELEGRAM_ENABLED` | no | `false` | Enable Telegram bot integration |
 | `TELEGRAM_BOT_TOKEN` | no | — | Telegram bot token (required if `TELEGRAM_ENABLED=true`) |
-| `TELEGRAM_AUTO_PAIR_FIRST_DM` | no | `true` | Auto-approves the first Telegram DM sender and persists access (MVP-friendly onboarding) |
+| `TELEGRAM_AUTO_PAIR_FIRST_DM` | no | `false` | Auto-approves the first Telegram DM sender and persists access (must opt-in explicitly) |
 | `OPENCLAW_GATEWAY_TOKEN` | no | generated | Stable gateway token for OpenClaw-compatible clients |
 
 > \* API keys are required only for `AUTH_MODE=api-key`. Subscription auth uses OpenClaw auth profiles instead.

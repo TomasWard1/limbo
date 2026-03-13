@@ -1,5 +1,5 @@
 import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
+import { join, resolve } from "path";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const NOTES_DIR = join(VAULT_PATH, "notes");
@@ -79,7 +79,10 @@ export async function vaultWriteNote(note) {
 
   const frontmatter = buildFrontmatter({ ...note, id: safe });
   const fileContent = `${frontmatter}\n\n${note.content}\n`;
-  const filePath = join(targetDir, `${safe}.md`);
+  const filePath = resolve(targetDir, `${safe}.md`);
+  if (!filePath.startsWith(resolve(NOTES_DIR) + "/")) {
+    throw new Error("Path traversal detected");
+  }
 
   await writeFile(filePath, fileContent, "utf8");
   return { id: safe, path: filePath };

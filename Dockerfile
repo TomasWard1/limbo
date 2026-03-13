@@ -11,8 +11,8 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* \
   && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
 
-# Install OpenClaw and mcporter globally
-RUN npm install -g openclaw mcporter
+# Install OpenClaw and mcporter globally (pinned for reproducibility + CVE control)
+RUN npm install -g openclaw@2026.3.12 mcporter@0.7.3
 
 # Copy MCP server and install its deps
 COPY mcp-server/package.json mcp-server/package-lock.json* ./mcp-server/

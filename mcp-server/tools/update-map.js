@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from "fs/promises";
-import { join } from "path";
+import { join, resolve } from "path";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const MAPS_DIR = join(VAULT_PATH, "maps");
@@ -71,7 +71,10 @@ export async function vaultUpdateMap(map, section, entries) {
   const safeMap = sanitizeName(map);
   await mkdir(MAPS_DIR, { recursive: true });
 
-  const filePath = join(MAPS_DIR, `${safeMap}.md`);
+  const filePath = resolve(MAPS_DIR, `${safeMap}.md`);
+  if (!filePath.startsWith(resolve(MAPS_DIR) + "/")) {
+    throw new Error("Path traversal detected");
+  }
 
   let existing = "";
   try {
