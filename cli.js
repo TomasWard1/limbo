@@ -3,7 +3,7 @@
 // Orchestrates the Docker-based Limbo runtime.
 'use strict';
 
-const { execSync, spawnSync } = require('child_process');
+const { execSync, spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -212,7 +212,7 @@ const TEXT = {
     modelQuestion: 'Model',
     customModel: 'Add another supported model name',
     customModelPrompt: '  Model name: ',
-    invalidModel: 'That model is not in the current OpenClaw docs allowlist for this provider/auth path.',
+    invalidModel: 'That model is not supported for this provider and access method.',
     supportedModels: 'Supported models:',
     openAiApiKeyPrompt: '  OpenAI API key (sk-...): ',
     anthropicApiKeyPrompt: '  Anthropic API key (sk-ant-...): ',
@@ -252,15 +252,16 @@ const TEXT = {
     logsHint: 'Check logs with: limbo logs',
     healthy: 'Container is healthy.',
     subscriptionSetup: 'Provider authentication',
-    openaiSubscriptionIntro: 'Limbo will open OpenClaw auth inside the container so you can complete Codex login.',
+    openaiSubscriptionIntro: 'Limbo will authenticate with your AI provider. A URL will appear — open it in your browser to complete login.',
     anthropicSubscriptionIntro: 'Generate a Claude setup-token on any machine with `claude setup-token`, then paste it into the next step.',
-    authFlowStart: 'Starting provider auth flow...',
-    authFlowDone: 'Provider auth completed.',
-    authFlowFailed: 'Provider auth did not complete successfully.',
-    authStatusFailed: 'OpenClaw still reports missing or invalid auth for the selected provider.',
-    configFlowStart: 'Applying OpenClaw config...',
-    configFlowDone: 'OpenClaw config updated.',
-    configFlowFailed: 'Could not update the OpenClaw config for Limbo.',
+    authFlowStart: 'Starting authentication...',
+    authFlowDone: 'Authentication complete.',
+    authFlowFailed: 'Authentication did not complete successfully.',
+    authStatusFailed: 'Provider auth is still missing or invalid. Try running with --reconfigure.',
+    configFlowStart: 'Applying configuration...',
+    configFlowDone: 'Configuration applied.',
+    configFlowFailed: 'Could not apply configuration. Check your settings and try again.',
+    composing: 'Initializing...',
     success: 'Limbo is running!',
     gateway: 'Gateway',
     gatewayToken: 'Gateway token',
@@ -303,7 +304,7 @@ const TEXT = {
     modelQuestion: 'Modelo',
     customModel: 'Agregar otro nombre de modelo soportado',
     customModelPrompt: '  Nombre del modelo: ',
-    invalidModel: 'Ese modelo no esta en la allowlist actual de OpenClaw para este provider y metodo.',
+    invalidModel: 'Ese modelo no esta soportado para este provider y metodo de acceso.',
     supportedModels: 'Modelos soportados:',
     openAiApiKeyPrompt: '  OpenAI API key (sk-...): ',
     anthropicApiKeyPrompt: '  Anthropic API key (sk-ant-...): ',
@@ -343,15 +344,16 @@ const TEXT = {
     logsHint: 'Mira los logs con: limbo logs',
     healthy: 'El container esta healthy.',
     subscriptionSetup: 'Autenticacion del provider',
-    openaiSubscriptionIntro: 'Limbo va a abrir la autenticacion de OpenClaw dentro del container para que completes el login de Codex.',
+    openaiSubscriptionIntro: 'Limbo va a autenticarse con tu proveedor de IA. Aparecera una URL — abrisla en el navegador para completar el login.',
     anthropicSubscriptionIntro: 'Genera un Claude setup-token en cualquier maquina con `claude setup-token` y pegalo en el siguiente paso.',
-    authFlowStart: 'Iniciando autenticacion del provider...',
-    authFlowDone: 'Autenticacion del provider completada.',
-    authFlowFailed: 'La autenticacion del provider no termino correctamente.',
-    authStatusFailed: 'OpenClaw sigue reportando auth faltante o invalida para el provider elegido.',
-    configFlowStart: 'Aplicando configuracion de OpenClaw...',
-    configFlowDone: 'Configuracion de OpenClaw actualizada.',
-    configFlowFailed: 'No se pudo actualizar la configuracion de OpenClaw para Limbo.',
+    authFlowStart: 'Iniciando autenticacion...',
+    authFlowDone: 'Autenticacion completada.',
+    authFlowFailed: 'La autenticacion no termino correctamente.',
+    authStatusFailed: 'La autenticacion del provider sigue siendo invalida o no esta configurada. Proba con --reconfigure.',
+    configFlowStart: 'Aplicando configuracion...',
+    configFlowDone: 'Configuracion aplicada.',
+    configFlowFailed: 'No se pudo aplicar la configuracion. Revisa los ajustes e intenta de nuevo.',
+    composing: 'Inicializando...',
     success: 'Limbo esta corriendo!',
     gateway: 'Gateway',
     gatewayToken: 'Token del gateway',
@@ -807,7 +809,53 @@ function applyOpenClawConfig(cfg) {
   ok(t(cfg.language, 'configFlowDone'));
 }
 
-function runSubscriptionAuthFlow(cfg) {
+// Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
+// Uses async spawn so URLs appear in real-time (spawnSync would buffer until exit).
+function streamFilteredAuth(dockerArgs) {
+  return new Promise((resolve) => {
+    const proc = spawn('docker', dockerArgs, {
+      cwd: LIMBO_DIR,
+      stdio: ['inherit', 'pipe', 'pipe'],
+    });
+
+    const urlRe = /https?:\/\/[^\s"'<>\]]+/g;
+    const seenUrls = new Set();
+    let buf = '';
+
+    const handleData = (data) => {
+      buf += data.toString();
+      const lines = buf.split('\n');
+      buf = lines.pop(); // hold incomplete last line
+      for (const line of lines) emitLine(line);
+    };
+
+    const emitLine = (line) => {
+      const urls = line.match(urlRe) || [];
+      if (urls.length > 0) {
+        for (const url of urls) {
+          if (!seenUrls.has(url)) {
+            seenUrls.add(url);
+            console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
+          }
+        }
+        return;
+      }
+      // Suppress lines that only contain internal gateway/runtime branding
+      if (/openclaw/i.test(line)) return;
+      if (line.trim()) console.log(`   ${line}`);
+    };
+
+    proc.stdout.on('data', handleData);
+    proc.stderr.on('data', handleData);
+    proc.on('close', (code) => {
+      if (buf.trim()) emitLine(buf);
+      resolve(code ?? 1);
+    });
+    proc.on('error', () => resolve(1));
+  });
+}
+
+async function runSubscriptionAuthFlow(cfg) {
   header(t(cfg.language, 'subscriptionSetup'));
   if (cfg.providerFamily === 'openai') {
     log(t(cfg.language, 'openaiSubscriptionIntro'));
@@ -820,8 +868,17 @@ function runSubscriptionAuthFlow(cfg) {
     ? ['models', 'auth', 'login', '--provider', 'openai-codex']
     : ['models', 'auth', 'paste-token', '--provider', 'anthropic'];
 
-  const authResult = runOpenClaw(authArgs);
-  if (authResult.status !== 0) die(t(cfg.language, 'authFlowFailed'));
+  let exitCode;
+  if (cfg.providerFamily === 'openai') {
+    // Stream output and extract OAuth URL so the user never sees "openclaw"
+    exitCode = await streamFilteredAuth(['compose', 'run', '--rm', '--entrypoint', 'openclaw', 'limbo', ...authArgs]);
+  } else {
+    // Anthropic paste-token is interactive (user pastes a token); keep stdio inherited
+    const authResult = runOpenClaw(authArgs);
+    exitCode = authResult.status;
+  }
+
+  if (exitCode !== 0) die(t(cfg.language, 'authFlowFailed'));
 
   const statusResult = runOpenClaw(
     ['models', 'status', '--check', '--probe-provider', cfg.provider],
@@ -912,7 +969,7 @@ async function cmdStart() {
   pullOrBuildImage(cfg.language);
 
   if (cfg.authMode === 'subscription' && (process.argv.includes('--reconfigure') || !alreadyHasEnv)) {
-    runSubscriptionAuthFlow(cfg);
+    await runSubscriptionAuthFlow(cfg);
   }
 
   applyOpenClawConfig({
@@ -922,7 +979,12 @@ async function cmdStart() {
   });
 
   header(t(cfg.language, 'starting'));
-  run('docker compose up -d --remove-orphans');
+  log(t(cfg.language, 'composing'));
+  const upResult = runDockerCompose(['up', '-d', '--remove-orphans'], { stdio: 'pipe' });
+  if (upResult.status !== 0) {
+    process.stderr.write(upResult.stderr || '');
+    die('Container failed to start. Run `limbo logs` to investigate.');
+  }
 
   header(t(cfg.language, 'verifying'));
   const healthy = waitForHealthy(cfg.language);
