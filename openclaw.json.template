@@ -5,6 +5,34 @@
     "bind": "loopback",
     "auth": { "mode": "token" }
   },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "tools": {
+    "profile": "messaging",
+    "allow": [
+      "web_search",
+      "web_fetch"
+    ],
+    "deny": [
+      "group:automation",
+      "group:runtime",
+      "group:fs",
+      "exec",
+      "browser",
+      "canvas",
+      "nodes",
+      "cron",
+      "gateway",
+      "sessions_spawn",
+      "sessions_send",
+      "process",
+      "image"
+    ],
+    "fs": { "workspaceOnly": true },
+    "exec": { "security": "deny", "ask": "always" },
+    "elevated": { "enabled": false }
+  },
   "agents": {
     "defaults": {
       "model": { "primary": "${MODEL_PROVIDER}/${MODEL_NAME}" },
@@ -14,7 +42,8 @@
   "channels": {
     "telegram": {
       "enabled": ${TELEGRAM_ENABLED},
-      "botToken": "${TELEGRAM_BOT_TOKEN}"
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "dmPolicy": "pairing"
     }
   }
 }

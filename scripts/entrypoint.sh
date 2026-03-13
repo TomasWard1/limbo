@@ -18,17 +18,30 @@ log() {
 
 log "INFO  Limbo container starting"
 
-# ── Validate required env vars ───────────────────────────────────────────────
+# ── Read Docker secrets (with env var fallback for backwards compat) ──────────
+read_secret() {
+  local file="/run/secrets/$1"
+  if [ -f "$file" ]; then
+    cat "$file"
+  else
+    echo ""
+  fi
+}
+
 # API key auth is optional now because OpenClaw can also use persisted auth profiles.
-# Keep the legacy LLM_API_KEY path for backwards compatibility.
-LLM_API_KEY="${LLM_API_KEY:-}"
+# Prefer Docker secrets, fall back to env vars for backwards compatibility.
+_secret_llm="$(read_secret llm_api_key)"
+_secret_telegram="$(read_secret telegram_bot_token)"
+_secret_gateway="$(read_secret gateway_token)"
+
+LLM_API_KEY="${_secret_llm:-${LLM_API_KEY:-}}"
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 MODEL_PROVIDER="${MODEL_PROVIDER:-anthropic}"
 MODEL_NAME="${MODEL_NAME:-claude-opus-4-6}"
 TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
-TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
-TELEGRAM_AUTO_PAIR_FIRST_DM="${TELEGRAM_AUTO_PAIR_FIRST_DM:-true}"
+TELEGRAM_BOT_TOKEN="${_secret_telegram:-${TELEGRAM_BOT_TOKEN:-}}"
+TELEGRAM_AUTO_PAIR_FIRST_DM="${TELEGRAM_AUTO_PAIR_FIRST_DM:-false}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
 OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/home/limbo/.openclaw}"

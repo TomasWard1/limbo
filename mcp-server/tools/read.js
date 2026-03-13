@@ -1,5 +1,5 @@
 import { readFile, readdir, stat } from "fs/promises";
-import { join } from "path";
+import { join, resolve } from "path";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const NOTES_DIR = join(VAULT_PATH, "notes");
@@ -76,6 +76,12 @@ export async function vaultRead(noteId) {
 
   const filePath = await findNote(safe);
   if (!filePath) return null;
+
+  // Defense-in-depth: ensure resolved path stays within vault
+  const resolved = resolve(filePath);
+  if (!resolved.startsWith(resolve(NOTES_DIR) + "/")) {
+    throw new Error("Path traversal detected");
+  }
 
   try {
     return await readFile(filePath, "utf8");
