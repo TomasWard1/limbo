@@ -820,9 +820,9 @@ function applyOpenClawConfig(cfg) {
 //   OSC: ESC ] <any> BEL|ST
 // Covers private-mode sequences like \x1b[?25l (hide cursor) that the old [0-9;]* missed.
 const stripAnsi = (str) => str
-  .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')  // CSI sequences (all parameter byte combos)
-  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences (must run before two-char ESC to claim \x1b])
-  .replace(/\x1b[@-Z\\-_]/g, '')             // two-char ESC sequences
+  .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')          // CSI sequences (all parameter byte combos)
+  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences (before two-char — shares \x1b] prefix)
+  .replace(/\x1b[^[\]]/g, '')                         // two-char ESC sequences (e.g. ESC 7/8 save/restore)
   .replace(/\r/g, '');
 
 // Matches OAuth/browser URLs emitted by OpenClaw during auth flows.
@@ -830,7 +830,7 @@ const AUTH_URL_RE = /https?:\/\/[^\s"'<>\]]+/g;
 
 // Matches lines consisting entirely of TUI chrome: spinner glyphs, box-drawing chars, and
 // clack/prompt decorations. Used to suppress animation frame scatter from OpenClaw TUI output.
-const TUI_CHROME_RE = /^[\s\u2500-\u257f\u2580-\u259f\u25a0-\u25ff\u2600-\u26ff◇◆●○◈→←↑↓⠀-\u28ff]*$/u;
+const TUI_CHROME_RE = /^[\s\u2500-\u257f\u2580-\u259f\u25a0-\u25ff\u2600-\u26ff\u2190-\u21ff\u2700-\u27bf\u2800-\u28ff]*$/u;
 
 // Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
 // --tty is required so openclaw sees a TTY inside the container and runs the auth wizard.
@@ -848,10 +848,22 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
 
     const handleData = (data) => {
       buf += data.toString();
-      // Split on \r\n, \n, or bare \r — TUIs use carriage returns for in-place redraws
-      const lines = buf.split(/\r?\n|\r/);
+      // Split only on \n (or \r\n) — NOT on bare \r.
+      // Bare \r is a carriage-return used for in-place TUI animation (typewriter effect):
+      // e.g. "│  Y\r│  Yo\r│  You\r...\r│  You are running in a remote environment\n"
+      // Splitting on \r would turn every animation frame into a separate emitLine call,
+      // printing one letter per line and scattering them across the terminal.
+      // Instead we split on \n and collapse \r-frames inside processLine().
+      const lines = buf.split(/\r?\n/);
       buf = lines.pop(); // hold incomplete last line
-      for (const line of lines) emitLine(line);
+      for (const line of lines) processLine(line);
+    };
+
+    // Take the last \r-segment of a line — i.e. the final visual state after any
+    // carriage-return animation, discarding all intermediate frames.
+    const processLine = (raw) => {
+      const finalFrame = raw.split('\r').pop() || '';
+      emitLine(finalFrame);
     };
 
     const emitLine = (rawLine) => {
@@ -869,10 +881,7 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
       }
       // Suppress OpenClaw branding
       if (/openclaw/i.test(line)) return;
-      // Suppress TUI chrome: lines that are only spinner/decoration/box-drawing chars.
-      // OpenClaw's TUI writes animation frames separated by \r — after our \r-split, each
-      // frame becomes a short line (often a single char). We filter these out so they don't
-      // scatter across the terminal as individual console.log lines.
+      // Suppress TUI chrome: lines consisting only of spinner/decoration/box-drawing chars.
       if (TUI_CHROME_RE.test(line)) return;
       if (line.trim()) console.log(`   ${line}`);
     };
@@ -880,7 +889,7 @@ function streamFilteredAuth(dockerArgs, onUrl = null) {
     proc.stdout.on('data', handleData);
     proc.stderr.on('data', handleData);
     proc.on('close', (code) => {
-      if (buf.trim()) emitLine(buf);
+      if (buf.trim()) processLine(buf);
       resolve(code ?? 1);
     });
     proc.on('error', () => resolve(1));
