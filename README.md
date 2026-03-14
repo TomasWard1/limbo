@@ -50,11 +50,11 @@ Pulls the latest Limbo image and restarts the container. Your vault data is pers
 
 ## Connecting
 
-The easiest way to talk to Limbo is via **Telegram** — set up once, works from any device.
+There are two ways to connect: **talk to Limbo** (conversational, with its personality and memory logic) or **use the vault directly** (raw tool access from another agent).
 
-For everything else, Limbo speaks over WebSocket at `ws://localhost:18789` via the OpenClaw gateway. Any OpenClaw-compatible client can connect there directly.
+### Talk to Limbo
 
-### Telegram (recommended)
+#### Telegram (recommended)
 
 Set `TELEGRAM_ENABLED=true` and `TELEGRAM_BOT_TOKEN` in `~/.limbo/.env`, then restart:
 
@@ -62,17 +62,21 @@ Set `TELEGRAM_ENABLED=true` and `TELEGRAM_BOT_TOKEN` in `~/.limbo/.env`, then re
 npx limbo-ai start --reconfigure
 ```
 
-Message your bot and Limbo will respond.
+Message your bot and Limbo will respond — full agent with personality, memory logic, and vault tools.
 
-### Without Telegram
+#### OpenClaw client
 
-Connect any [OpenClaw](https://openclaw.dev)-compatible client to:
+Any [OpenClaw](https://openclaw.dev)-compatible chat client can connect to:
 
 ```
 ws://localhost:18789
 ```
 
-This includes Claude Code — add Limbo to your MCP config:
+This gives you a conversational session with Limbo, same as Telegram but over WebSocket.
+
+### Use the vault from another agent
+
+If you want another AI agent (like Claude Code) to read and write to Limbo's vault directly — without going through Limbo's personality or reasoning — add it as an MCP server:
 
 ```json
 {
@@ -83,6 +87,8 @@ This includes Claude Code — add Limbo to your MCP config:
   }
 }
 ```
+
+This exposes the 4 vault tools (`vault_search`, `vault_read`, `vault_write_note`, `vault_update_map`) as MCP tools in the connecting agent. The agent operates on the vault directly — Limbo's LLM is not involved.
 
 ---
 
