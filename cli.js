@@ -260,6 +260,9 @@ const TEXT = {
     subscriptionSetup: 'Provider authentication',
     openaiSubscriptionIntro: 'Limbo will authenticate with your OpenAI account. A URL will open in your browser — log in and authorize access.',
     anthropicSubscriptionIntro: 'Generate a Claude setup-token on any machine with `claude setup-token`, then paste it into the next step.',
+    claudeTokenPrompt: '  Setup token: ',
+    claudeTokenInvalid: 'Invalid token. It should start with "sk-ant-".',
+    claudeTokenWritten: 'Auth profile written.',
     authFlowStart: 'Starting authentication...',
     authFlowDone: 'Authentication complete.',
     authFlowFailed: 'Authentication did not complete successfully.',
@@ -358,6 +361,9 @@ const TEXT = {
     subscriptionSetup: 'Autenticacion del provider',
     openaiSubscriptionIntro: 'Limbo va a autenticarse con tu cuenta de OpenAI. Se va a abrir una URL en tu navegador — inicia sesion y autoriza el acceso.',
     anthropicSubscriptionIntro: 'Genera un Claude setup-token en cualquier maquina con `claude setup-token` y pegalo en el siguiente paso.',
+    claudeTokenPrompt: '  Setup token: ',
+    claudeTokenInvalid: 'Token invalido. Deberia empezar con "sk-ant-".',
+    claudeTokenWritten: 'Perfil de auth guardado.',
     authFlowStart: 'Iniciando autenticacion...',
     authFlowDone: 'Autenticacion completada.',
     authFlowFailed: 'La autenticacion no termino correctamente.',
@@ -933,10 +939,24 @@ function decodeJwtPayload(token) {
   return JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 }
 
-function writeAuthProfilesToDocker(profile) {
-  // Write auth-profiles.json into the OpenClaw Docker volume via a temp container
+function writeAuthProfilesToDocker(store) {
+  const json = JSON.stringify(store, null, 2);
+  const destDir = '/home/limbo/.openclaw/agents/main/agent';
+  const destFile = `${destDir}/auth-profiles.json`;
+  spawnSync('docker', [
+    'compose', 'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
+    '-c', `mkdir -p "${destDir}" && cat > "${destFile}"`,
+  ], {
+    cwd: LIMBO_DIR,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    input: json,
+    encoding: 'utf8',
+  });
+}
+
+function buildCodexAuthProfile(profile) {
   const profileId = profile.email ? `openai-codex:${profile.email}` : 'openai-codex:default';
-  const store = {
+  return {
     version: 1,
     profiles: {
       [profileId]: {
@@ -952,19 +972,46 @@ function writeAuthProfilesToDocker(profile) {
     lastGood: {},
     usageStats: {},
   };
-  const json = JSON.stringify(store, null, 2);
-  const destDir = '/home/limbo/.openclaw/agents/main/agent';
-  const destFile = `${destDir}/auth-profiles.json`;
-  // Use a one-shot container to write into the named volume
-  spawnSync('docker', [
-    'compose', 'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
-    '-c', `mkdir -p "${destDir}" && cat > "${destFile}"`,
-  ], {
-    cwd: LIMBO_DIR,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    input: json,
-    encoding: 'utf8',
-  });
+}
+
+function buildAnthropicAuthProfile(token) {
+  return {
+    version: 1,
+    profiles: {
+      'anthropic:token': {
+        type: 'token',
+        provider: 'anthropic',
+        token,
+      },
+    },
+    order: { anthropic: ['anthropic:token'] },
+    lastGood: {},
+    usageStats: {},
+  };
+}
+
+function parseClaudeSetupToken(raw) {
+  const trimmed = raw.trim();
+  if (/^sk-ant-[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
+  return null;
+}
+
+async function runClaudeSetupTokenAuth(language) {
+  const tokenRaw = await promptValidated(
+    t(language, 'claudeTokenPrompt'),
+    (value) => {
+      if (!value) return { ok: false, message: t(language, 'requiredField') };
+      const parsed = parseClaudeSetupToken(value);
+      if (!parsed) return { ok: false, message: t(language, 'claudeTokenInvalid') };
+      return { ok: true, value };
+    },
+  );
+
+  const token = parseClaudeSetupToken(tokenRaw);
+  const store = buildAnthropicAuthProfile(token);
+  writeAuthProfilesToDocker(store);
+  ok(t(language, 'claudeTokenWritten'));
+  return 0;
 }
 
 async function runCodexOAuth(language) {
@@ -1004,13 +1051,14 @@ async function runCodexOAuth(language) {
   const accountId = authClaim.chatgpt_account_id || '';
   const email = jwt.email || '';
 
-  writeAuthProfilesToDocker({
+  const store = buildCodexAuthProfile({
     access: tokens.access_token,
     refresh: tokens.refresh_token,
     expires: Date.now() + (tokens.expires_in * 1000),
     accountId,
     email,
   });
+  writeAuthProfilesToDocker(store);
 
   return 0;
 }
@@ -1033,18 +1081,10 @@ async function runSubscriptionAuthFlow(cfg) {
   } else {
     log(t(cfg.language, 'anthropicSubscriptionIntro'));
     log(t(cfg.language, 'authFlowStart'));
-    // Anthropic paste-token is interactive (user pastes a token); keep stdio inherited
-    const authResult = runOpenClaw(['models', 'auth', 'paste-token', '--provider', 'anthropic']);
-    if (authResult.status !== 0) die(t(cfg.language, 'authFlowFailed'));
-
-    const statusResult = runOpenClaw(
-      ['models', 'status', '--check', '--probe-provider', cfg.provider],
-      { stdio: 'pipe' },
-    );
-    if (statusResult.status !== 0) {
-      process.stdout.write(statusResult.stdout || '');
-      process.stderr.write(statusResult.stderr || '');
-      die(t(cfg.language, 'authStatusFailed'));
+    try {
+      await runClaudeSetupTokenAuth(cfg.language);
+    } catch (err) {
+      die(`${t(cfg.language, 'authFlowFailed')}: ${err.message}`);
     }
     ok(t(cfg.language, 'authFlowDone'));
   }
