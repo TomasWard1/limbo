@@ -52,19 +52,13 @@ COPY --chown=limbo:limbo openclaw.json.template ./openclaw.json.template
 # mcporter config — registers the limbo-vault MCP stdio server
 COPY --chown=limbo:limbo mcporter.json ./mcporter.json
 
-# Entrypoint script (runs as root so it can set up /data, then drops to limbo)
+# Entrypoint script
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Pre-create /data with correct ownership so the non-root user can write to it
-# The actual subdirectories are created by entrypoint.sh on first run
+# Pre-create dirs with correct ownership for image-layer defaults
 RUN mkdir -p /data && chown limbo:limbo /data
-
-# Pre-create the OpenClaw state dir so the named volume initialises with limbo ownership.
-# Without this, Docker creates the volume mount point as root:root, blocking openclaw writes.
 RUN mkdir -p /home/limbo/.openclaw && chown limbo:limbo /home/limbo/.openclaw
-
-# Make /app writable by limbo so entrypoint can write openclaw.json
 RUN chown limbo:limbo /app
 
 # Data volume — vault, db, config, memory, backups, logs
@@ -73,7 +67,7 @@ VOLUME ["/data"]
 # OpenClaw gateway port
 EXPOSE 18789
 
-# Drop to non-root
+# Run as non-root limbo user
 USER limbo
 
 ENTRYPOINT ["/entrypoint.sh"]
