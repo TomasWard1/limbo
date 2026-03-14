@@ -1,13 +1,11 @@
 #!/bin/sh
-# entrypoint.sh — Limbo container startup
-# Runs as user 'limbo' (non-root). /data is pre-owned by limbo.
+# entrypoint.sh — Limbo container startup (runs as user limbo)
 set -e
 
 LOG_DIR="/data/logs"
 LOG_FILE="$LOG_DIR/startup.log"
 
 # ── Logging ──────────────────────────────────────────────────────────────────
-# Bootstrap log dir before anything else
 mkdir -p "$LOG_DIR"
 
 log() {
@@ -56,37 +54,43 @@ if [ "$MODEL_PROVIDER" = "anthropic" ] && [ -n "$LLM_API_KEY" ] && [ -z "$ANTHRO
 fi
 
 # ── Validate and resolve API key ─────────────────────────────────────────────
-# Accept LLM_API_KEY (generic) or ANTHROPIC_API_KEY (backwards compat).
-# For OpenRouter, also accept OPENROUTER_API_KEY directly.
-case "$MODEL_PROVIDER" in
-  openrouter)
-    # Prefer explicit OPENROUTER_API_KEY, then fall back to LLM_API_KEY
-    LLM_API_KEY="${LLM_API_KEY:-${OPENROUTER_API_KEY:-}}"
-    if [ -z "$LLM_API_KEY" ]; then
-      log "ERROR LLM_API_KEY (or OPENROUTER_API_KEY) is required for MODEL_PROVIDER=openrouter"
-      exit 1
-    fi
-    export OPENROUTER_API_KEY="$LLM_API_KEY"
-    ;;
-  openai)
-    # Prefer explicit OPENAI_API_KEY, then fall back to LLM_API_KEY
-    LLM_API_KEY="${LLM_API_KEY:-${OPENAI_API_KEY:-}}"
-    if [ -z "$LLM_API_KEY" ]; then
-      log "ERROR LLM_API_KEY (or OPENAI_API_KEY) is required for MODEL_PROVIDER=openai"
-      exit 1
-    fi
-    export OPENAI_API_KEY="$LLM_API_KEY"
-    ;;
-  *)
-    # anthropic (default) — accept LLM_API_KEY or legacy ANTHROPIC_API_KEY
-    LLM_API_KEY="${LLM_API_KEY:-${ANTHROPIC_API_KEY:-}}"
-    if [ -z "$LLM_API_KEY" ]; then
-      log "ERROR LLM_API_KEY (or ANTHROPIC_API_KEY for backwards compat) is required"
-      exit 1
-    fi
-    export ANTHROPIC_API_KEY="$LLM_API_KEY"
-    ;;
-esac
+# Subscription mode uses OAuth tokens stored in OpenClaw auth-profiles — no API key needed.
+AUTH_MODE="${AUTH_MODE:-api-key}"
+
+if [ "$AUTH_MODE" = "subscription" ]; then
+  log "INFO  Subscription mode — using OpenClaw auth profiles (no API key required)"
+  # Export any API keys that happen to exist, but don't require them
+  [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
+  [ -n "$LLM_API_KEY" ] && export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$LLM_API_KEY}"
+else
+  # API-key mode: require LLM_API_KEY or provider-specific key
+  case "$MODEL_PROVIDER" in
+    openrouter)
+      LLM_API_KEY="${LLM_API_KEY:-${OPENROUTER_API_KEY:-}}"
+      if [ -z "$LLM_API_KEY" ]; then
+        log "ERROR LLM_API_KEY (or OPENROUTER_API_KEY) is required for MODEL_PROVIDER=openrouter"
+        exit 1
+      fi
+      export OPENROUTER_API_KEY="$LLM_API_KEY"
+      ;;
+    openai)
+      LLM_API_KEY="${LLM_API_KEY:-${OPENAI_API_KEY:-}}"
+      if [ -z "$LLM_API_KEY" ]; then
+        log "ERROR LLM_API_KEY (or OPENAI_API_KEY) is required for MODEL_PROVIDER=openai"
+        exit 1
+      fi
+      export OPENAI_API_KEY="$LLM_API_KEY"
+      ;;
+    *)
+      LLM_API_KEY="${LLM_API_KEY:-${ANTHROPIC_API_KEY:-}}"
+      if [ -z "$LLM_API_KEY" ]; then
+        log "ERROR LLM_API_KEY (or ANTHROPIC_API_KEY for backwards compat) is required"
+        exit 1
+      fi
+      export ANTHROPIC_API_KEY="$LLM_API_KEY"
+      ;;
+  esac
+fi
 
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
 mkdir -p /data/db /data/backups /data/logs /data/vault/notes /data/vault/maps /data/config "$OPENCLAW_STATE_DIR"
