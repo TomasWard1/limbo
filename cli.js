@@ -20,8 +20,6 @@ const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
 const DEFAULT_TAG = require('./package.json').version;
 const PORT = 18789;
-// OpenClaw's OAuth callback server port — must be exposed when running auth inside Docker
-const OPENCLAW_AUTH_PORT = 1453;
 
 // OpenClaw compatibility snapshots from official docs:
 // - https://docs.openclaw.ai/providers/openai
@@ -72,6 +70,9 @@ const COMPOSE_CONTENT = `services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
@@ -80,14 +81,14 @@ const COMPOSE_CONTENT = `services:
       - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
-      - ./vault:/data/vault
+      - ${VAULT_DIR}:/data/vault
       - limbo-openclaw-state:/home/limbo/.openclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
       - gateway_token
     env_file:
-      - .env
+      - ${LIMBO_DIR}/.env
     environment:
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
@@ -104,11 +105,11 @@ const COMPOSE_CONTENT = `services:
 
 secrets:
   llm_api_key:
-    file: ./secrets/llm_api_key
+    file: ${SECRETS_DIR}/llm_api_key
   telegram_bot_token:
-    file: ./secrets/telegram_bot_token
+    file: ${SECRETS_DIR}/telegram_bot_token
   gateway_token:
-    file: ./secrets/gateway_token
+    file: ${SECRETS_DIR}/gateway_token
 
 volumes:
   limbo-data:
@@ -125,6 +126,9 @@ const COMPOSE_CONTENT_HARDENED = `services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
@@ -133,14 +137,14 @@ const COMPOSE_CONTENT_HARDENED = `services:
       - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
-      - ./vault:/data/vault
+      - ${VAULT_DIR}:/data/vault
       - limbo-openclaw-state:/home/limbo/.openclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
       - gateway_token
     env_file:
-      - .env
+      - ${LIMBO_DIR}/.env
     environment:
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
@@ -178,8 +182,8 @@ const COMPOSE_CONTENT_HARDENED = `services:
       - internal
       - external
     volumes:
-      - ./squid/squid.conf:/etc/squid/squid.conf:ro
-      - ./squid/allowed-domains.txt:/etc/squid/allowed-domains.txt:ro
+      - ${LIMBO_DIR}/squid/squid.conf:/etc/squid/squid.conf:ro
+      - ${LIMBO_DIR}/squid/allowed-domains.txt:/etc/squid/allowed-domains.txt:ro
 
 networks:
   internal:
@@ -188,11 +192,11 @@ networks:
 
 secrets:
   llm_api_key:
-    file: ./secrets/llm_api_key
+    file: ${SECRETS_DIR}/llm_api_key
   telegram_bot_token:
-    file: ./secrets/telegram_bot_token
+    file: ${SECRETS_DIR}/telegram_bot_token
   gateway_token:
-    file: ./secrets/gateway_token
+    file: ${SECRETS_DIR}/gateway_token
 
 volumes:
   limbo-data:
@@ -254,14 +258,19 @@ const TEXT = {
     logsHint: 'Check logs with: limbo logs',
     healthy: 'Container is healthy.',
     subscriptionSetup: 'Provider authentication',
-    openaiSubscriptionIntro: 'Limbo will authenticate with your AI provider. A URL will appear — open it in your browser to complete login.',
+    openaiSubscriptionIntro: 'Limbo will authenticate with your OpenAI account. A URL will open in your browser — log in and authorize access.',
     anthropicSubscriptionIntro: 'Generate a Claude setup-token on any machine with `claude setup-token`, then paste it into the next step.',
     authFlowStart: 'Starting authentication...',
     authFlowDone: 'Authentication complete.',
-    modelConnected: (model) => `Model connected: ${model}`,
     authFlowFailed: 'Authentication did not complete successfully.',
     authStatusFailed: 'Provider auth is still missing or invalid. Try running with --reconfigure.',
+    oauthPasteHint: 'After you log in, the browser will redirect to a localhost URL (it may show an error page — that\'s normal). Copy the full URL from the address bar and paste it below.',
+    oauthCallbackPrompt: '  Paste the callback URL: ',
+    oauthInvalidCallback: 'Could not extract an authorization code from that input. Paste the full URL from the browser address bar.',
+    oauthExchanging: 'Exchanging authorization code for tokens...',
+    oauthStateMismatch: 'OAuth state mismatch — proceeding anyway, but this may indicate a problem.',
     configFlowStart: 'Applying configuration...',
+    configFlowSlow: 'This may take a couple of minutes.',
     configFlowDone: 'Configuration applied.',
     configFlowFailed: 'Could not apply configuration. Check your settings and try again.',
     composing: 'Initializing...',
@@ -347,14 +356,19 @@ const TEXT = {
     logsHint: 'Mira los logs con: limbo logs',
     healthy: 'El container esta healthy.',
     subscriptionSetup: 'Autenticacion del provider',
-    openaiSubscriptionIntro: 'Limbo va a autenticarse con tu proveedor de IA. Aparecera una URL — abrisla en el navegador para completar el login.',
+    openaiSubscriptionIntro: 'Limbo va a autenticarse con tu cuenta de OpenAI. Se va a abrir una URL en tu navegador — inicia sesion y autoriza el acceso.',
     anthropicSubscriptionIntro: 'Genera un Claude setup-token en cualquier maquina con `claude setup-token` y pegalo en el siguiente paso.',
     authFlowStart: 'Iniciando autenticacion...',
     authFlowDone: 'Autenticacion completada.',
-    modelConnected: (model) => `Modelo conectado: ${model}`,
     authFlowFailed: 'La autenticacion no termino correctamente.',
     authStatusFailed: 'La autenticacion del provider sigue siendo invalida o no esta configurada. Proba con --reconfigure.',
+    oauthPasteHint: 'Despues de loguearte, el browser va a redirigir a una URL de localhost (puede mostrar una pagina de error — es normal). Copa la URL completa de la barra de direcciones y pegala abajo.',
+    oauthCallbackPrompt: '  Pega la URL de callback: ',
+    oauthInvalidCallback: 'No se pudo extraer un codigo de autorizacion. Pega la URL completa de la barra del navegador.',
+    oauthExchanging: 'Intercambiando codigo de autorizacion por tokens...',
+    oauthStateMismatch: 'OAuth state mismatch — se continua igual, pero esto puede indicar un problema.',
     configFlowStart: 'Aplicando configuracion...',
+    configFlowSlow: 'Esto puede tardar un par de minutos.',
     configFlowDone: 'Configuracion aplicada.',
     configFlowFailed: 'No se pudo aplicar la configuracion. Revisa los ajustes e intenta de nuevo.',
     composing: 'Inicializando...',
@@ -751,19 +765,21 @@ function ensureGatewayToken(existingEnv) {
 }
 
 function pullOrBuildImage(lang) {
+  // When running from the repo (npx .), prefer local build over registry pull.
+  const repoDockerfile = path.join(__dirname, 'Dockerfile');
+  if (fs.existsSync(repoDockerfile)) {
+    header(t(lang, 'buildingFallback'));
+    execSync(`docker build -t ${GHCR_IMAGE}:${DEFAULT_TAG} .`, { stdio: 'inherit', cwd: __dirname });
+    ok(t(lang, 'buildOk', DEFAULT_TAG));
+    return;
+  }
+
   header(t(lang, 'pullingImage'));
   try {
     run('docker compose pull -q');
     ok(t(lang, 'imagePulled'));
   } catch {
-    warn(t(lang, 'pullFailed'));
-    const repoDockerfile = path.join(__dirname, 'Dockerfile');
-    if (!fs.existsSync(repoDockerfile)) {
-      die('Could not pull image and no local Dockerfile found. Check your network or GHCR access.');
-    }
-    log(t(lang, 'buildingFallback'));
-    execSync(`docker build -t ${GHCR_IMAGE}:${DEFAULT_TAG} .`, { stdio: 'inherit', cwd: __dirname });
-    ok(t(lang, 'buildOk', DEFAULT_TAG));
+    die('Could not pull image and no local Dockerfile found. Check your network or GHCR access.');
   }
 }
 
@@ -771,8 +787,24 @@ function runOpenClaw(args, opts = {}) {
   return runDockerCompose(['run', '--rm', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
 }
 
+// Fix volume ownership before any docker compose run commands.
+// cap_drop:ALL strips CAP_DAC_OVERRIDE from root, so a root-user container
+// cannot write to limbo-owned volumes.  This one-shot container runs as root
+// with the minimum caps needed to chown the volume dirs back to limbo.
+function ensureVolumePermissions() {
+  runDockerCompose([
+    'run', '--rm', '--no-deps',
+    '--user', 'root',
+    '--cap-add', 'DAC_OVERRIDE',
+    '--entrypoint', 'sh',
+    'limbo',
+    '-c', 'chown -R limbo:limbo /data /home/limbo/.openclaw 2>/dev/null; true',
+  ], { stdio: 'pipe' });
+}
+
 function applyOpenClawConfig(cfg) {
   header(t(cfg.language, 'configFlowStart'));
+  log(t(cfg.language, 'configFlowSlow'));
 
   const setCommands = [
     ['config', 'set', 'gateway.mode', 'local'],
@@ -790,9 +822,15 @@ function applyOpenClawConfig(cfg) {
     );
   }
 
+  const total = setCommands.length + 1; // +1 for validate
+  let step = 0;
+
   for (const command of setCommands) {
+    step++;
+    process.stdout.write(`\r${c.dim}  [${step}/${total}] ${command.slice(1, 4).join(' ')}${c.reset}`.padEnd(60));
     const result = runOpenClaw(command, { stdio: 'pipe' });
     if (result.status !== 0) {
+      console.log('');
       process.stdout.write(result.stdout || '');
       process.stderr.write(result.stderr || '');
       die(t(cfg.language, 'configFlowFailed'));
@@ -803,154 +841,213 @@ function applyOpenClawConfig(cfg) {
     runOpenClaw(['config', 'unset', 'channels.telegram'], { stdio: 'pipe' });
   }
 
+  step++;
+  process.stdout.write(`\r${c.dim}  [${step}/${total}] config validate${c.reset}`.padEnd(60));
   const validateResult = runOpenClaw(['config', 'validate'], { stdio: 'pipe' });
   if (validateResult.status !== 0) {
+    console.log('');
     process.stdout.write(validateResult.stdout || '');
     process.stderr.write(validateResult.stderr || '');
     die(t(cfg.language, 'configFlowFailed'));
   }
 
+  process.stdout.write('\r' + ' '.repeat(60) + '\r');
   ok(t(cfg.language, 'configFlowDone'));
 }
 
-// Strip all ANSI/VT100 escape sequences from a string.
-// Uses standards-based ECMA-48 byte ranges:
-//   CSI: ESC [ <param bytes 0x30-0x3F>* <intermediate bytes 0x20-0x2F>* <final byte 0x40-0x7E>
-//   Two-char ESC: ESC <0x40-0x5F>  (e.g. ESC M, ESC =, ESC 7/8 save/restore cursor)
-//   OSC: ESC ] <any> BEL|ST
-// Covers private-mode sequences like \x1b[?25l (hide cursor) that the old [0-9;]* missed.
-const stripAnsi = (str) => str
-  .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')          // CSI sequences (all parameter byte combos)
-  .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences (before two-char — shares \x1b] prefix)
-  .replace(/\x1b[^[\]]/g, '')                         // two-char ESC sequences (e.g. ESC 7/8 save/restore)
-  .replace(/\r/g, '');
+// ─── Native OAuth (PKCE) for OpenAI Codex ───────────────────────────────────
+// Implements the full OAuth flow locally so we never need OpenClaw's interactive TUI.
 
-// Matches OAuth/browser URLs emitted by OpenClaw during auth flows.
-const AUTH_URL_RE = /https?:\/\/[^\s"'<>\]]+/g;
+const OPENAI_OAUTH = {
+  clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
+  authorizeUrl: 'https://auth.openai.com/oauth/authorize',
+  tokenUrl: 'https://auth.openai.com/oauth/token',
+  redirectUri: 'http://localhost:1455/auth/callback',
+  scopes: 'openid profile email offline_access',
+};
 
-// Matches lines consisting entirely of TUI chrome: spinner glyphs, box-drawing chars, and
-// clack/prompt decorations. Used to suppress animation frame scatter from OpenClaw TUI output.
-const TUI_CHROME_RE = /^[\s\u2500-\u257f\u2580-\u259f\u25a0-\u25ff\u2600-\u26ff\u2190-\u21ff\u2700-\u27bf\u2800-\u28ff]*$/u;
-
-// Pure helper: flush complete lines from a raw buffer.
-// Normalises \r\n → \n, splits on \n, and within each segment keeps only the LAST
-// \r-separated piece — that's the final rendered state after TUI in-place overwrites.
-// Returns the lines to emit and the leftover incomplete segment.
-function flushStreamLines(buf) {
-  const normalized = buf.replace(/\r\n/g, '\n');
-  const segments = normalized.split('\n');
-  const remaining = segments.pop(); // no trailing \n yet
-  const lines = segments.map((seg) => {
-    const frames = seg.split('\r');
-    return frames[frames.length - 1]; // last frame = final rendered content
-  });
-  return { lines, remaining };
+function generatePKCE() {
+  const verifier = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+  return { verifier, challenge };
 }
 
-// Spawn OpenClaw auth with filtered output: extract OAuth URLs, suppress branding.
-// --tty is required so openclaw sees a TTY inside the container and runs the auth wizard.
-// We pipe stdout/stderr to filter content while the container gets a proper PTY allocation.
-// onUrl: optional callback invoked with each unique URL as it appears (e.g. to auto-open browser).
-function streamFilteredAuth(dockerArgs, onUrl = null) {
-  return new Promise((resolve) => {
-    const proc = spawn('docker', dockerArgs, {
-      cwd: LIMBO_DIR,
-      stdio: ['inherit', 'pipe', 'pipe'],
-    });
+function buildOAuthUrl(pkce, state) {
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: OPENAI_OAUTH.clientId,
+    redirect_uri: OPENAI_OAUTH.redirectUri,
+    scope: OPENAI_OAUTH.scopes,
+    code_challenge: pkce.challenge,
+    code_challenge_method: 'S256',
+    state,
+    id_token_add_organizations: 'true',
+    codex_cli_simplified_flow: 'true',
+    originator: 'pi',
+  });
+  return `${OPENAI_OAUTH.authorizeUrl}?${params}`;
+}
 
-    const seenUrls = new Set();
-    let buf = '';
-
-    const handleData = (data) => {
-      buf += data.toString();
-      // flushStreamLines keeps only the final \r frame per \n-terminated line,
-      // discarding all intermediate TUI animation states (character-by-character
-      // reveals, spinner frames) that would otherwise scatter across the terminal.
-      const { lines, remaining } = flushStreamLines(buf);
-      buf = remaining;
-      for (const line of lines) emitLine(line);
+function parseCallbackInput(input) {
+  const trimmed = input.trim();
+  // Accept full URL, just the code, or code#state / code=XXX&state=YYY
+  try {
+    const url = new URL(trimmed);
+    return {
+      code: url.searchParams.get('code'),
+      state: url.searchParams.get('state'),
     };
+  } catch {}
+  // Try as query string
+  if (trimmed.includes('code=')) {
+    const params = new URLSearchParams(trimmed.replace(/^\?/, ''));
+    return { code: params.get('code'), state: params.get('state') };
+  }
+  // Bare code
+  return { code: trimmed, state: null };
+}
 
-    const emitLine = (rawLine) => {
-      const line = stripAnsi(rawLine);
-      const urls = line.match(AUTH_URL_RE) || [];
-      if (urls.length > 0) {
-        for (const url of urls) {
-          if (!seenUrls.has(url)) {
-            seenUrls.add(url);
-            console.log(`\n  ${c.cyan}${c.bold}→  ${url}${c.reset}\n`);
-            if (onUrl) onUrl(url);
-          }
-        }
-        return; // don't double-print the line containing the URL
-      }
-      // Suppress OpenClaw branding
-      if (/openclaw/i.test(line)) return;
-      // Suppress TUI chrome: lines consisting only of spinner/decoration/box-drawing chars.
-      if (TUI_CHROME_RE.test(line)) return;
-      if (line.trim()) console.log(`   ${line}`);
-    };
+async function exchangeCodeForTokens(code, pkceVerifier) {
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    client_id: OPENAI_OAUTH.clientId,
+    code,
+    code_verifier: pkceVerifier,
+    redirect_uri: OPENAI_OAUTH.redirectUri,
+  });
+  const res = await fetch(OPENAI_OAUTH.tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Token exchange failed (${res.status}): ${text}`);
+  }
+  return res.json();
+}
 
-    proc.stdout.on('data', handleData);
-    proc.stderr.on('data', handleData);
-    proc.on('close', (code) => {
-      if (buf.trim()) {
-        // Append a synthetic \n to flush the remaining buffer through flushStreamLines.
-        const { lines } = flushStreamLines(buf + '\n');
-        for (const line of lines) emitLine(line);
-      }
-      resolve(code ?? 1);
-    });
-    proc.on('error', () => resolve(1));
+function decodeJwtPayload(token) {
+  const parts = token.split('.');
+  if (parts.length < 2) return {};
+  return JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+}
+
+function writeAuthProfilesToDocker(profile) {
+  // Write auth-profiles.json into the OpenClaw Docker volume via a temp container
+  const profileId = profile.email ? `openai-codex:${profile.email}` : 'openai-codex:default';
+  const store = {
+    version: 1,
+    profiles: {
+      [profileId]: {
+        type: 'oauth',
+        provider: 'openai-codex',
+        access: profile.access,
+        refresh: profile.refresh,
+        expires: profile.expires,
+        accountId: profile.accountId,
+      },
+    },
+    order: {},
+    lastGood: {},
+    usageStats: {},
+  };
+  const json = JSON.stringify(store, null, 2);
+  const destDir = '/home/limbo/.openclaw/agents/main/agent';
+  const destFile = `${destDir}/auth-profiles.json`;
+  // Use a one-shot container to write into the named volume
+  spawnSync('docker', [
+    'compose', 'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
+    '-c', `mkdir -p "${destDir}" && cat > "${destFile}"`,
+  ], {
+    cwd: LIMBO_DIR,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    input: json,
+    encoding: 'utf8',
   });
 }
+
+async function runCodexOAuth(language) {
+  const pkce = generatePKCE();
+  const state = crypto.randomBytes(16).toString('hex');
+  const authUrl = buildOAuthUrl(pkce, state);
+
+  // Open browser automatically
+  const openCmd = process.platform === 'darwin' ? 'open'
+    : process.platform === 'win32' ? 'start' : 'xdg-open';
+  try { execSync(`${openCmd} "${authUrl}"`, { stdio: 'ignore' }); } catch {}
+
+  console.log(`\n  ${c.cyan}${c.bold}→  ${authUrl}${c.reset}\n`);
+  log(t(language, 'oauthPasteHint'));
+
+  const callbackRaw = await promptValidated(
+    t(language, 'oauthCallbackPrompt'),
+    (value) => {
+      if (!value) return { ok: false, message: t(language, 'requiredField') };
+      const parsed = parseCallbackInput(value);
+      if (!parsed.code) return { ok: false, message: t(language, 'oauthInvalidCallback') };
+      return { ok: true, value };
+    },
+  );
+
+  const { code, state: returnedState } = parseCallbackInput(callbackRaw);
+  if (returnedState && returnedState !== state) {
+    warn(t(language, 'oauthStateMismatch'));
+  }
+
+  log(t(language, 'oauthExchanging'));
+  const tokens = await exchangeCodeForTokens(code, pkce.verifier);
+
+  // Extract account info from JWT
+  const jwt = decodeJwtPayload(tokens.access_token);
+  const authClaim = jwt['https://api.openai.com/auth'] || {};
+  const accountId = authClaim.chatgpt_account_id || '';
+  const email = jwt.email || '';
+
+  writeAuthProfilesToDocker({
+    access: tokens.access_token,
+    refresh: tokens.refresh_token,
+    expires: Date.now() + (tokens.expires_in * 1000),
+    accountId,
+    email,
+  });
+
+  return 0;
+}
+
+// ─── Subscription auth flow ──────────────────────────────────────────────────
 
 async function runSubscriptionAuthFlow(cfg) {
   header(t(cfg.language, 'subscriptionSetup'));
+
   if (cfg.providerFamily === 'openai') {
     log(t(cfg.language, 'openaiSubscriptionIntro'));
+    log(t(cfg.language, 'authFlowStart'));
+    try {
+      await runCodexOAuth(cfg.language);
+    } catch (err) {
+      die(`${t(cfg.language, 'authFlowFailed')}: ${err.message}`);
+    }
+    // Native OAuth — tokens verified by successful exchange, no status check needed
+    ok(t(cfg.language, 'authFlowDone'));
   } else {
     log(t(cfg.language, 'anthropicSubscriptionIntro'));
-  }
-  log(t(cfg.language, 'authFlowStart'));
-
-  const authArgs = cfg.providerFamily === 'openai'
-    ? ['models', 'auth', 'login', '--provider', 'openai-codex']
-    : ['models', 'auth', 'paste-token', '--provider', 'anthropic'];
-
-  let exitCode;
-  if (cfg.providerFamily === 'openai') {
-    // --tty allocates a PTY inside the container so openclaw's auth wizard runs correctly.
-    // -p exposes the OAuth callback port so the browser redirect reaches the in-container server.
-    // We still pipe stdout/stderr to filter out branding and highlight the OAuth URL.
-    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open';
-    exitCode = await streamFilteredAuth(
-      ['compose', 'run', '--tty', '--rm', '-p', `${OPENCLAW_AUTH_PORT}:${OPENCLAW_AUTH_PORT}`, '--entrypoint', 'openclaw', 'limbo', ...authArgs],
-      (url) => {
-        // Auto-open the browser so the user doesn't need to copy/paste the URL
-        try { spawnSync(opener, [url], { stdio: 'ignore', timeout: 3000 }); } catch {}
-      },
-    );
-  } else {
+    log(t(cfg.language, 'authFlowStart'));
     // Anthropic paste-token is interactive (user pastes a token); keep stdio inherited
-    const authResult = runOpenClaw(authArgs);
-    exitCode = authResult.status;
+    const authResult = runOpenClaw(['models', 'auth', 'paste-token', '--provider', 'anthropic']);
+    if (authResult.status !== 0) die(t(cfg.language, 'authFlowFailed'));
+
+    const statusResult = runOpenClaw(
+      ['models', 'status', '--check', '--probe-provider', cfg.provider],
+      { stdio: 'pipe' },
+    );
+    if (statusResult.status !== 0) {
+      process.stdout.write(statusResult.stdout || '');
+      process.stderr.write(statusResult.stderr || '');
+      die(t(cfg.language, 'authStatusFailed'));
+    }
+    ok(t(cfg.language, 'authFlowDone'));
   }
-
-  if (exitCode !== 0) die(t(cfg.language, 'authFlowFailed'));
-
-  const statusResult = runOpenClaw(
-    ['models', 'status', '--check', '--probe-provider', cfg.provider],
-    { stdio: 'pipe' },
-  );
-
-  if (statusResult.status !== 0) {
-    process.stdout.write(statusResult.stdout || '');
-    process.stderr.write(statusResult.stderr || '');
-    die(t(cfg.language, 'authStatusFailed'));
-  }
-
-  ok(t(cfg.language, 'modelConnected', `${cfg.provider}/${cfg.modelName}`));
 }
 
 function printSuccess(cfg, gatewayToken) {
@@ -1026,6 +1123,7 @@ async function cmdStart() {
   }
 
   pullOrBuildImage(cfg.language);
+  ensureVolumePermissions();
 
   if (cfg.authMode === 'subscription' && (process.argv.includes('--reconfigure') || !alreadyHasEnv)) {
     await runSubscriptionAuthFlow(cfg);
@@ -1116,29 +1214,24 @@ ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-if (require.main === module) {
-  const [,, cmd = 'start'] = process.argv;
+const [,, cmd = 'start'] = process.argv;
 
-  (async () => {
-    switch (cmd) {
-      case 'start':
-      case 'install': await cmdStart(); break;
-      case 'stop':    cmdStop(); break;
-      case 'logs':    cmdLogs(); break;
-      case 'update':  cmdUpdate(); break;
-      case 'status':  cmdStatus(); break;
-      case 'help':
-      case '--help':
-      case '-h':      cmdHelp(); break;
-      default:
-        warn(t('en', 'unknownCommand', cmd));
-        cmdHelp();
-        process.exit(1);
-    }
-  })().catch((err) => {
-    die(err.message || String(err));
-  });
-} else {
-  // Exported for unit testing — not part of the public CLI API.
-  module.exports = { stripAnsi, AUTH_URL_RE, TUI_CHROME_RE, flushStreamLines };
-}
+(async () => {
+  switch (cmd) {
+    case 'start':
+    case 'install': await cmdStart(); break;
+    case 'stop':    cmdStop(); break;
+    case 'logs':    cmdLogs(); break;
+    case 'update':  cmdUpdate(); break;
+    case 'status':  cmdStatus(); break;
+    case 'help':
+    case '--help':
+    case '-h':      cmdHelp(); break;
+    default:
+      warn(t('en', 'unknownCommand', cmd));
+      cmdHelp();
+      process.exit(1);
+  }
+})().catch((err) => {
+  die(err.message || String(err));
+});
