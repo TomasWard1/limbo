@@ -25,6 +25,30 @@ This will:
 
 Limbo binds to `127.0.0.1:18789`.
 
+### Agent Installation
+
+AI agents can install Limbo non-interactively using CLI flags:
+
+```bash
+npx limbo-ai start --provider openrouter --api-key sk-or-v1-xxx --model auto
+```
+
+**Required flags:**
+| Flag | Description |
+|------|-------------|
+| `--provider` | `openai`, `anthropic`, or `openrouter` |
+| `--api-key` | Your provider API key |
+
+**Optional flags:**
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--model` | Provider default | Model name (e.g. `anthropic/claude-sonnet-4-6`) |
+| `--language` | `en` | CLI language (`en` or `es`) |
+
+Headless mode skips Telegram setup. To add Telegram later, run `npx limbo-ai start --reconfigure`.
+
+> **Note:** Subscription-based auth (ChatGPT/Codex, Claude Code) requires interactive setup because it involves browser-based OAuth or token pasting. Use `npx limbo-ai start` without flags for subscription auth.
+
 ### Available commands
 
 ```sh
