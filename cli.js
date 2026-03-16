@@ -50,6 +50,12 @@ const MODEL_CATALOG = {
     menuModels: ['claude-opus-4-6', 'claude-sonnet-4-6'],
     supportedModels: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-opus-4-1', 'claude-sonnet-4'],
   },
+  'openrouter:api-key': {
+    provider: 'openrouter',
+    defaultModel: 'auto',
+    menuModels: [],
+    supportedModels: [],
+  },
 };
 
 const ASCII_ART = String.raw`
@@ -211,6 +217,7 @@ const TEXT = {
     providerQuestion: 'AI Provider',
     providerOpenAI: 'Codex (OpenAI)',
     providerAnthropic: 'Claude (Anthropic)',
+    providerOpenRouter: 'OpenRouter (100+ models)',
     accessMethodQuestion: 'Access method',
     accessSubscriptionOpenAI: 'ChatGPT / Codex subscription',
     accessSubscriptionAnthropic: 'Claude Code subscription',
@@ -225,6 +232,11 @@ const TEXT = {
     requiredField: 'This field is required.',
     invalidOpenAIKey: 'OpenAI API keys usually start with "sk-".',
     invalidAnthropicKey: 'Anthropic API keys usually start with "sk-ant-".',
+    openRouterApiKeyPrompt: '  OpenRouter API key (sk-or-...): ',
+    openRouterKeyWarn: 'OpenRouter API keys usually start with "sk-or-". Proceeding anyway.',
+    openRouterKeyHint: 'Get your key at: https://openrouter.ai/keys',
+    openRouterModelPrompt: '  Model name (blank = auto-routing): ',
+    openRouterModelHint: 'Examples: anthropic/claude-sonnet-4-6, openai/gpt-4o, google/gemini-2.5-pro',
     telegramQuestion: 'Want to speak to Limbo through Telegram?',
     telegramBotFatherSteps: [
       'To create a Telegram bot:',
@@ -312,6 +324,7 @@ const TEXT = {
     providerQuestion: 'AI Provider',
     providerOpenAI: 'Codex (OpenAI)',
     providerAnthropic: 'Claude (Anthropic)',
+    providerOpenRouter: 'OpenRouter (100+ modelos)',
     accessMethodQuestion: 'Metodo de acceso',
     accessSubscriptionOpenAI: 'Suscripcion ChatGPT / Codex',
     accessSubscriptionAnthropic: 'Suscripcion Claude Code',
@@ -326,6 +339,11 @@ const TEXT = {
     requiredField: 'Este campo es obligatorio.',
     invalidOpenAIKey: 'Las API keys de OpenAI normalmente empiezan con "sk-".',
     invalidAnthropicKey: 'Las API keys de Anthropic normalmente empiezan con "sk-ant-".',
+    openRouterApiKeyPrompt: '  OpenRouter API key (sk-or-...): ',
+    openRouterKeyWarn: 'Las API keys de OpenRouter normalmente empiezan con "sk-or-". Continuando igual.',
+    openRouterKeyHint: 'Consegui tu key en: https://openrouter.ai/keys',
+    openRouterModelPrompt: '  Nombre del modelo (vacio = auto-routing): ',
+    openRouterModelHint: 'Ejemplos: anthropic/claude-sonnet-4-6, openai/gpt-4o, google/gemini-2.5-pro',
     telegramQuestion: 'Quieres hablar con Limbo por Telegram?',
     telegramBotFatherSteps: [
       'Para crear un bot de Telegram:',
@@ -590,7 +608,7 @@ function writeSecrets(cfg, existingEnv = {}) {
 }
 
 const SECRET_KEYS = new Set([
-  'LLM_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY',
+  'LLM_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY',
   'TELEGRAM_BOT_TOKEN', 'OPENCLAW_GATEWAY_TOKEN',
 ]);
 
@@ -615,12 +633,29 @@ function waitForHealthy(lang, maxAttempts = 12) {
   return false;
 }
 
+function deriveProviderFamily(provider) {
+  if (!provider) return 'anthropic';
+  if (provider.startsWith('openai')) return 'openai';
+  if (provider === 'openrouter') return 'openrouter';
+  return 'anthropic';
+}
+
 function getModelCatalog(providerFamily, authMode) {
   return MODEL_CATALOG[`${providerFamily}:${authMode}`];
 }
 
 async function chooseModel(lang, providerFamily, authMode) {
   const catalog = getModelCatalog(providerFamily, authMode);
+
+  if (!catalog.menuModels.length) {
+    console.log(`  ${c.dim}${t(lang, 'openRouterModelHint')}${c.reset}`);
+    const modelName = await promptValidated(
+      t(lang, 'openRouterModelPrompt'),
+      (value) => ({ ok: true, value: value || catalog.defaultModel }),
+    );
+    return modelName;
+  }
+
   const options = catalog.menuModels.map((model) => ({ label: model, value: model }));
   options.push({ label: t(lang, 'customModel'), value: '__custom__' });
 
@@ -654,17 +689,23 @@ async function collectConfig(existingEnv = {}) {
   const providerFamily = (await selectMenu(t(language, 'providerQuestion'), [
     { label: t(language, 'providerOpenAI'), value: 'openai' },
     { label: t(language, 'providerAnthropic'), value: 'anthropic' },
+    { label: t(language, 'providerOpenRouter'), value: 'openrouter' },
   ], language)).value;
 
-  const accessMethod = (await selectMenu(t(language, 'accessMethodQuestion'), [
-    {
-      label: providerFamily === 'openai'
-        ? t(language, 'accessSubscriptionOpenAI')
-        : t(language, 'accessSubscriptionAnthropic'),
-      value: 'subscription',
-    },
-    { label: t(language, 'accessApiKey'), value: 'api-key' },
-  ], language)).value;
+  let accessMethod;
+  if (providerFamily === 'openrouter') {
+    accessMethod = 'api-key';
+  } else {
+    accessMethod = (await selectMenu(t(language, 'accessMethodQuestion'), [
+      {
+        label: providerFamily === 'openai'
+          ? t(language, 'accessSubscriptionOpenAI')
+          : t(language, 'accessSubscriptionAnthropic'),
+        value: 'subscription',
+      },
+      { label: t(language, 'accessApiKey'), value: 'api-key' },
+    ], language)).value;
+  }
 
   const modelName = await chooseModel(language, providerFamily, accessMethod);
   const provider = getModelCatalog(providerFamily, accessMethod).provider;
@@ -677,6 +718,16 @@ async function collectConfig(existingEnv = {}) {
         (value) => {
           if (!value) return { ok: false, message: t(language, 'requiredField') };
           if (!value.startsWith('sk-')) return { ok: false, message: t(language, 'invalidOpenAIKey') };
+          return { ok: true, value };
+        },
+      );
+    } else if (providerFamily === 'openrouter') {
+      console.log(`  ${c.dim}${t(language, 'openRouterKeyHint')}${c.reset}`);
+      apiKey = await promptValidated(
+        t(language, 'openRouterApiKeyPrompt'),
+        (value) => {
+          if (!value) return { ok: false, message: t(language, 'requiredField') };
+          if (!value.startsWith('sk-or-')) warn(t(language, 'openRouterKeyWarn'));
           return { ok: true, value };
         },
       );
@@ -1138,7 +1189,7 @@ async function cmdStart() {
       cfg = {
         language: lang,
         provider: existingEnv.MODEL_PROVIDER || 'anthropic',
-        providerFamily: (existingEnv.MODEL_PROVIDER || 'anthropic').startsWith('openai') ? 'openai' : 'anthropic',
+        providerFamily: deriveProviderFamily(existingEnv.MODEL_PROVIDER),
         authMode: existingEnv.AUTH_MODE || 'api-key',
         modelName: existingEnv.MODEL_NAME || 'claude-opus-4-6',
         telegramEnabled: existingEnv.TELEGRAM_ENABLED || 'false',
