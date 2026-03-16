@@ -55,6 +55,39 @@ function detectExistingOpenClaw() {
   return { port: DEFAULT_PORT, processInfo };
 }
 
+function findExistingApiKeys() {
+  const searchPaths = [
+    '/opt/openclaw/.env',
+    '/opt/openclaw/secrets/llm_api_key',
+    path.join(os.homedir(), '.openclaw', '.env'),
+  ];
+
+  for (const envPath of searchPaths) {
+    try {
+      if (!fs.existsSync(envPath)) continue;
+
+      // If it's a secrets file (single value), read directly
+      if (envPath.endsWith('llm_api_key')) {
+        const key = fs.readFileSync(envPath, 'utf8').trim();
+        if (key) return { source: path.dirname(envPath), keys: { LLM_API_KEY: key } };
+        continue;
+      }
+
+      // Parse .env file
+      const content = fs.readFileSync(envPath, 'utf8');
+      const keys = {};
+      for (const line of content.split('\n')) {
+        const match = line.match(/^(LLM_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY|OPENROUTER_API_KEY|MODEL_PROVIDER|MODEL_NAME)=(.+)$/);
+        if (match) keys[match[1]] = match[2];
+      }
+      const hasKey = keys.LLM_API_KEY || keys.ANTHROPIC_API_KEY || keys.OPENAI_API_KEY || keys.OPENROUTER_API_KEY;
+      if (hasKey) return { source: path.dirname(envPath), keys };
+    } catch { /* permission denied etc — skip */ }
+  }
+
+  return null;
+}
+
 // OpenClaw compatibility snapshots from official docs:
 // - https://docs.openclaw.ai/providers/openai
 // - https://docs.openclaw.ai/providers/anthropic
