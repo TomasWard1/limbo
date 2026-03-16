@@ -19,7 +19,9 @@ const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
 const DEFAULT_TAG = require('./package.json').version;
-const PORT = 18789;
+const DEFAULT_PORT = 18789;
+const COEXIST_PORT = 18900;
+let PORT = DEFAULT_PORT;
 
 // OpenClaw compatibility snapshots from official docs:
 // - https://docs.openclaw.ai/providers/openai
@@ -67,7 +69,8 @@ const ASCII_ART = String.raw`
 `;
 
 // docker-compose.yml written to ~/.limbo on install
-const COMPOSE_CONTENT = `services:
+function composeContent() {
+  return `services:
   limbo:
     image: ${GHCR_IMAGE}:${DEFAULT_TAG}
     restart: unless-stopped
@@ -98,6 +101,7 @@ const COMPOSE_CONTENT = `services:
     environment:
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
+      LIMBO_PORT: "${PORT}"
     healthcheck:
       test:
         - CMD-SHELL
@@ -121,9 +125,11 @@ volumes:
   limbo-data:
   limbo-openclaw-state:
 `;
+}
 
 // Hardened variant: adds Squid egress proxy sidecar with domain allowlist
-const COMPOSE_CONTENT_HARDENED = `services:
+function composeContentHardened() {
+  return `services:
   limbo:
     image: ${GHCR_IMAGE}:${DEFAULT_TAG}
     restart: unless-stopped
@@ -154,6 +160,7 @@ const COMPOSE_CONTENT_HARDENED = `services:
     environment:
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
+      LIMBO_PORT: "${PORT}"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
       NO_PROXY: "127.0.0.1,localhost"
@@ -208,6 +215,7 @@ volumes:
   limbo-data:
   limbo-openclaw-state:
 `;
+}
 
 const TEXT = {
   en: {
@@ -820,7 +828,7 @@ function ensureComposeFile(hardened = false) {
       if (fs.existsSync(src)) fs.copyFileSync(src, dest);
     }
   }
-  fs.writeFileSync(COMPOSE_FILE, hardened ? COMPOSE_CONTENT_HARDENED : COMPOSE_CONTENT);
+  fs.writeFileSync(COMPOSE_FILE, hardened ? composeContentHardened() : composeContent());
 }
 
 function readSecretFile(name) {
