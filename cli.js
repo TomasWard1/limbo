@@ -674,6 +674,7 @@ function normalizeConfig(cfg, existingEnv = {}) {
     AUTH_MODE: cfg.authMode || existingEnv.AUTH_MODE || 'api-key',
     MODEL_PROVIDER: cfg.provider || existingEnv.MODEL_PROVIDER || 'anthropic',
     MODEL_NAME: cfg.modelName || existingEnv.MODEL_NAME || 'claude-opus-4-6',
+    LIMBO_PORT: String(PORT),
     OPENAI_API_KEY: cfg.provider === 'openai' && cfg.apiKey ? cfg.apiKey : (cfg.keepExisting ? existingEnv.OPENAI_API_KEY || '' : ''),
     ANTHROPIC_API_KEY: cfg.provider === 'anthropic' && cfg.apiKey ? cfg.apiKey : (cfg.keepExisting ? existingEnv.ANTHROPIC_API_KEY || '' : ''),
     LLM_API_KEY: cfg.apiKey || (cfg.keepExisting ? existingEnv.LLM_API_KEY || '' : ''),
@@ -1264,10 +1265,28 @@ async function cmdStart() {
   if (!hasDocker()) die(t('en', 'dockerMissing'));
 
   const hardened = process.argv.includes('--hardened');
-  ensureComposeFile(hardened);
 
+  // ── Detect existing OpenClaw ──────────────────────────────────────────────
   const existingEnv = parseEnvFile();
   const alreadyHasEnv = fs.existsSync(ENV_FILE);
+
+  if (existingEnv.LIMBO_PORT) {
+    PORT = parseInt(existingEnv.LIMBO_PORT, 10);
+  } else {
+    const existing = detectExistingOpenClaw();
+    if (existing) {
+      console.log(`
+  ${c.yellow}${c.bold}Existing OpenClaw detected${c.reset}
+  ${c.dim}Port ${existing.port} is in use (${existing.processInfo})${c.reset}
+
+  Limbo will run its own OpenClaw instance on port ${c.bold}${COEXIST_PORT}${c.reset}.
+  Both can coexist safely — separate containers, separate data.
+`);
+      PORT = COEXIST_PORT;
+    }
+  }
+
+  ensureComposeFile(hardened);
   let cfg;
   let lang = existingEnv.CLI_LANGUAGE || 'en';
 
