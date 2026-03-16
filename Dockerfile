@@ -40,8 +40,11 @@ WORKDIR /app
 COPY --from=deps /build/mcp-server/node_modules ./mcp-server/node_modules
 COPY --chown=limbo:limbo mcp-server/ ./mcp-server/
 
-# Workspace agent persona files (baked in; USER.md is generated at runtime)
-COPY --chown=limbo:limbo workspace/ ./workspace/
+# System workspace files (product-owned, root-owned for read-only enforcement via symlinks)
+COPY workspace/system/ ./workspace/system/
+
+# User workspace templates (limbo-owned, seeded on first run)
+COPY --chown=limbo:limbo workspace/templates/ ./workspace/templates/
 
 # Migration runner (no external deps — pure Node.js stdlib)
 COPY --chown=limbo:limbo migrations/ ./migrations/
