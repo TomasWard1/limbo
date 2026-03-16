@@ -5,6 +5,7 @@ const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const NOTES_DIR = join(VAULT_PATH, "notes");
 
 const REQUIRED_FIELDS = ["id", "title", "type", "description", "content"];
+const VALID_TYPES = ['fact', 'preference', 'person', 'event', 'project', 'decision', 'idea', 'question', 'source', 'insight'];
 
 function escapeYaml(str) {
   return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -21,6 +22,7 @@ function buildFrontmatter(note) {
   lines.push(`title: "${escapeYaml(note.title)}"`);
   lines.push(`description: "${escapeYaml(note.description)}"`);
   lines.push(`type: ${note.type}`);
+  lines.push(`schema_version: 1`);
   if (note.status) {
     lines.push(`status: ${note.status}`);
   }
@@ -52,6 +54,10 @@ export async function vaultWriteNote(note) {
     if (!note[field] || typeof note[field] !== "string") {
       throw new Error(`Missing or invalid required field: ${field}`);
     }
+  }
+
+  if (!VALID_TYPES.includes(note.type)) {
+    throw new Error(`Invalid note type: "${note.type}". Valid types: ${VALID_TYPES.join(', ')}`);
   }
 
   // Sanitize id

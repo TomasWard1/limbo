@@ -18,7 +18,7 @@ const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
-const DEFAULT_TAG = require('./package.json').version;
+const DEFAULT_TAG = 'latest';
 const DEFAULT_PORT = 18789;
 const COEXIST_PORT = 18900;
 let PORT = DEFAULT_PORT;
@@ -1450,10 +1450,22 @@ function cmdLogs() {
 
 function cmdUpdate() {
   if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
+
+  // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
+  const compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
+  const patched = compose.replace(
+    /image:\s*ghcr\.io\/tomasward1\/limbo:\S+/g,
+    `image: ${GHCR_IMAGE}:${DEFAULT_TAG}`
+  );
+  if (patched !== compose) {
+    fs.writeFileSync(COMPOSE_FILE, patched);
+    log('Patched compose image tag to :latest');
+  }
+
   log('Pulling latest image...');
-  run('docker compose pull -q');
+  run(`docker compose -f "${COMPOSE_FILE}" pull -q`);
   log('Restarting...');
-  run('docker compose up -d --remove-orphans');
+  run(`docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans`);
   ok('Updated and restarted.');
 }
 

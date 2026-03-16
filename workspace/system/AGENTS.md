@@ -54,7 +54,7 @@ Use when: the user shares something worth remembering, or asks you to capture/sa
 mcporter call limbo-vault.vault_write_note \
   id="note-id" \
   title="Note Title" \
-  type="claim" \
+  type="fact" \
   description="One sentence summarizing the core idea." \
   content="Full markdown body." \
   map="optional-moc-name"
@@ -66,13 +66,16 @@ mcporter call limbo-vault.vault_write_note \
 - Keep IDs stable — they're used for linking
 
 **Type values:**
-- `claim` — a fact, assertion, or insight the user shares
-- `source` — a book, article, paper, link, or reference
-- `concept` — an abstract idea or mental model
-- `question` — an open question to explore later
+- `fact` — a factual statement about the user's world (personal info, configs, etc.)
+- `preference` — something the user likes, dislikes, or prefers
 - `person` — information about a specific person
+- `event` — a time-bound happening (meeting, trip, milestone)
 - `project` — notes related to a specific project or goal
-- `event` — a meeting, call, or time-bound event
+- `decision` — a choice with rationale (chose X because Y)
+- `idea` — a creative thought, concept, or mental model
+- `question` — an open question to explore later
+- `source` — a book, article, paper, link, or reference
+- `insight` — a learned pattern, gotcha, or discovery
 
 **Content quality:**
 - Write in third person or neutral framing so notes age well
