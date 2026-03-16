@@ -774,6 +774,32 @@ async function chooseModel(lang, providerFamily, authMode) {
 async function collectConfig(existingEnv = {}) {
   console.log(`${c.cyan}${ASCII_ART}${c.reset}`);
 
+  // Check for existing API keys from another OpenClaw installation
+  const existingKeys = findExistingApiKeys();
+  if (existingKeys && !existingEnv.LLM_API_KEY && !existingEnv.ANTHROPIC_API_KEY && !existingEnv.OPENAI_API_KEY) {
+    const keyValue = existingKeys.keys.LLM_API_KEY || existingKeys.keys.ANTHROPIC_API_KEY || existingKeys.keys.OPENAI_API_KEY || existingKeys.keys.OPENROUTER_API_KEY || '';
+    const maskedKey = keyValue ? keyValue.slice(0, 10) + '...' : 'found';
+
+    console.log(`
+  ${c.cyan}Found existing API keys${c.reset} from ${existingKeys.source}
+  ${c.dim}Key: ${maskedKey}${c.reset}
+`);
+
+    const { select } = await getClack();
+    const reuseChoice = await select({
+      message: 'Reuse existing API configuration?',
+      options: [
+        { value: 'yes', label: 'Yes, use existing keys' },
+        { value: 'no', label: 'No, configure new keys' },
+      ],
+    });
+    await maybeHandleClackCancel(reuseChoice);
+
+    if (reuseChoice === 'yes') {
+      Object.assign(existingEnv, existingKeys.keys);
+    }
+  }
+
   const language = (await selectMenu(t('en', 'chooseLanguage'), [
     { label: TEXT.en.languageName, value: 'en' },
     { label: TEXT.es.languageName, value: 'es' },
@@ -805,7 +831,15 @@ async function collectConfig(existingEnv = {}) {
   let apiKey = '';
 
   if (accessMethod === 'api-key') {
-    if (providerFamily === 'openai') {
+    const reusedKey = existingEnv.LLM_API_KEY
+      || (providerFamily === 'openai' && existingEnv.OPENAI_API_KEY)
+      || (providerFamily === 'anthropic' && existingEnv.ANTHROPIC_API_KEY)
+      || (providerFamily === 'openrouter' && existingEnv.OPENROUTER_API_KEY)
+      || '';
+
+    if (reusedKey) {
+      apiKey = reusedKey;
+    } else if (providerFamily === 'openai') {
       apiKey = await promptValidated(
         t(language, 'openAiApiKeyPrompt'),
         (value) => {
