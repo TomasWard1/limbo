@@ -23,6 +23,38 @@ const DEFAULT_PORT = 18789;
 const COEXIST_PORT = 18900;
 let PORT = DEFAULT_PORT;
 
+// ─── OpenClaw Detection ─────────────────────────────────────────────────────
+
+function isPortInUse(port) {
+  try {
+    execSync(
+      `node -e "const s=require('net').connect(${port},'127.0.0.1');s.on('connect',()=>{s.destroy();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),1500);"`,
+      { stdio: 'pipe', timeout: 3000 }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function detectExistingOpenClaw() {
+  if (!isPortInUse(DEFAULT_PORT)) return null;
+
+  let processInfo = 'unknown process';
+  try {
+    const lsof = execSync(`lsof -i :${DEFAULT_PORT} -t 2>/dev/null`, { encoding: 'utf8', stdio: 'pipe' }).trim();
+    if (lsof) {
+      const pid = lsof.split('\n')[0];
+      const cmdline = execSync(`ps -p ${pid} -o command= 2>/dev/null`, { encoding: 'utf8', stdio: 'pipe' }).trim();
+      if (cmdline.includes('openclaw')) processInfo = 'OpenClaw';
+      else if (cmdline.includes('docker')) processInfo = 'Docker container';
+      else processInfo = cmdline.slice(0, 60);
+    }
+  } catch { /* lsof not available or no match */ }
+
+  return { port: DEFAULT_PORT, processInfo };
+}
+
 // OpenClaw compatibility snapshots from official docs:
 // - https://docs.openclaw.ai/providers/openai
 // - https://docs.openclaw.ai/providers/anthropic
