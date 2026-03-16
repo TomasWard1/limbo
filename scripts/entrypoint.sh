@@ -102,6 +102,7 @@ mkdir -p /data/workspace
 # Even if the agent or user deleted/modified these, they get restored.
 # Symlink targets are on read-only root FS — immutable at runtime.
 for f in /app/workspace/system/*.md; do
+  [ -f "$f" ] || continue
   fname=$(basename "$f")
   target="/data/workspace/$fname"
   if [ -f "$target" ] && [ ! -L "$target" ]; then
@@ -114,6 +115,7 @@ log "INFO  System workspace files linked from image"
 # User files: seed from templates only on first run (never overwrite).
 # These are owned by limbo and writable by the agent.
 for f in /app/workspace/templates/*.md; do
+  [ -f "$f" ] || continue
   fname=$(basename "$f")
   # Skip the USER.md.template — handled separately via envsubst
   [ "$fname" = "USER.md.template" ] && continue

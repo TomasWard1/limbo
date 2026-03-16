@@ -35,6 +35,10 @@ const TYPE_MAP = {
   'insight': 'insight',
 };
 
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Recursively find all .md files under a directory.
  */
@@ -108,7 +112,7 @@ export async function up({ dataDir, log }) {
         const newType = TYPE_MAP[cleanType];
         if (newType && newType !== cleanType) {
           newContent = newContent.replace(
-            new RegExp(`^type:\\s*${currentType}$`, 'm'),
+            new RegExp(`^type:\\s*${escapeRegExp(currentType)}$`, 'm'),
             `type: ${newType}`
           );
           modified = true;
@@ -118,12 +122,16 @@ export async function up({ dataDir, log }) {
 
       // 2. Add schema_version: 1 if not present
       if (!parsed.fields.has('schema_version')) {
-        // Insert schema_version after the type line
-        newContent = newContent.replace(
-          /^(type:\s*.+)$/m,
-          '$1\nschema_version: 1'
-        );
-        modified = true;
+        if (parsed.fields.has('type')) {
+          // Insert schema_version after the type line
+          newContent = newContent.replace(
+            /^(type:\s*.+)$/m,
+            '$1\nschema_version: 1'
+          );
+          modified = true;
+        } else {
+          log("WARN ", `${filePath}: no type field found — cannot insert schema_version`);
+        }
       }
 
       if (modified) {

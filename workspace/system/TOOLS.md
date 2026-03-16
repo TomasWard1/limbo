@@ -55,7 +55,7 @@ Create or overwrite a vault note with YAML frontmatter. Supports subdirectory or
 mcporter call limbo-vault.vault_write_note \
   id="note-id" \
   title="Note Title" \
-  type="config-fact" \
+  type="fact" \
   description="One-sentence falsifiable description." \
   content="Full markdown body of the note." \
   subdirectory="openclaw" \
