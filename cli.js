@@ -19,7 +19,74 @@ const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
 const DEFAULT_TAG = require('./package.json').version;
-const PORT = 18789;
+const DEFAULT_PORT = 18789;
+const COEXIST_PORT = 18900;
+let PORT = DEFAULT_PORT;
+
+// ─── OpenClaw Detection ─────────────────────────────────────────────────────
+
+function isPortInUse(port) {
+  try {
+    execSync(
+      `node -e "const s=require('net').connect(${port},'127.0.0.1');s.on('connect',()=>{s.destroy();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),1500);"`,
+      { stdio: 'pipe', timeout: 3000 }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function detectExistingOpenClaw() {
+  if (!isPortInUse(DEFAULT_PORT)) return null;
+
+  let processInfo = 'unknown process';
+  try {
+    const lsof = execSync(`lsof -i :${DEFAULT_PORT} -t 2>/dev/null`, { encoding: 'utf8', stdio: 'pipe' }).trim();
+    if (lsof) {
+      const pid = lsof.split('\n')[0];
+      const cmdline = execSync(`ps -p ${pid} -o command= 2>/dev/null`, { encoding: 'utf8', stdio: 'pipe' }).trim();
+      if (cmdline.includes('openclaw')) processInfo = 'OpenClaw';
+      else if (cmdline.includes('docker')) processInfo = 'Docker container';
+      else processInfo = cmdline.slice(0, 60);
+    }
+  } catch { /* lsof not available or no match */ }
+
+  return { port: DEFAULT_PORT, processInfo };
+}
+
+function findExistingApiKeys() {
+  const searchPaths = [
+    '/opt/openclaw/.env',
+    '/opt/openclaw/secrets/llm_api_key',
+    path.join(os.homedir(), '.openclaw', '.env'),
+  ];
+
+  for (const envPath of searchPaths) {
+    try {
+      if (!fs.existsSync(envPath)) continue;
+
+      // If it's a secrets file (single value), read directly
+      if (envPath.endsWith('llm_api_key')) {
+        const key = fs.readFileSync(envPath, 'utf8').trim();
+        if (key) return { source: path.dirname(envPath), keys: { LLM_API_KEY: key } };
+        continue;
+      }
+
+      // Parse .env file
+      const content = fs.readFileSync(envPath, 'utf8');
+      const keys = {};
+      for (const line of content.split('\n')) {
+        const match = line.match(/^(LLM_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY|OPENROUTER_API_KEY|MODEL_PROVIDER|MODEL_NAME)=(.+)$/);
+        if (match) keys[match[1]] = match[2].replace(/^["']|["']$/g, '').trim();
+      }
+      const hasKey = keys.LLM_API_KEY || keys.ANTHROPIC_API_KEY || keys.OPENAI_API_KEY || keys.OPENROUTER_API_KEY;
+      if (hasKey) return { source: path.dirname(envPath), keys };
+    } catch { /* permission denied etc — skip */ }
+  }
+
+  return null;
+}
 
 // OpenClaw compatibility snapshots from official docs:
 // - https://docs.openclaw.ai/providers/openai
@@ -67,7 +134,8 @@ const ASCII_ART = String.raw`
 `;
 
 // docker-compose.yml written to ~/.limbo on install
-const COMPOSE_CONTENT = `services:
+function composeContent() {
+  return `services:
   limbo:
     image: ${GHCR_IMAGE}:${DEFAULT_TAG}
     restart: unless-stopped
@@ -98,6 +166,7 @@ const COMPOSE_CONTENT = `services:
     environment:
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
+      LIMBO_PORT: "${PORT}"
     healthcheck:
       test:
         - CMD-SHELL
@@ -121,9 +190,11 @@ volumes:
   limbo-data:
   limbo-openclaw-state:
 `;
+}
 
 // Hardened variant: adds Squid egress proxy sidecar with domain allowlist
-const COMPOSE_CONTENT_HARDENED = `services:
+function composeContentHardened() {
+  return `services:
   limbo:
     image: ${GHCR_IMAGE}:${DEFAULT_TAG}
     restart: unless-stopped
@@ -154,6 +225,7 @@ const COMPOSE_CONTENT_HARDENED = `services:
     environment:
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
+      LIMBO_PORT: "${PORT}"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
       NO_PROXY: "127.0.0.1,localhost"
@@ -208,6 +280,7 @@ volumes:
   limbo-data:
   limbo-openclaw-state:
 `;
+}
 
 const TEXT = {
   en: {
@@ -601,6 +674,7 @@ function normalizeConfig(cfg, existingEnv = {}) {
     AUTH_MODE: cfg.authMode || existingEnv.AUTH_MODE || 'api-key',
     MODEL_PROVIDER: cfg.provider || existingEnv.MODEL_PROVIDER || 'anthropic',
     MODEL_NAME: cfg.modelName || existingEnv.MODEL_NAME || 'claude-opus-4-6',
+    LIMBO_PORT: String(PORT),
     OPENAI_API_KEY: cfg.provider === 'openai' && cfg.apiKey ? cfg.apiKey : (cfg.keepExisting ? existingEnv.OPENAI_API_KEY || '' : ''),
     ANTHROPIC_API_KEY: cfg.provider === 'anthropic' && cfg.apiKey ? cfg.apiKey : (cfg.keepExisting ? existingEnv.ANTHROPIC_API_KEY || '' : ''),
     LLM_API_KEY: cfg.apiKey || (cfg.keepExisting ? existingEnv.LLM_API_KEY || '' : ''),
@@ -700,6 +774,32 @@ async function chooseModel(lang, providerFamily, authMode) {
 async function collectConfig(existingEnv = {}) {
   console.log(`${c.cyan}${ASCII_ART}${c.reset}`);
 
+  // Check for existing API keys from another OpenClaw installation
+  const existingKeys = findExistingApiKeys();
+  if (existingKeys && !existingEnv.LLM_API_KEY && !existingEnv.ANTHROPIC_API_KEY && !existingEnv.OPENAI_API_KEY) {
+    const keyValue = existingKeys.keys.LLM_API_KEY || existingKeys.keys.ANTHROPIC_API_KEY || existingKeys.keys.OPENAI_API_KEY || existingKeys.keys.OPENROUTER_API_KEY || '';
+    const maskedKey = keyValue ? keyValue.slice(0, 10) + '...' : 'found';
+
+    console.log(`
+  ${c.cyan}Found existing API keys${c.reset} from ${existingKeys.source}
+  ${c.dim}Key: ${maskedKey}${c.reset}
+`);
+
+    const { select } = await getClack();
+    const reuseChoice = await select({
+      message: 'Reuse existing API configuration?',
+      options: [
+        { value: 'yes', label: 'Yes, use existing keys' },
+        { value: 'no', label: 'No, configure new keys' },
+      ],
+    });
+    await maybeHandleClackCancel(reuseChoice);
+
+    if (reuseChoice === 'yes') {
+      Object.assign(existingEnv, existingKeys.keys);
+    }
+  }
+
   const language = (await selectMenu(t('en', 'chooseLanguage'), [
     { label: TEXT.en.languageName, value: 'en' },
     { label: TEXT.es.languageName, value: 'es' },
@@ -731,7 +831,15 @@ async function collectConfig(existingEnv = {}) {
   let apiKey = '';
 
   if (accessMethod === 'api-key') {
-    if (providerFamily === 'openai') {
+    const reusedKey = existingEnv.LLM_API_KEY
+      || (providerFamily === 'openai' && existingEnv.OPENAI_API_KEY)
+      || (providerFamily === 'anthropic' && existingEnv.ANTHROPIC_API_KEY)
+      || (providerFamily === 'openrouter' && existingEnv.OPENROUTER_API_KEY)
+      || '';
+
+    if (reusedKey) {
+      apiKey = reusedKey;
+    } else if (providerFamily === 'openai') {
       apiKey = await promptValidated(
         t(language, 'openAiApiKeyPrompt'),
         (value) => {
@@ -820,7 +928,7 @@ function ensureComposeFile(hardened = false) {
       if (fs.existsSync(src)) fs.copyFileSync(src, dest);
     }
   }
-  fs.writeFileSync(COMPOSE_FILE, hardened ? COMPOSE_CONTENT_HARDENED : COMPOSE_CONTENT);
+  fs.writeFileSync(COMPOSE_FILE, hardened ? composeContentHardened() : composeContent());
 }
 
 function readSecretFile(name) {
@@ -1191,10 +1299,33 @@ async function cmdStart() {
   if (!hasDocker()) die(t('en', 'dockerMissing'));
 
   const hardened = process.argv.includes('--hardened');
-  ensureComposeFile(hardened);
 
+  // ── Detect existing OpenClaw ──────────────────────────────────────────────
   const existingEnv = parseEnvFile();
   const alreadyHasEnv = fs.existsSync(ENV_FILE);
+
+  if (existingEnv.LIMBO_PORT) {
+    const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 65535) {
+      warn(`Invalid LIMBO_PORT="${existingEnv.LIMBO_PORT}" in .env, using default ${DEFAULT_PORT}`);
+    } else {
+      PORT = parsed;
+    }
+  } else {
+    const existing = detectExistingOpenClaw();
+    if (existing) {
+      console.log(`
+  ${c.yellow}${c.bold}Existing OpenClaw detected${c.reset}
+  ${c.dim}Port ${existing.port} is in use (${existing.processInfo})${c.reset}
+
+  Limbo will run its own OpenClaw instance on port ${c.bold}${COEXIST_PORT}${c.reset}.
+  Both can coexist safely — separate containers, separate data.
+`);
+      PORT = COEXIST_PORT;
+    }
+  }
+
+  ensureComposeFile(hardened);
   let cfg;
   let lang = existingEnv.CLI_LANGUAGE || 'en';
 
