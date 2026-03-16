@@ -65,7 +65,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           id: { type: "string", description: "Unique note identifier (alphanumeric, dashes, underscores)" },
           title: { type: "string", description: "Human-readable note title" },
-          type: { type: "string", description: "Note type: gotcha, decision, config-fact, pattern, tool-knowledge, research-finding, personal-fact" },
+          type: {
+            type: "string",
+            enum: ["fact", "preference", "person", "event", "project", "decision", "idea", "question", "source", "insight"],
+            description: "Note type: fact, preference, person, event, project, decision, idea, question, source, insight",
+          },
           description: { type: "string", description: "One-sentence falsifiable description of the note's claim" },
           content: { type: "string", description: "Full markdown body of the note" },
           subdirectory: { type: "string", description: "Optional subdirectory under notes/ (e.g. 'openclaw', 'research', 'aios/infrastructure'). Created if it doesn't exist." },
