@@ -316,6 +316,13 @@ const TEXT = {
     helpReconfigure: 'Reconfigure auth and onboarding settings (use with start)',
     securityNotice: 'Security notice: Limbo runs AI agents inside a Docker container with access to your API keys and vault data. The container can make network requests to AI provider APIs. Do not store sensitive secrets (passwords, private keys) in your vault notes.',
     unknownCommand: (cmd) => `Unknown command: ${cmd}`,
+    headlessMissingApiKey: '--provider requires --api-key. Subscription auth needs interactive setup: npx limbo-ai start',
+    headlessInvalidProvider: 'Invalid --provider. Use: openai, anthropic, or openrouter',
+    headlessStarting: 'Headless mode: configuring...',
+    helpProvider: 'Set provider for headless install (openai, anthropic, openrouter)',
+    helpApiKey: 'API key for headless install',
+    helpModel: 'Model name (optional, uses provider default)',
+    helpLanguage: 'Language: en, es (default: en)',
   },
   es: {
     languageName: 'Espanol',
@@ -423,6 +430,13 @@ const TEXT = {
     helpReconfigure: 'Reconfigura auth y onboarding (usar con start)',
     securityNotice: 'Aviso de seguridad: Limbo corre agentes de IA dentro de un container Docker con acceso a tus API keys y datos del vault. El container puede hacer requests a las APIs de los proveedores de IA. No guardes secretos sensibles (passwords, claves privadas) en las notas del vault.',
     unknownCommand: (cmd) => `Comando desconocido: ${cmd}`,
+    headlessMissingApiKey: '--provider requiere --api-key. La autenticacion por suscripcion necesita setup interactivo: npx limbo-ai start',
+    headlessInvalidProvider: '--provider invalido. Usa: openai, anthropic, o openrouter',
+    headlessStarting: 'Modo headless: configurando...',
+    helpProvider: 'Setea el provider para instalacion headless (openai, anthropic, openrouter)',
+    helpApiKey: 'API key para instalacion headless',
+    helpModel: 'Nombre del modelo (opcional, usa el default del provider)',
+    helpLanguage: 'Idioma: en, es (default: en)',
   },
 };
 
@@ -449,6 +463,11 @@ const header = (msg) => console.log(`\n${c.bold}${msg}${c.reset}`);
 function t(lang, key, ...args) {
   const value = TEXT[lang][key];
   return typeof value === 'function' ? value(...args) : value;
+}
+
+function parseFlag(flag) {
+  const idx = process.argv.indexOf(flag);
+  return idx !== -1 && idx + 1 < process.argv.length ? process.argv[idx + 1] : undefined;
 }
 
 function sleep(ms) {
@@ -1179,7 +1198,42 @@ async function cmdStart() {
   let cfg;
   let lang = existingEnv.CLI_LANGUAGE || 'en';
 
-  if (alreadyHasEnv) {
+  // ── Headless mode ──────────────────────────────────────────────────────────
+  const flagProvider = parseFlag('--provider');
+  const flagApiKey = parseFlag('--api-key');
+  const flagModel = parseFlag('--model');
+  const flagLang = parseFlag('--language') || 'en';
+
+  if (flagProvider) {
+    const validProviders = ['openai', 'anthropic', 'openrouter'];
+    if (!validProviders.includes(flagProvider)) {
+      die(t(flagLang, 'headlessInvalidProvider'));
+    }
+    if (!flagApiKey) {
+      die(t(flagLang, 'headlessMissingApiKey'));
+    }
+
+    lang = flagLang;
+    const providerFamily = deriveProviderFamily(flagProvider);
+    const catalog = getModelCatalog(providerFamily, 'api-key');
+    const modelName = flagModel || catalog.defaultModel;
+
+    log(t(lang, 'headlessStarting'));
+    cfg = {
+      language: lang,
+      authMode: 'api-key',
+      provider: catalog.provider,
+      providerFamily,
+      modelName,
+      apiKey: flagApiKey,
+      telegramEnabled: 'false',
+      telegramToken: '',
+      telegramAutoPair: 'false',
+      gatewayToken: ensureGatewayToken(existingEnv),
+    };
+    writeEnv({ ...cfg, CLI_LANGUAGE: cfg.language }, existingEnv);
+    ok(t(cfg.language, 'envWritten'));
+  } else if (alreadyHasEnv) {
     log(existingEnv.MODEL_PROVIDER ? t(lang, 'foundExistingConfig') : `Found existing config at ${ENV_FILE}`);
     const reconfig = process.argv.includes('--reconfigure');
     if (!reconfig) {
@@ -1296,8 +1350,12 @@ ${c.bold}Commands:${c.reset}
   help          Show this help
 
 ${c.bold}Flags:${c.reset}
-  --reconfigure  Reconfigure auth and onboarding settings (use with start)
-  --hardened     Enable egress proxy (restricts outbound to AI provider APIs only)
+  --reconfigure        Reconfigure auth and onboarding settings (use with start)
+  --hardened           Enable egress proxy (restricts outbound to AI provider APIs only)
+  --provider <name>    Set provider for headless install (openai, anthropic, openrouter)
+  --api-key <key>      API key for headless install
+  --model <name>       Model name (optional, uses provider default)
+  --language <code>    Language: en, es (default: en)
 
 ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 `);
