@@ -95,10 +95,41 @@ fi
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
 mkdir -p /data/db /data/backups /data/logs /data/vault/notes /data/vault/maps /data/config "$OPENCLAW_STATE_DIR"
 
-# ── Bootstrap workspace (first-run: seed from baked-in template) ──────────────
-if [ ! -d /data/workspace ]; then
-  log "INFO  First run — seeding workspace from template"
-  cp -r /app/workspace /data/workspace
+# ── Bootstrap workspace (layered: system symlinks + user seeds) ──────────────
+mkdir -p /data/workspace
+
+# System files: symlink from read-only image on every boot.
+# Even if the agent or user deleted/modified these, they get restored.
+# Symlink targets are on read-only root FS — immutable at runtime.
+for f in /app/workspace/system/*.md; do
+  fname=$(basename "$f")
+  target="/data/workspace/$fname"
+  if [ -f "$target" ] && [ ! -L "$target" ]; then
+    log "WARN  System file $fname was replaced — restoring from image"
+  fi
+  ln -sf "$f" "$target"
+done
+log "INFO  System workspace files linked from image"
+
+# User files: seed from templates only on first run (never overwrite).
+# These are owned by limbo and writable by the agent.
+for f in /app/workspace/templates/*.md; do
+  fname=$(basename "$f")
+  # Skip the USER.md.template — handled separately via envsubst
+  [ "$fname" = "USER.md.template" ] && continue
+  target="/data/workspace/$fname"
+  if [ ! -f "$target" ]; then
+    cp "$f" "$target"
+    log "INFO  Seeded user file: $fname"
+  fi
+done
+
+# USER.md: generate from template via envsubst on first run
+if [ ! -f /data/workspace/USER.md ]; then
+  export USER_NAME USER_TIMEZONE USER_LANGUAGE USER_CONTEXT
+  envsubst '$USER_NAME $USER_TIMEZONE $USER_LANGUAGE $USER_CONTEXT' \
+    < /app/workspace/templates/USER.md.template > /data/workspace/USER.md
+  log "INFO  Generated USER.md from template"
 fi
 
 # ── Generate OpenClaw config only if one does not exist already ──────────────
