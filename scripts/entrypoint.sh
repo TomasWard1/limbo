@@ -187,5 +187,6 @@ start_telegram_auto_pair_worker() {
 start_telegram_auto_pair_worker
 
 # ── Start OpenClaw gateway ────────────────────────────────────────────────────
-log "INFO  Starting OpenClaw gateway (token auth, loopback)"
-exec openclaw gateway run --port 18789 --bind loopback
+LIMBO_PORT="${LIMBO_PORT:-18789}"
+log "INFO  Starting OpenClaw gateway on port ${LIMBO_PORT} (token auth, loopback)"
+exec openclaw gateway run --port "${LIMBO_PORT}" --bind loopback
