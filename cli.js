@@ -78,7 +78,7 @@ function findExistingApiKeys() {
       const keys = {};
       for (const line of content.split('\n')) {
         const match = line.match(/^(LLM_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY|OPENROUTER_API_KEY|MODEL_PROVIDER|MODEL_NAME)=(.+)$/);
-        if (match) keys[match[1]] = match[2];
+        if (match) keys[match[1]] = match[2].replace(/^["']|["']$/g, '').trim();
       }
       const hasKey = keys.LLM_API_KEY || keys.ANTHROPIC_API_KEY || keys.OPENAI_API_KEY || keys.OPENROUTER_API_KEY;
       if (hasKey) return { source: path.dirname(envPath), keys };
@@ -1305,7 +1305,12 @@ async function cmdStart() {
   const alreadyHasEnv = fs.existsSync(ENV_FILE);
 
   if (existingEnv.LIMBO_PORT) {
-    PORT = parseInt(existingEnv.LIMBO_PORT, 10);
+    const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 65535) {
+      warn(`Invalid LIMBO_PORT="${existingEnv.LIMBO_PORT}" in .env, using default ${DEFAULT_PORT}`);
+    } else {
+      PORT = parsed;
+    }
   } else {
     const existing = detectExistingOpenClaw();
     if (existing) {

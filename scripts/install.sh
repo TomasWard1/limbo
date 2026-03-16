@@ -114,7 +114,7 @@ if ss -tlnp 2>/dev/null | grep -q ":${DEFAULT_PORT} " || \
   done
 
   if [ -n "$EXISTING_ENV" ]; then
-    EXISTING_KEY=$(grep -E '^(LLM_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY)=' "$EXISTING_ENV" | head -1 | cut -d= -f2)
+    EXISTING_KEY=$(grep -E '^(LLM_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY|OPENROUTER_API_KEY)=' "$EXISTING_ENV" | head -1 | cut -d= -f2)
     if [ -n "$EXISTING_KEY" ]; then
       MASKED_KEY="${EXISTING_KEY:0:10}..."
       log "Found existing API key ($MASKED_KEY) in $EXISTING_ENV"
@@ -140,6 +140,28 @@ header "Setting up /opt/limbo..."
 mkdir -p /opt/limbo
 log "Directory /opt/limbo ready."
 
+# ─── Helper prompts ───────────────────────────────────────────────────────────
+prompt_required() {
+  local varname="$1"
+  local label="$2"
+  local value=""
+  while [[ -z "$value" ]]; do
+    read -rp "  ${label}: " value
+    if [[ -z "$value" ]]; then
+      warn "This field is required."
+    fi
+  done
+  printf -v "$varname" '%s' "$value"
+}
+
+prompt_optional() {
+  local varname="$1"
+  local label="$2"
+  local default="${3:-}"
+  read -rp "  ${label} [${default}]: " value
+  printf -v "$varname" '%s' "${value:-$default}"
+}
+
 # ─── Collect API keys ─────────────────────────────────────────────────────────
 if [ "$KEYS_REUSED" != "true" ]; then
   header "Configuration"
@@ -153,27 +175,6 @@ if [ "$KEYS_REUSED" != "true" ]; then
   echo ""
   echo "Telegram integration is optional — skip by pressing Enter."
   echo ""
-
-  prompt_required() {
-    local varname="$1"
-    local label="$2"
-    local value=""
-    while [[ -z "$value" ]]; do
-      read -rp "  ${label}: " value
-      if [[ -z "$value" ]]; then
-        warn "This field is required."
-      fi
-    done
-    printf -v "$varname" '%s' "$value"
-  }
-
-  prompt_optional() {
-    local varname="$1"
-    local label="$2"
-    local default="${3:-}"
-    read -rp "  ${label} [${default}]: " value
-    printf -v "$varname" '%s' "${value:-$default}"
-  }
 
   # Provider selection
   read -rp "  Choice [1-4, default 1]: " PROVIDER_CHOICE
@@ -214,6 +215,15 @@ if [ "$KEYS_REUSED" != "true" ]; then
   fi
 fi
 
+# Telegram config (always prompt, even if API keys were reused)
+if [ "$KEYS_REUSED" = "true" ]; then
+  prompt_optional TELEGRAM_ENABLED "Enable Telegram bot? (true/false)" "false"
+  TELEGRAM_BOT_TOKEN=""
+  if [[ "$TELEGRAM_ENABLED" == "true" ]]; then
+    prompt_required TELEGRAM_BOT_TOKEN "Telegram bot token"
+  fi
+fi
+
 # ─── Write .env ───────────────────────────────────────────────────────────────
 header "Writing /opt/limbo/.env..."
 LIMBO_IMAGE_TAG="${LIMBO_IMAGE_TAG:-1.0.0}"
@@ -235,6 +245,12 @@ ok ".env written."
 header "Downloading docker-compose.yml..."
 curl -fsSL "$COMPOSE_URL" -o /opt/limbo/docker-compose.yml
 ok "docker-compose.yml downloaded."
+
+# Patch compose port if coexisting with existing OpenClaw
+if [ "$LIMBO_PORT" != "$DEFAULT_PORT" ]; then
+  sed -i "s/18789/${LIMBO_PORT}/g" /opt/limbo/docker-compose.yml
+  ok "Patched docker-compose.yml for port ${LIMBO_PORT}."
+fi
 
 # ─── Start Limbo ─────────────────────────────────────────────────────────────
 header "Starting Limbo..."
