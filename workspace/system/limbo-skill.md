@@ -97,7 +97,7 @@ Create or overwrite a vault note.
 |-------|------|----------|-------------|
 | `id` | string | yes | Unique identifier (lowercase kebab-case, e.g. `meeting-alex-2026-03`) |
 | `title` | string | yes | Human-readable note title |
-| `type` | string | yes | `claim`, `source`, `concept`, `question`, `person`, `project`, `event` |
+| `type` | string | yes | `fact`, `preference`, `person`, `event`, `project`, `decision`, `idea`, `question`, `source`, `insight` |
 | `description` | string | yes | One-sentence summary of the note's core claim |
 | `content` | string | yes | Full markdown body |
 | `map` | string | no | MOC name this note belongs to |
