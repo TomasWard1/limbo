@@ -89,86 +89,136 @@ else
   ok "Docker installed: $(docker --version)"
 fi
 
+# ─── Detect existing OpenClaw ────────────────────────────────────────────────
+header "Checking for existing OpenClaw..."
+
+DEFAULT_PORT=18789
+COEXIST_PORT=18900
+LIMBO_PORT=$DEFAULT_PORT
+KEYS_REUSED=false
+
+if ss -tlnp 2>/dev/null | grep -q ":${DEFAULT_PORT} " || \
+   netstat -tlnp 2>/dev/null | grep -q ":${DEFAULT_PORT} "; then
+  warn "Port ${DEFAULT_PORT} is already in use (likely an existing OpenClaw instance)."
+  log "Limbo will run on port ${COEXIST_PORT} to coexist safely."
+  LIMBO_PORT=$COEXIST_PORT
+  echo ""
+
+  # Check for existing API keys
+  EXISTING_ENV=""
+  for candidate in /opt/openclaw/.env "$HOME/.openclaw/.env"; do
+    if [ -f "$candidate" ]; then
+      EXISTING_ENV="$candidate"
+      break
+    fi
+  done
+
+  if [ -n "$EXISTING_ENV" ]; then
+    EXISTING_KEY=$(grep -E '^(LLM_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY)=' "$EXISTING_ENV" | head -1 | cut -d= -f2)
+    if [ -n "$EXISTING_KEY" ]; then
+      MASKED_KEY="${EXISTING_KEY:0:10}..."
+      log "Found existing API key ($MASKED_KEY) in $EXISTING_ENV"
+      read -rp "  Reuse this key? [Y/n]: " REUSE_CHOICE
+      REUSE_CHOICE="${REUSE_CHOICE:-Y}"
+      if [[ "$REUSE_CHOICE" =~ ^[Yy] ]]; then
+        EXISTING_PROVIDER=$(grep '^MODEL_PROVIDER=' "$EXISTING_ENV" | cut -d= -f2)
+        EXISTING_MODEL=$(grep '^MODEL_NAME=' "$EXISTING_ENV" | cut -d= -f2)
+        LLM_API_KEY="$EXISTING_KEY"
+        MODEL_PROVIDER="${EXISTING_PROVIDER:-anthropic}"
+        MODEL_NAME="${EXISTING_MODEL:-claude-sonnet-4-6}"
+        KEYS_REUSED=true
+        ok "Reusing existing API configuration."
+      fi
+    fi
+  fi
+else
+  ok "Port ${DEFAULT_PORT} is available. Limbo will use it."
+fi
+
 # ─── Create /opt/limbo ───────────────────────────────────────────────────────
 header "Setting up /opt/limbo..."
 mkdir -p /opt/limbo
 log "Directory /opt/limbo ready."
 
 # ─── Collect API keys ─────────────────────────────────────────────────────────
-header "Configuration"
-echo "Limbo supports multiple AI providers. Choose one:"
-echo "  1) Anthropic API key      (pay-per-use, sk-ant-...)"
-echo "  2) OpenAI / Codex API key (pay-per-use, sk-...)"
-echo "  3) OpenRouter API key     (100+ models, sk-or-...)"
-echo "  4) Claude Code / Codex subscription"
-echo "     (OAuth — run scripts/setup.sh on a local machine first,"
-echo "      then copy the generated .env to this server)"
-echo ""
-echo "Telegram integration is optional — skip by pressing Enter."
-echo ""
+if [ "$KEYS_REUSED" != "true" ]; then
+  header "Configuration"
+  echo "Limbo supports multiple AI providers. Choose one:"
+  echo "  1) Anthropic API key      (pay-per-use, sk-ant-...)"
+  echo "  2) OpenAI / Codex API key (pay-per-use, sk-...)"
+  echo "  3) OpenRouter API key     (100+ models, sk-or-...)"
+  echo "  4) Claude Code / Codex subscription"
+  echo "     (OAuth — run scripts/setup.sh on a local machine first,"
+  echo "      then copy the generated .env to this server)"
+  echo ""
+  echo "Telegram integration is optional — skip by pressing Enter."
+  echo ""
 
-prompt_required() {
-  local varname="$1"
-  local label="$2"
-  local value=""
-  while [[ -z "$value" ]]; do
-    read -rp "  ${label}: " value
-    if [[ -z "$value" ]]; then
-      warn "This field is required."
-    fi
-  done
-  printf -v "$varname" '%s' "$value"
-}
+  prompt_required() {
+    local varname="$1"
+    local label="$2"
+    local value=""
+    while [[ -z "$value" ]]; do
+      read -rp "  ${label}: " value
+      if [[ -z "$value" ]]; then
+        warn "This field is required."
+      fi
+    done
+    printf -v "$varname" '%s' "$value"
+  }
 
-prompt_optional() {
-  local varname="$1"
-  local label="$2"
-  local default="${3:-}"
-  read -rp "  ${label} [${default}]: " value
-  printf -v "$varname" '%s' "${value:-$default}"
-}
+  prompt_optional() {
+    local varname="$1"
+    local label="$2"
+    local default="${3:-}"
+    read -rp "  ${label} [${default}]: " value
+    printf -v "$varname" '%s' "${value:-$default}"
+  }
 
-# Provider selection
-read -rp "  Choice [1-4, default 1]: " PROVIDER_CHOICE
-PROVIDER_CHOICE="${PROVIDER_CHOICE:-1}"
+  # Provider selection
+  read -rp "  Choice [1-4, default 1]: " PROVIDER_CHOICE
+  PROVIDER_CHOICE="${PROVIDER_CHOICE:-1}"
 
-case "$PROVIDER_CHOICE" in
-  2)
-    MODEL_PROVIDER="openai"
-    DEFAULT_MODEL_NAME="codex-mini-latest"
-    KEY_LABEL="OpenAI API key (sk-...)"
-    ;;
-  3)
-    MODEL_PROVIDER="openrouter"
-    DEFAULT_MODEL_NAME="auto"
-    KEY_LABEL="OpenRouter API key (sk-or-...)"
-    ;;
-  4)
-    echo ""
-    echo -e "${YELLOW}OAuth-based subscription auth requires a browser.${NC}"
-    echo "Run scripts/setup.sh on your local machine to complete OAuth,"
-    echo "then copy the generated .env file to this server and re-run."
-    die "OAuth auth must be set up locally. See scripts/setup.sh."
-    ;;
-  *)
-    MODEL_PROVIDER="anthropic"
-    DEFAULT_MODEL_NAME="claude-sonnet-4-6"
-    KEY_LABEL="Anthropic API key (sk-ant-...)"
-    ;;
-esac
+  case "$PROVIDER_CHOICE" in
+    2)
+      MODEL_PROVIDER="openai"
+      DEFAULT_MODEL_NAME="codex-mini-latest"
+      KEY_LABEL="OpenAI API key (sk-...)"
+      ;;
+    3)
+      MODEL_PROVIDER="openrouter"
+      DEFAULT_MODEL_NAME="auto"
+      KEY_LABEL="OpenRouter API key (sk-or-...)"
+      ;;
+    4)
+      echo ""
+      echo -e "${YELLOW}OAuth-based subscription auth requires a browser.${NC}"
+      echo "Run scripts/setup.sh on your local machine to complete OAuth,"
+      echo "then copy the generated .env file to this server and re-run."
+      die "OAuth auth must be set up locally. See scripts/setup.sh."
+      ;;
+    *)
+      MODEL_PROVIDER="anthropic"
+      DEFAULT_MODEL_NAME="claude-sonnet-4-6"
+      KEY_LABEL="Anthropic API key (sk-ant-...)"
+      ;;
+  esac
 
-prompt_required LLM_API_KEY "$KEY_LABEL"
-prompt_optional MODEL_NAME  "Model name" "$DEFAULT_MODEL_NAME"
+  prompt_required LLM_API_KEY "$KEY_LABEL"
+  prompt_optional MODEL_NAME  "Model name" "$DEFAULT_MODEL_NAME"
 
-prompt_optional TELEGRAM_ENABLED "Enable Telegram bot? (true/false)" "false"
-TELEGRAM_BOT_TOKEN=""
-if [[ "$TELEGRAM_ENABLED" == "true" ]]; then
-  prompt_required TELEGRAM_BOT_TOKEN "Telegram bot token"
+  prompt_optional TELEGRAM_ENABLED "Enable Telegram bot? (true/false)" "false"
+  TELEGRAM_BOT_TOKEN=""
+  if [[ "$TELEGRAM_ENABLED" == "true" ]]; then
+    prompt_required TELEGRAM_BOT_TOKEN "Telegram bot token"
+  fi
 fi
 
 # ─── Write .env ───────────────────────────────────────────────────────────────
 header "Writing /opt/limbo/.env..."
 LIMBO_IMAGE_TAG="${LIMBO_IMAGE_TAG:-1.0.0}"
+TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
+TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 cat > /opt/limbo/.env <<EOF
 LLM_API_KEY=${LLM_API_KEY}
 MODEL_PROVIDER=${MODEL_PROVIDER}
@@ -176,6 +226,7 @@ MODEL_NAME=${MODEL_NAME}
 TELEGRAM_ENABLED=${TELEGRAM_ENABLED}
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
 LIMBO_IMAGE_TAG=${LIMBO_IMAGE_TAG}
+LIMBO_PORT=${LIMBO_PORT}
 EOF
 chmod 600 /opt/limbo/.env
 ok ".env written."
@@ -250,7 +301,7 @@ echo -e "${GREEN}${BOLD}╔═════════════════�
 echo -e "${GREEN}${BOLD}║         Limbo installed successfully!        ║${NC}"
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "  ${BOLD}OpenClaw gateway:${NC} ws://127.0.0.1:18789"
+echo -e "  ${BOLD}OpenClaw gateway:${NC} ws://127.0.0.1:${LIMBO_PORT}"
 echo -e "  ${BOLD}Data directory:${NC}   /opt/limbo/"
 echo -e "  ${BOLD}Logs:${NC}             docker compose -f /opt/limbo/docker-compose.yml logs -f"
 echo -e "  ${BOLD}Update:${NC}           Automatic (daily at 04:00) or run:"
