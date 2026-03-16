@@ -69,7 +69,7 @@ mcporter call limbo-vault.vault_write_note \
 |-------|------|----------|-------------|
 | `id` | string | yes | Unique note identifier (alphanumeric, dashes, underscores) |
 | `title` | string | yes | Human-readable note title |
-| `type` | string | yes | Note type: `gotcha`, `decision`, `config-fact`, `pattern`, `tool-knowledge`, `research-finding`, `personal-fact` |
+| `type` | string | yes | Note type: `fact`, `preference`, `person`, `event`, `project`, `decision`, `idea`, `question`, `source`, `insight` |
 | `description` | string | yes | One-sentence falsifiable description of the note's claim |
 | `content` | string | yes | Full markdown body of the note |
 | `subdirectory` | string | no | Subdirectory under `notes/` (e.g. `openclaw`, `research`, `aios/infrastructure`). Created if it doesn't exist. |
