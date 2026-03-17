@@ -1028,32 +1028,23 @@ function installCloudflared() {
   }
 }
 
-function hasCloudflaredCredentials() {
-  const certPath = path.join(os.homedir(), '.cloudflared', 'cert.pem');
-  return fs.existsSync(certPath);
-}
-
-function createSetupTunnel(port) {
+function createSetupTunnel(port, tunnelDomain) {
   if (!hasCloudflared() && !installCloudflared()) return null;
   if (!hasCloudflared()) return null;
 
   const tunnelId = crypto.randomBytes(4).toString('hex');
 
-  // Branded tunnel with subdomain if Cloudflare credentials exist
-  if (hasCloudflaredCredentials()) {
+  // Admin mode: branded subdomain (requires cloudflared login for the zone)
+  if (tunnelDomain) {
     const tunnelName = `limbo-setup-${tunnelId}`;
-    const subdomain = `setup-${tunnelId}.limbo.tomasward.com`;
+    const subdomain = `setup-${tunnelId}.${tunnelDomain}`;
     try {
-      execSync(`cloudflared tunnel create ${tunnelName}`, { stdio: 'pipe' });
-      execSync(`cloudflared tunnel route dns ${tunnelName} ${subdomain}`, { stdio: 'pipe' });
+      execSync(`cloudflared tunnel create ${tunnelName}`, { stdio: 'pipe', encoding: 'utf8' });
+      execSync(`cloudflared tunnel route dns ${tunnelName} ${subdomain}`, { stdio: 'pipe', encoding: 'utf8' });
 
-      // Write a minimal config for this tunnel
       const cfHome = path.join(os.homedir(), '.cloudflared');
-      const credFiles = fs.readdirSync(cfHome).filter(f => f.endsWith('.json') && f !== 'config.yml');
-      // Find the credential file for this tunnel
       const tunnelInfoRaw = execSync(`cloudflared tunnel info ${tunnelName} 2>&1`, { encoding: 'utf8', stdio: 'pipe' });
       const tunnelUuid = tunnelInfoRaw.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/)?.[1];
-
       if (!tunnelUuid) throw new Error('Could not find tunnel UUID');
 
       const credFile = path.join(cfHome, `${tunnelUuid}.json`);
@@ -1067,23 +1058,21 @@ function createSetupTunnel(port) {
         '  - service: http_status:404',
       ].join('\n'));
 
-      // Start tunnel in background
       const tunnelProc = spawn('cloudflared', ['tunnel', '--config', configPath, 'run'], {
         detached: true, stdio: 'ignore',
       });
       tunnelProc.unref();
-
-      // Wait for tunnel to register
       sleep(5000);
 
       return { type: 'branded', url: `https://${subdomain}`, tunnelName, tunnelUuid, configPath, pid: tunnelProc.pid };
     } catch (err) {
       warn(`Could not create branded tunnel: ${err.message}`);
+      warn('Make sure you ran `cloudflared login` for this domain first.');
       // Fall through to quick tunnel
     }
   }
 
-  // Quick tunnel (no credentials needed)
+  // Default: quick tunnel (zero config, works for everyone)
   try {
     const logFile = path.join(LIMBO_DIR, 'cloudflared-setup.log');
     const tunnelProc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--url', `http://localhost:${port}`], {
@@ -1092,7 +1081,6 @@ function createSetupTunnel(port) {
     });
     tunnelProc.unref();
 
-    // Wait for URL to appear in logs
     for (let i = 0; i < 15; i++) {
       sleep(1000);
       try {
@@ -1110,13 +1098,10 @@ function createSetupTunnel(port) {
 
 function teardownSetupTunnel(tunnel) {
   if (!tunnel) return;
-  // Kill the tunnel process
   try { process.kill(tunnel.pid); } catch {}
 
   if (tunnel.type === 'branded') {
-    // Clean up DNS and tunnel
-    try { execSync(`cloudflared tunnel route dns -f ${tunnel.tunnelName} ${tunnel.tunnelName}`, { stdio: 'pipe' }); } catch {}
-    try { execSync(`cloudflared tunnel delete ${tunnel.tunnelName}`, { stdio: 'pipe' }); } catch {}
+    try { execSync(`cloudflared tunnel delete -f ${tunnel.tunnelName}`, { stdio: 'pipe' }); } catch {}
     try { fs.unlinkSync(tunnel.configPath); } catch {}
   }
   if (tunnel.logFile) try { fs.unlinkSync(tunnel.logFile); } catch {}
@@ -1632,6 +1617,7 @@ async function cmdStart() {
   const flagApiKey = parseFlag('--api-key');
   const flagModel = parseFlag('--model');
   const flagLang = parseFlag('--language') || 'en';
+  const flagTunnelDomain = parseFlag('--tunnel-domain');
 
   if (flagProvider) {
     const validProviders = ['openai', 'anthropic', 'openrouter'];
@@ -1734,7 +1720,7 @@ async function cmdStart() {
     let tunnel = null;
     if (isServerEnvironment()) {
       log('Server environment detected — creating secure tunnel...');
-      tunnel = createSetupTunnel(PORT);
+      tunnel = createSetupTunnel(PORT, flagTunnelDomain);
     }
     printWizardUrl(wizardUrl, tunnel);
   } else {
@@ -1876,6 +1862,7 @@ ${c.bold}Flags:${c.reset}
   --api-key <key>      API key for headless install
   --model <name>       Model name (optional, uses provider default)
   --language <code>    Language: en, es (default: en)
+  --tunnel-domain <d>  Admin: use branded subdomain for setup tunnel (e.g. limbo.tomasward.com)
 
 ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 `);
