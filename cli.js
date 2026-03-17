@@ -363,6 +363,12 @@ const TEXT = {
     configFlowSlow: 'This may take a couple of minutes.',
     configFlowDone: 'Configuration applied.',
     configFlowFailed: 'Could not apply configuration. Check your settings and try again.',
+    configOom: 'Configuration failed: out of memory. The server does not have enough free RAM.',
+    configOomContainers: (n) => `  Found ${n} running Limbo container(s) using memory. Stop them first:\n    npx limbo stop`,
+    configOomHint: '  Try closing other programs or upgrading to a server with more RAM.',
+    configOomOverride: '  If your server has enough RAM, increase the limit in .env:\n    LIMBO_NODE_OPTIONS=--max-old-space-size=2048',
+    staleContainersFound: (n) => `Found ${n} running Limbo container(s). Stopping to free memory...`,
+    staleContainersStopped: 'Stopped existing containers.',
     composing: 'Initializing...',
     success: 'Limbo is running!',
     gateway: 'Gateway',
@@ -477,6 +483,12 @@ const TEXT = {
     configFlowSlow: 'Esto puede tardar un par de minutos.',
     configFlowDone: 'Configuracion aplicada.',
     configFlowFailed: 'No se pudo aplicar la configuracion. Revisa los ajustes e intenta de nuevo.',
+    configOom: 'La configuracion fallo: sin memoria. El servidor no tiene suficiente RAM libre.',
+    configOomContainers: (n) => `  Se encontraron ${n} container(s) de Limbo corriendo que usan memoria. Frenalos primero:\n    npx limbo stop`,
+    configOomHint: '  Proba cerrando otros programas o usando un servidor con mas RAM.',
+    configOomOverride: '  Si tu servidor tiene suficiente RAM, podes aumentar el limite en .env:\n    LIMBO_NODE_OPTIONS=--max-old-space-size=2048',
+    staleContainersFound: (n) => `Se encontraron ${n} container(s) de Limbo corriendo. Frenando para liberar memoria...`,
+    staleContainersStopped: 'Containers existentes frenados.',
     composing: 'Inicializando...',
     success: 'Limbo esta corriendo!',
     gateway: 'Gateway',
@@ -989,9 +1001,51 @@ function ensureVolumePermissions() {
   ], { stdio: 'pipe' });
 }
 
+function isOomError(stderr) {
+  return typeof stderr === 'string' && (
+    stderr.includes('heap out of memory') ||
+    stderr.includes('Allocation failed') ||
+    stderr.includes('FATAL ERROR: Reached heap limit')
+  );
+}
+
+function countRunningLimboContainers() {
+  try {
+    const result = spawnSync('docker', ['compose', 'ps', '-q', '--status', 'running'], {
+      cwd: LIMBO_DIR, stdio: 'pipe', encoding: 'utf8',
+    });
+    if (result.status !== 0 || !result.stdout) return 0;
+    return result.stdout.trim().split('\n').filter(Boolean).length;
+  } catch { return 0; }
+}
+
+function stopExistingContainers(lang) {
+  const running = countRunningLimboContainers();
+  if (running > 0) {
+    warn(t(lang, 'staleContainersFound', running));
+    runDockerCompose(['down', '--remove-orphans'], { stdio: 'pipe' });
+    ok(t(lang, 'staleContainersStopped'));
+  }
+  return running;
+}
+
+function handleConfigOom(lang) {
+  console.log('');
+  die([
+    t(lang, 'configOom'),
+    countRunningLimboContainers() > 0
+      ? t(lang, 'configOomContainers', countRunningLimboContainers())
+      : t(lang, 'configOomHint'),
+    t(lang, 'configOomOverride'),
+  ].join('\n'));
+}
+
 function applyOpenClawConfig(cfg) {
   header(t(cfg.language, 'configFlowStart'));
   log(t(cfg.language, 'configFlowSlow'));
+
+  // Stop existing containers to free memory before running config commands
+  stopExistingContainers(cfg.language);
 
   const setCommands = [
     ['config', 'set', 'gateway.mode', 'local'],
@@ -1017,6 +1071,7 @@ function applyOpenClawConfig(cfg) {
     process.stdout.write(`\r${c.dim}  [${step}/${total}] ${command.slice(1, 4).join(' ')}${c.reset}`.padEnd(60));
     const result = runOpenClaw(command, { stdio: 'pipe' });
     if (result.status !== 0) {
+      if (isOomError(result.stderr)) handleConfigOom(cfg.language);
       console.log('');
       process.stdout.write(result.stdout || '');
       process.stderr.write(result.stderr || '');
@@ -1032,6 +1087,7 @@ function applyOpenClawConfig(cfg) {
   process.stdout.write(`\r${c.dim}  [${step}/${total}] config validate${c.reset}`.padEnd(60));
   const validateResult = runOpenClaw(['config', 'validate'], { stdio: 'pipe' });
   if (validateResult.status !== 0) {
+    if (isOomError(validateResult.stderr)) handleConfigOom(cfg.language);
     console.log('');
     process.stdout.write(validateResult.stdout || '');
     process.stderr.write(validateResult.stderr || '');
