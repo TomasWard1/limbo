@@ -40,6 +40,9 @@ WORKDIR /app
 COPY --from=deps /build/mcp-server/node_modules ./mcp-server/node_modules
 COPY --chown=limbo:limbo mcp-server/ ./mcp-server/
 
+# Setup wizard server (zero dependencies — plain Node.js HTTP server)
+COPY --chown=limbo:limbo setup-server/ /app/setup-server/
+
 # System workspace files (product-owned, root-owned for read-only enforcement via symlinks)
 COPY workspace/system/ ./workspace/system/
 

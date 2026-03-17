@@ -17,10 +17,15 @@ log() {
 log "INFO  Limbo container starting"
 
 # ── Read Docker secrets (with env var fallback for backwards compat) ──────────
+# Priority: /run/secrets/ (Docker secrets) > /data/secrets/ (wizard-written) > env vars
 read_secret() {
-  local file="/run/secrets/$1"
-  if [ -f "$file" ]; then
-    cat "$file"
+  local docker_secret="/run/secrets/$1"
+  local wizard_secret="/data/secrets/$1"
+  # Check Docker secrets first, but only if non-empty (empty files are placeholders)
+  if [ -f "$docker_secret" ] && [ -s "$docker_secret" ]; then
+    cat "$docker_secret"
+  elif [ -f "$wizard_secret" ] && [ -s "$wizard_secret" ]; then
+    cat "$wizard_secret"
   else
     echo ""
   fi
@@ -53,11 +58,26 @@ if [ "$MODEL_PROVIDER" = "anthropic" ] && [ -n "$LLM_API_KEY" ] && [ -z "$ANTHRO
   ANTHROPIC_API_KEY="$LLM_API_KEY"
 fi
 
+# ── Detect setup mode (no config yet → wizard will handle everything) ────────
+SETUP_MODE=false
+if [ ! -f /data/config/.env ]; then
+  SETUP_MODE=true
+else
+  # Source wizard-generated config (written by setup-server on first run)
+  set -a
+  . /data/config/.env
+  set +a
+  log "INFO  Loaded config from /data/config/.env"
+fi
+
 # ── Validate and resolve API key ─────────────────────────────────────────────
 # Subscription mode uses OAuth tokens stored in OpenClaw auth-profiles — no API key needed.
+# Setup mode skips validation entirely — the wizard will configure keys.
 AUTH_MODE="${AUTH_MODE:-api-key}"
 
-if [ "$AUTH_MODE" = "subscription" ]; then
+if [ "$SETUP_MODE" = "true" ]; then
+  log "INFO  Setup mode — skipping API key validation"
+elif [ "$AUTH_MODE" = "subscription" ]; then
   log "INFO  Subscription mode — using OpenClaw auth profiles (no API key required)"
   # Export any API keys that happen to exist, but don't require them
   [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
@@ -93,7 +113,7 @@ else
 fi
 
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
-mkdir -p /data/db /data/backups /data/logs /data/vault/notes /data/vault/maps /data/config "$OPENCLAW_STATE_DIR"
+mkdir -p /data/db /data/backups /data/logs /data/vault/notes /data/vault/maps /data/config /data/secrets "$OPENCLAW_STATE_DIR"
 
 # ── Bootstrap workspace (layered: system symlinks + user seeds) ──────────────
 mkdir -p /data/workspace
@@ -219,7 +239,16 @@ start_telegram_auto_pair_worker() {
 
 start_telegram_auto_pair_worker
 
-# ── Start OpenClaw gateway ────────────────────────────────────────────────────
+# ── Setup mode: start wizard instead of OpenClaw ─────────────────────────────
+# When setup completes, the server exits and Docker restarts the container.
+# On restart, /data/config/.env exists → normal startup path.
 LIMBO_PORT="${LIMBO_PORT:-18789}"
+
+if [ "$SETUP_MODE" = "true" ]; then
+  log "INFO  No configuration found — starting setup wizard on port $LIMBO_PORT"
+  exec node /app/setup-server/server.js
+fi
+
+# ── Start OpenClaw gateway ────────────────────────────────────────────────────
 log "INFO  Starting OpenClaw gateway on port ${LIMBO_PORT} (token auth, loopback)"
 exec openclaw gateway run --port "${LIMBO_PORT}" --bind loopback

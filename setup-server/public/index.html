@@ -1,0 +1,1888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Limbo — Setup Wizard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0D0D0D;
+      --bg-2: #111111;
+      --bg-3: #1A1A1A;
+      --bg-4: #080808;
+      --border: #333333;
+      --border-sub: #1A1A1A;
+      --border-hover: #444444;
+      --accent: #E8846C;
+      --accent-hover: #D6735B;
+      --accent-fg: #0D0D0D;
+      --text: #FFFFFF;
+      --text-sub: #9C9B99;
+      --text-muted: #888888;
+      --text-dim: #808080;
+      --success: #3E8F5D;
+      --danger: #C45C5C;
+      --warning: #A08745;
+      --r-sm: 8px;
+      --r-md: 12px;
+      --r-lg: 16px;
+      --r-xl: 24px;
+      --r-pill: 100px;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* --- Bilingual --- */
+    body.lang-en [data-lang="es"],
+    body.lang-es [data-lang="en"] { display: none !important; }
+
+    /* --- Layout --- */
+    .wizard-wrapper {
+      width: 100%;
+      max-width: 600px;
+      padding: 48px 24px 32px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    @media (max-width: 480px) {
+      .wizard-wrapper { padding: 24px 16px 24px; }
+    }
+
+    /* --- Brand --- */
+    .brand {
+      text-align: center;
+      margin-bottom: 40px;
+      user-select: none;
+    }
+    .brand-logo {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+    .brand-sub {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 4px;
+    }
+
+    /* --- Progress --- */
+    .progress {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 40px;
+    }
+    .progress-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--bg-3);
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+    .progress-dot.active {
+      background: var(--accent);
+      transform: scale(1.25);
+    }
+    .progress-dot.done {
+      background: var(--text-dim);
+    }
+
+    /* --- Navigation --- */
+    .nav-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 32px;
+      min-height: 40px;
+    }
+    .btn-back {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-sub);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    .btn-back:hover {
+      border-color: var(--border-hover);
+      color: var(--text);
+      background: var(--bg-3);
+    }
+    .btn-back svg { width: 18px; height: 18px; }
+    .btn-back.hidden { visibility: hidden; pointer-events: none; }
+
+    /* --- Steps --- */
+    .step {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+    }
+    .step.active {
+      display: flex;
+      animation: stepIn 0.3s ease forwards;
+    }
+    @keyframes stepIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .step-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .step-desc {
+      font-size: 16px;
+      color: var(--text-sub);
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+
+    /* --- Cards --- */
+    .cards { display: flex; flex-direction: column; gap: 12px; }
+    .cards.horizontal { flex-direction: row; }
+    @media (max-width: 480px) {
+      .cards.horizontal { flex-direction: column; }
+    }
+
+    .card {
+      background: var(--bg-2);
+      border: 1px solid var(--border-sub);
+      border-radius: var(--r-lg);
+      padding: 24px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, transform 0.15s;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      user-select: none;
+    }
+    .card:hover {
+      background: #151515;
+      border-color: var(--border);
+    }
+    .card.selected {
+      border-color: var(--accent);
+      background: #151515;
+    }
+    .card:active { transform: scale(0.985); }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      min-width: 48px;
+      background: var(--bg-3);
+      border-radius: var(--r-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+
+    .card-content { flex: 1; }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .card-subtitle {
+      font-size: 13px;
+      color: var(--text-sub);
+      line-height: 1.4;
+    }
+
+    .card-lg {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 32px;
+      flex: 1;
+      gap: 12px;
+    }
+    .card-lg .card-icon {
+      width: 56px;
+      height: 56px;
+      font-size: 28px;
+    }
+
+    /* --- Buttons --- */
+    .btn-primary {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border: none;
+      padding: 14px 28px;
+      border-radius: var(--r-pill);
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:active { transform: scale(0.97); }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #CCC;
+      border: 1px solid var(--border);
+      padding: 14px 28px;
+      border-radius: var(--r-pill);
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-secondary:hover {
+      border-color: var(--border-hover);
+      color: var(--text);
+      background: var(--bg-3);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: auto;
+      padding-top: 32px;
+    }
+    .btn-row .btn-primary,
+    .btn-row .btn-secondary { flex: 1; }
+
+    /* --- Inputs --- */
+    .input-group { margin-bottom: 16px; }
+    .input-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-sub);
+      margin-bottom: 8px;
+    }
+    .input-field {
+      width: 100%;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: var(--r-pill);
+      padding: 14px 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-field::placeholder { color: var(--text-dim); }
+    .input-field:focus { border-color: var(--accent); }
+    .input-field.valid { border-color: var(--success); }
+    .input-field.invalid { border-color: var(--danger); }
+
+    .input-hint {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+    .input-hint a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .input-hint a:hover { text-decoration: underline; }
+
+    .validation-msg {
+      font-size: 13px;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .validation-msg.success { color: var(--success); }
+    .validation-msg.error { color: var(--danger); }
+
+    /* --- Toggle --- */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      background: var(--bg-2);
+      border: 1px solid var(--border-sub);
+      border-radius: var(--r-lg);
+      margin-bottom: 20px;
+    }
+    .toggle-label {
+      font-size: 16px;
+      font-weight: 500;
+    }
+    .toggle-sub {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
+    .toggle {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      cursor: pointer;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .toggle-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      background: var(--text-sub);
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle input:checked ~ .toggle-track {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .toggle input:checked ~ .toggle-thumb {
+      transform: translateX(22px);
+      background: var(--accent-fg);
+    }
+
+    /* --- Model cards --- */
+    .model-card {
+      background: var(--bg-2);
+      border: 1px solid var(--border-sub);
+      border-radius: var(--r-lg);
+      padding: 20px 24px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .model-card:hover {
+      background: #151515;
+      border-color: var(--border);
+    }
+    .model-card.selected {
+      border-color: var(--accent);
+      background: #151515;
+    }
+    .model-name {
+      font-size: 15px;
+      font-weight: 500;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .model-badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--accent);
+      color: var(--accent-fg);
+      padding: 3px 10px;
+      border-radius: var(--r-pill);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* --- Summary --- */
+    .summary-card {
+      background: var(--bg-2);
+      border: 1px solid var(--border-sub);
+      border-radius: var(--r-lg);
+      overflow: hidden;
+    }
+    .summary-item {
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-sub);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .summary-item:last-child { border-bottom: none; }
+    .summary-item:hover { background: #151515; }
+    .summary-label {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-bottom: 2px;
+    }
+    .summary-value {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .summary-edit {
+      font-size: 13px;
+      color: var(--text-dim);
+      transition: color 0.15s;
+    }
+    .summary-item:hover .summary-edit { color: var(--accent); }
+
+    /* --- Loading / Success --- */
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2.5px solid var(--accent-fg);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .success-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 16px;
+      padding: 48px 24px;
+      flex: 1;
+    }
+    .success-screen.active { display: flex; }
+
+    .success-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--success);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: popIn 0.4s ease;
+    }
+    .success-icon svg { width: 32px; height: 32px; color: #fff; }
+    @keyframes popIn {
+      from { transform: scale(0); opacity: 0; }
+      50% { transform: scale(1.15); }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .success-title {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .success-sub {
+      font-size: 14px;
+      color: var(--text-sub);
+    }
+
+    /* --- Telegram guide --- */
+    .guide-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .guide-step {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .guide-num {
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      border-radius: 50%;
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-sub);
+    }
+    .guide-text {
+      font-size: 14px;
+      color: var(--text-sub);
+      line-height: 1.5;
+      padding-top: 3px;
+    }
+    .guide-text code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      background: var(--bg-3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      color: var(--accent);
+    }
+
+    /* --- Telegram conditional --- */
+    .tg-fields { display: none; }
+    .tg-fields.visible { display: block; }
+
+    /* --- Error banner --- */
+    .error-banner {
+      display: none;
+      background: rgba(196, 92, 92, 0.1);
+      border: 1px solid var(--danger);
+      border-radius: var(--r-md);
+      padding: 14px 20px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      color: var(--danger);
+      align-items: center;
+      gap: 8px;
+    }
+    .error-banner.visible {
+      display: flex;
+    }
+
+    /* --- OAuth / Subscription Auth --- */
+    .btn-oauth {
+      width: 100%;
+      padding: 16px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #10A37F;
+      color: #fff;
+      border: none;
+      border-radius: var(--r-md);
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn-oauth:hover { background: #0D8C6D; }
+    .btn-oauth:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .info-box {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: var(--text-sub);
+      line-height: 1.6;
+    }
+
+    .auth-success {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px;
+      background: rgba(62, 143, 93, 0.1);
+      border: 1px solid var(--success);
+      border-radius: var(--r-md);
+      color: var(--success);
+      font-weight: 500;
+      font-size: 15px;
+      margin: 16px 0;
+    }
+
+    .cmd-block {
+      background: var(--bg-4);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 14px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      user-select: all;
+    }
+    .cmd-block:hover { border-color: var(--accent); }
+    .cmd-block .copy-hint {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* --- Footer --- */
+    .footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    /* --- Loading overlay for models --- */
+    .loading-models {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 48px 0;
+      color: var(--text-sub);
+      font-size: 14px;
+    }
+    .loading-models .spinner {
+      border-color: var(--accent);
+      border-top-color: transparent;
+    }
+  </style>
+</head>
+<body class="lang-en">
+
+  <div class="wizard-wrapper">
+    <!-- Brand -->
+    <div class="brand">
+      <div class="brand-logo">limbo</div>
+      <div class="brand-sub">Setup Wizard</div>
+    </div>
+
+    <!-- Progress Dots -->
+    <div class="progress" id="progress">
+      <div class="progress-dot active"></div>
+      <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
+    </div>
+
+    <!-- Nav Header -->
+    <div class="nav-header">
+      <button class="btn-back hidden" id="btnBack" aria-label="Go back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Step 1: Language -->
+    <div class="step active" data-step="1">
+      <h2 class="step-title">
+        <span data-lang="en">Choose your language</span>
+        <span data-lang="es">Elegí tu idioma</span>
+      </h2>
+      <p class="step-desc">
+        <span data-lang="en">Select your preferred language for Limbo.</span>
+        <span data-lang="es">Seleccioná tu idioma preferido para Limbo.</span>
+      </p>
+      <div class="cards horizontal">
+        <div class="card card-lg" data-value="es" onclick="selectLanguage('es')">
+          <div class="card-icon">🇦🇷</div>
+          <div class="card-content">
+            <div class="card-title">Español</div>
+            <div class="card-subtitle">Argentina</div>
+          </div>
+        </div>
+        <div class="card card-lg" data-value="en" onclick="selectLanguage('en')">
+          <div class="card-icon">🇬🇧</div>
+          <div class="card-content">
+            <div class="card-title">English</div>
+            <div class="card-subtitle">International</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Provider -->
+    <div class="step" data-step="2">
+      <h2 class="step-title">
+        <span data-lang="en">Choose your AI provider</span>
+        <span data-lang="es">Elegí tu proveedor de IA</span>
+      </h2>
+      <p class="step-desc">
+        <span data-lang="en">Which AI service do you want to use?</span>
+        <span data-lang="es">¿Qué servicio de IA querés usar?</span>
+      </p>
+      <div class="cards">
+        <div class="card" data-value="anthropic" onclick="selectProvider('anthropic')">
+          <div class="card-icon">🟠</div>
+          <div class="card-content">
+            <div class="card-title">Anthropic <span style="color:var(--text-sub);font-weight:400">(Claude)</span></div>
+            <div class="card-subtitle">
+              <span data-lang="en">Claude Opus, Sonnet, Haiku</span>
+              <span data-lang="es">Claude Opus, Sonnet, Haiku</span>
+            </div>
+          </div>
+        </div>
+        <div class="card" data-value="openai" onclick="selectProvider('openai')">
+          <div class="card-icon">🟢</div>
+          <div class="card-content">
+            <div class="card-title">OpenAI <span style="color:var(--text-sub);font-weight:400">(ChatGPT)</span></div>
+            <div class="card-subtitle">
+              <span data-lang="en">GPT-5.4, GPT-4.1, o3, o4-mini</span>
+              <span data-lang="es">GPT-5.4, GPT-4.1, o3, o4-mini</span>
+            </div>
+          </div>
+        </div>
+        <div class="card" data-value="openrouter" onclick="selectProvider('openrouter')">
+          <div class="card-icon">🔀</div>
+          <div class="card-content">
+            <div class="card-title">OpenRouter</div>
+            <div class="card-subtitle">
+              <span data-lang="en">Multiple providers, one API</span>
+              <span data-lang="es">Múltiples proveedores, una API</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Auth Method -->
+    <div class="step" data-step="3">
+      <h2 class="step-title">
+        <span data-lang="en">Authentication method</span>
+        <span data-lang="es">Método de autenticación</span>
+      </h2>
+      <p class="step-desc">
+        <span data-lang="en">How do you want to connect?</span>
+        <span data-lang="es">¿Cómo querés conectarte?</span>
+      </p>
+      <div class="cards">
+        <div class="card" data-value="api-key" onclick="selectAuthMode('api-key')">
+          <div class="card-icon">🔑</div>
+          <div class="card-content">
+            <div class="card-title">API Key</div>
+            <div class="card-subtitle">
+              <span data-lang="en">Direct API access with your own key</span>
+              <span data-lang="es">Acceso directo a la API con tu propia clave</span>
+            </div>
+          </div>
+        </div>
+        <div class="card" data-value="subscription" onclick="selectAuthMode('subscription')">
+          <div class="card-icon">✨</div>
+          <div class="card-content">
+            <div class="card-title">Subscription</div>
+            <div class="card-subtitle" id="subscriptionSubtitle">
+              <span data-lang="en">Use your existing subscription</span>
+              <span data-lang="es">Usá tu suscripción existente</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: API Key / Token -->
+    <div class="step" data-step="4">
+      <!-- API Key variant -->
+      <div id="apiKeySection">
+        <h2 class="step-title">
+          <span data-lang="en">Enter your API key</span>
+          <span data-lang="es">Ingresá tu API key</span>
+        </h2>
+        <p class="step-desc">
+          <span data-lang="en">Paste your API key below. It will be stored securely on your server.</span>
+          <span data-lang="es">Pegá tu API key abajo. Se guarda de forma segura en tu servidor.</span>
+        </p>
+        <div class="input-group">
+          <label class="input-label" for="apiKeyInput">API Key</label>
+          <input
+            type="password"
+            class="input-field"
+            id="apiKeyInput"
+            placeholder="sk-..."
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <div class="validation-msg" id="apiKeyValidation"></div>
+          <p class="input-hint" id="apiKeyHint"></p>
+        </div>
+      </div>
+      <!-- Subscription: OpenAI OAuth PKCE -->
+      <div id="oauthSection" style="display:none">
+        <h2 class="step-title">
+          <span data-lang="en">Login with OpenAI</span>
+          <span data-lang="es">Iniciar sesión con OpenAI</span>
+        </h2>
+        <p class="step-desc">
+          <span data-lang="en">Sign in with your ChatGPT Plus or Pro account.</span>
+          <span data-lang="es">Iniciá sesión con tu cuenta ChatGPT Plus o Pro.</span>
+        </p>
+
+        <!-- Vista 1: Botón inicial -->
+        <div id="oauthStartView">
+          <button class="btn-oauth" id="btnOauthStart" onclick="startOpenAIOAuth()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364l2.0201-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.4114-.6938zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0974-2.3616l2.603-1.5018 2.6029 1.5018v3.0036l-2.6029 1.5018-2.603-1.5018z"/></svg>
+            <span data-lang="en">Login with OpenAI</span>
+            <span data-lang="es">Iniciar sesión con OpenAI</span>
+          </button>
+        </div>
+
+        <!-- Vista 2: Heads-up dialog antes de abrir -->
+        <div id="oauthHeadsUpView" style="display:none">
+          <div class="info-box" style="border-color:var(--accent);background:rgba(232,132,108,0.06)">
+            <p style="color:var(--text);font-weight:600;margin-bottom:10px;font-size:15px">
+              <span data-lang="en">Before you continue</span>
+              <span data-lang="es">Antes de continuar</span>
+            </p>
+            <p style="margin-bottom:14px">
+              <span data-lang="en">A new tab will open for you to sign in with OpenAI. After signing in, you'll land on a page that says <strong style="color:var(--text)">"This site can't be reached"</strong> — <strong style="color:var(--accent)">this is expected</strong>.</span>
+              <span data-lang="es">Se va a abrir una pestaña nueva para iniciar sesión con OpenAI. Después de iniciar sesión, vas a ver una página que dice <strong style="color:var(--text)">"No se puede acceder a este sitio"</strong> — <strong style="color:var(--accent)">esto es normal</strong>.</span>
+            </p>
+            <p>
+              <span data-lang="en">When that happens, <strong style="color:var(--text)">copy the full URL</strong> from the address bar and come back here to paste it.</span>
+              <span data-lang="es">Cuando eso pase, <strong style="color:var(--text)">copiá la URL completa</strong> de la barra de direcciones y volvé acá para pegarla.</span>
+            </p>
+          </div>
+          <button class="btn-oauth" id="btnOauthConfirmOpen" onclick="confirmOpenAIOAuth()" style="margin-top:16px">
+            <span data-lang="en">Got it — open OpenAI login</span>
+            <span data-lang="es">Entendido — abrir login de OpenAI</span>
+          </button>
+          <button class="btn-secondary" onclick="document.getElementById('oauthHeadsUpView').style.display='none';document.getElementById('oauthStartView').style.display=''" style="width:100%;margin-top:8px">
+            <span data-lang="en">Go back</span>
+            <span data-lang="es">Volver</span>
+          </button>
+        </div>
+
+        <!-- Vista 3: Pegar URL -->
+        <div id="oauthPasteView" style="display:none">
+          <div class="guide-steps" style="margin-bottom:20px">
+            <div class="guide-step">
+              <div class="guide-num" style="background:var(--success);border-color:var(--success);color:#fff">✓</div>
+              <div class="guide-text" style="color:var(--text)">
+                <span data-lang="en">Sign in with your OpenAI account</span>
+                <span data-lang="es">Iniciá sesión con tu cuenta de OpenAI</span>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="guide-num">2</div>
+              <div class="guide-text">
+                <span data-lang="en">You'll see a page that says <strong style="color:var(--text)">"This site can't be reached"</strong> — that's OK!</span>
+                <span data-lang="es">Vas a ver una página que dice <strong style="color:var(--text)">"No se puede acceder a este sitio"</strong> — ¡está bien!</span>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="guide-num">3</div>
+              <div class="guide-text">
+                <span data-lang="en">Copy the <strong style="color:var(--text)">entire URL</strong> from the address bar (it starts with <code>http://localhost</code>)</span>
+                <span data-lang="es">Copiá la <strong style="color:var(--text)">URL completa</strong> de la barra de direcciones (empieza con <code>http://localhost</code>)</span>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="guide-num">4</div>
+              <div class="guide-text">
+                <span data-lang="en">Paste it below</span>
+                <span data-lang="es">Pegala acá abajo</span>
+              </div>
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="oauthCallbackInput">
+              <span data-lang="en">Paste the URL here</span>
+              <span data-lang="es">Pegá la URL acá</span>
+            </label>
+            <input
+              type="text"
+              class="input-field"
+              id="oauthCallbackInput"
+              placeholder="http://localhost:1455/auth/callback?code=..."
+              autocomplete="off"
+              spellcheck="false"
+            >
+            <div class="validation-msg" id="oauthValidation"></div>
+          </div>
+          <button class="btn-primary" id="btnOauthConnect" onclick="submitOAuthCallback()" disabled style="width:100%;margin-top:8px">
+            <span data-lang="en">Connect</span>
+            <span data-lang="es">Conectar</span>
+          </button>
+        </div>
+
+        <div id="oauthSuccessView" style="display:none" class="auth-success">
+          <span data-lang="en">Connected as <strong id="oauthEmailEn"></strong></span>
+          <span data-lang="es">Conectado como <strong id="oauthEmailEs"></strong></span>
+        </div>
+      </div>
+
+      <!-- Subscription: Anthropic (claude setup-token) -->
+      <div id="claudeTokenSection" style="display:none">
+        <h2 class="step-title">
+          <span data-lang="en">Connect your Claude subscription</span>
+          <span data-lang="es">Conectá tu suscripción de Claude</span>
+        </h2>
+        <p class="step-desc">
+          <span data-lang="en">Run this command in your terminal to get a setup token.</span>
+          <span data-lang="es">Ejecutá este comando en tu terminal para obtener un token.</span>
+        </p>
+
+        <div class="guide-steps">
+          <div class="guide-step">
+            <div class="guide-num">1</div>
+            <div class="guide-text">
+              <span data-lang="en">Open a terminal on your computer</span>
+              <span data-lang="es">Abrí una terminal en tu computadora</span>
+            </div>
+          </div>
+          <div class="guide-step">
+            <div class="guide-num">2</div>
+            <div class="guide-text">
+              <span data-lang="en">Run this command:</span>
+              <span data-lang="es">Ejecutá este comando:</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="cmd-block" onclick="copyCommand(this)">
+          <span>claude setup-token</span>
+          <span class="copy-hint" data-lang="en">click to copy</span>
+          <span class="copy-hint" data-lang="es">click para copiar</span>
+        </div>
+
+        <div class="guide-steps">
+          <div class="guide-step">
+            <div class="guide-num">3</div>
+            <div class="guide-text">
+              <span data-lang="en">Follow the instructions in your terminal — it will give you a token</span>
+              <span data-lang="es">Seguí las instrucciones en tu terminal — te va a dar un token</span>
+            </div>
+          </div>
+          <div class="guide-step">
+            <div class="guide-num">4</div>
+            <div class="guide-text">
+              <span data-lang="en">Paste the token below</span>
+              <span data-lang="es">Pegá el token acá abajo</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="claudeTokenInput">
+            <span data-lang="en">Setup Token</span>
+            <span data-lang="es">Token de configuración</span>
+          </label>
+          <input
+            type="password"
+            class="input-field"
+            id="claudeTokenInput"
+            placeholder="sk-ant-..."
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <div class="validation-msg" id="claudeTokenValidation"></div>
+        </div>
+
+        <div id="claudeSuccessView" style="display:none" class="auth-success">
+          <span data-lang="en">Connected to Claude</span>
+          <span data-lang="es">Conectado a Claude</span>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btnApiKeyContinue" disabled onclick="submitApiKey()">
+          <span data-lang="en">Continue</span>
+          <span data-lang="es">Continuar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 5: Model Selection -->
+    <div class="step" data-step="5">
+      <h2 class="step-title">
+        <span data-lang="en">Choose your model</span>
+        <span data-lang="es">Elegí tu modelo</span>
+      </h2>
+      <p class="step-desc">
+        <span data-lang="en">Select the AI model you want to use.</span>
+        <span data-lang="es">Seleccioná el modelo de IA que querés usar.</span>
+      </p>
+      <div id="modelsContainer">
+        <div class="loading-models">
+          <div class="spinner"></div>
+          <span data-lang="en">Loading models...</span>
+          <span data-lang="es">Cargando modelos...</span>
+        </div>
+      </div>
+      <div class="btn-row" id="modelBtnRow" style="display:none">
+        <button class="btn-primary" id="btnModelContinue" onclick="submitModel()">
+          <span data-lang="en">Continue</span>
+          <span data-lang="es">Continuar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 6: Telegram -->
+    <div class="step" data-step="6">
+      <h2 class="step-title">
+        <span data-lang="en">Connect Telegram</span>
+        <span data-lang="es">Conectá Telegram</span>
+      </h2>
+      <p class="step-desc">
+        <span data-lang="en">Telegram is the recommended way to chat with Limbo from your phone. If you're technical, you can skip this and connect directly to the vault MCP.</span>
+        <span data-lang="es">Telegram es la forma recomendada de hablar con Limbo desde tu celular. Si sos técnico, podés omitir esto y conectarte directo al MCP del vault.</span>
+      </p>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">
+            <span data-lang="en">Connect Telegram bot</span>
+            <span data-lang="es">Conectar bot de Telegram</span>
+          </div>
+          <div class="toggle-sub">
+            <span data-lang="en">Recommended — chat with Limbo from anywhere</span>
+            <span data-lang="es">Recomendado — hablá con Limbo desde cualquier lugar</span>
+          </div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="tgToggle" onchange="toggleTelegram()" checked>
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+
+      <div class="tg-fields visible" id="tgFields">
+        <div class="guide-steps">
+          <div class="guide-step">
+            <div class="guide-num">1</div>
+            <div class="guide-text">
+              <span data-lang="en">Open Telegram and search for <code>@BotFather</code></span>
+              <span data-lang="es">Abrí Telegram y buscá <code>@BotFather</code></span>
+            </div>
+          </div>
+          <div class="guide-step">
+            <div class="guide-num">2</div>
+            <div class="guide-text">
+              <span data-lang="en">Send <code>/newbot</code> and follow the steps</span>
+              <span data-lang="es">Enviá <code>/newbot</code> y seguí los pasos</span>
+            </div>
+          </div>
+          <div class="guide-step">
+            <div class="guide-num">3</div>
+            <div class="guide-text">
+              <span data-lang="en">Copy the bot token BotFather gives you</span>
+              <span data-lang="es">Copiá el token que te da BotFather</span>
+            </div>
+          </div>
+          <div class="guide-step">
+            <div class="guide-num">4</div>
+            <div class="guide-text">
+              <span data-lang="en">Paste it below</span>
+              <span data-lang="es">Pegalo abajo</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="tgTokenInput">Bot Token</label>
+          <input
+            type="text"
+            class="input-field"
+            id="tgTokenInput"
+            placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <div class="validation-msg" id="tgTokenValidation"></div>
+        </div>
+
+        <div class="toggle-row" style="margin-top: 4px;">
+          <div>
+            <div class="toggle-label">
+              <span data-lang="en">Auto-pair with your account</span>
+              <span data-lang="es">Auto-vincular con tu cuenta</span>
+            </div>
+            <div class="toggle-sub">
+              <span data-lang="en">Only the first Telegram user to message the bot will be linked</span>
+              <span data-lang="es">Solo el primer usuario que le escriba al bot será vinculado</span>
+            </div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="tgAutoPair" checked>
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="skipTelegram()">
+          <span data-lang="en">Skip</span>
+          <span data-lang="es">Omitir</span>
+        </button>
+        <button class="btn-primary" id="btnTgContinue" onclick="submitTelegram()">
+          <span data-lang="en">Continue</span>
+          <span data-lang="es">Continuar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 7: Confirm -->
+    <div class="step" data-step="7">
+      <h2 class="step-title">
+        <span data-lang="en">Ready to launch</span>
+        <span data-lang="es">Listo para arrancar</span>
+      </h2>
+      <p class="step-desc">
+        <span data-lang="en">Review your configuration. Click any item to change it.</span>
+        <span data-lang="es">Revisá tu configuración. Tocá cualquier item para cambiarlo.</span>
+      </p>
+
+      <div class="error-banner" id="confirmError">
+        <span id="confirmErrorText"></span>
+      </div>
+
+      <div class="summary-card" id="summaryCard"></div>
+
+      <div class="btn-row" style="flex-direction:column;gap:8px">
+        <button class="btn-primary" id="btnConfirm" onclick="submitConfig()" style="width:100%">
+          <span data-lang="en">Start Limbo</span>
+          <span data-lang="es">Iniciar Limbo</span>
+        </button>
+        <button class="btn-secondary" onclick="startOver()" style="width:100%">
+          <span data-lang="en">Start over</span>
+          <span data-lang="es">Empezar de nuevo</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Success Screen -->
+    <div class="success-screen" id="successScreen">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h2 class="success-title">
+        <span data-lang="en">Limbo is ready!</span>
+        <span data-lang="es">¡Limbo está listo!</span>
+      </h2>
+      <p class="success-sub" id="successMsgTelegram" style="display:none">
+        <span data-lang="en">Open Telegram and send a message to your bot to start chatting with Limbo.</span>
+        <span data-lang="es">Abrí Telegram y mandale un mensaje a tu bot para empezar a hablar con Limbo.</span>
+      </p>
+      <p class="success-sub" id="successMsgNoTelegram" style="display:none">
+        <span data-lang="en">Connect to the gateway at <code style="background:var(--bg-3);padding:4px 10px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:14px" id="gwUrlEn"></code></span>
+        <span data-lang="es">Conectate al gateway en <code style="background:var(--bg-3);padding:4px 10px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:14px" id="gwUrlEs"></code></span>
+      </p>
+      <p class="success-sub" style="margin-top:24px;color:var(--text-dim);font-size:14px">
+        <span data-lang="en">You can close this page.</span>
+        <span data-lang="es">Podés cerrar esta página.</span>
+      </p>
+    </div>
+  </div>
+
+  <footer class="footer">&copy; 2026 Limbo</footer>
+
+  <script>
+    // --- Setup Token ---
+    const SETUP_TOKEN = new URLSearchParams(window.location.search).get('token') || '';
+    function authHeaders() {
+      return { 'Authorization': `Bearer ${SETUP_TOKEN}`, 'Content-Type': 'application/json' };
+    }
+
+    // --- State ---
+    const state = {
+      step: 1,
+      language: 'en',
+      provider: null,
+      authMode: null,
+      apiKey: '',
+      model: null,
+      telegram: { enabled: true, botToken: '', autoPair: true },
+      subscriptionDone: false,
+      subscriptionEmail: '',
+    };
+
+    const totalSteps = 7;
+
+    // --- Prefix validation rules ---
+    const keyPrefixes = {
+      anthropic: 'sk-ant-',
+      openai: 'sk-',
+      openrouter: 'sk-or-',
+    };
+
+    const keyLinks = {
+      anthropic: 'https://console.anthropic.com/settings/keys',
+      openai: 'https://platform.openai.com/api-keys',
+      openrouter: 'https://openrouter.ai/keys',
+    };
+
+    // --- Provider display names ---
+    const providerNames = {
+      anthropic: 'Anthropic (Claude)',
+      openai: 'OpenAI (ChatGPT)',
+      openrouter: 'OpenRouter',
+    };
+
+    const authModeNames = {
+      en: { 'api-key': 'API Key', subscription: 'Subscription' },
+      es: { 'api-key': 'API Key', subscription: 'Suscripción' },
+    };
+
+    // --- Navigation ---
+    function goToStep(n) {
+      // Skip auth method step for openrouter
+      if (n === 3 && state.provider === 'openrouter') {
+        state.authMode = 'api-key';
+        n = 4;
+      }
+
+      state.step = n;
+
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      const target = document.querySelector(`.step[data-step="${n}"]`);
+      if (target) target.classList.add('active');
+
+      // Progress dots
+      document.querySelectorAll('.progress-dot').forEach((dot, i) => {
+        dot.classList.remove('active', 'done');
+        if (i + 1 === n) dot.classList.add('active');
+        else if (i + 1 < n) dot.classList.add('done');
+      });
+
+      // Back button
+      document.getElementById('btnBack').classList.toggle('hidden', n === 1);
+
+      // Step-specific setup
+      if (n === 4) setupApiKeyStep();
+      if (n === 5) fetchModels();
+      if (n === 7) buildSummary();
+    }
+
+    document.getElementById('btnBack').addEventListener('click', () => {
+      let prev = state.step - 1;
+      // Skip auth method for openrouter when going back
+      if (prev === 3 && state.provider === 'openrouter') prev = 2;
+      if (prev >= 1) goToStep(prev);
+    });
+
+    // --- Step 1: Language ---
+    function selectLanguage(lang) {
+      state.language = lang;
+      document.body.className = `lang-${lang}`;
+      // Mark card selected
+      document.querySelectorAll('.step[data-step="1"] .card').forEach(c => {
+        c.classList.toggle('selected', c.dataset.value === lang);
+      });
+      setTimeout(() => goToStep(2), 200);
+    }
+
+    // --- Step 2: Provider ---
+    const subscriptionLabels = {
+      anthropic: { en: 'Use your Claude Pro/Team subscription', es: 'Usá tu suscripción de Claude Pro/Team' },
+      openai:    { en: 'Use your ChatGPT Plus/Pro subscription', es: 'Usá tu suscripción de ChatGPT Plus/Pro' },
+    };
+    function selectProvider(provider) {
+      state.provider = provider;
+      document.querySelectorAll('.step[data-step="2"] .card').forEach(c => {
+        c.classList.toggle('selected', c.dataset.value === provider);
+      });
+      // Update subscription subtitle for step 3
+      const sub = document.getElementById('subscriptionSubtitle');
+      const labels = subscriptionLabels[provider];
+      if (labels && sub) {
+        sub.innerHTML = `<span data-lang="en">${labels.en}</span><span data-lang="es">${labels.es}</span>`;
+        document.body.className = `lang-${state.language}`;
+      }
+      // Reset downstream
+      state.authMode = null;
+      state.apiKey = '';
+      state.model = null;
+      state.subscriptionDone = false;
+      state.subscriptionEmail = '';
+      setTimeout(() => goToStep(3), 200);
+    }
+
+    // --- Step 3: Auth Mode ---
+    function selectAuthMode(mode) {
+      state.authMode = mode;
+      state.subscriptionDone = false;
+      state.subscriptionEmail = '';
+      document.querySelectorAll('.step[data-step="3"] .card').forEach(c => {
+        c.classList.toggle('selected', c.dataset.value === mode);
+      });
+      setTimeout(() => goToStep(4), 200);
+    }
+
+    // --- Step 4: Credentials ---
+    function setupApiKeyStep() {
+      const isSub = state.authMode === 'subscription';
+      const isOAuth = isSub && state.provider === 'openai';
+      const isClaude = isSub && state.provider === 'anthropic';
+
+      // Hide all sections
+      document.getElementById('apiKeySection').style.display = 'none';
+      document.getElementById('oauthSection').style.display = 'none';
+      document.getElementById('claudeTokenSection').style.display = 'none';
+
+      const btn = document.getElementById('btnApiKeyContinue');
+
+      if (isOAuth) {
+        document.getElementById('oauthSection').style.display = '';
+        btn.disabled = !state.subscriptionDone;
+        // Reset all OAuth sub-views
+        document.getElementById('oauthStartView').style.display = 'none';
+        document.getElementById('oauthHeadsUpView').style.display = 'none';
+        document.getElementById('oauthPasteView').style.display = 'none';
+        document.getElementById('oauthSuccessView').style.display = 'none';
+        if (state.subscriptionDone) {
+          document.getElementById('oauthSuccessView').style.display = '';
+        } else {
+          document.getElementById('oauthStartView').style.display = '';
+        }
+      } else if (isClaude) {
+        document.getElementById('claudeTokenSection').style.display = '';
+        btn.disabled = !state.subscriptionDone;
+        document.getElementById('claudeSuccessView').style.display = state.subscriptionDone ? '' : 'none';
+        const input = document.getElementById('claudeTokenInput');
+        if (!state.subscriptionDone) {
+          input.value = '';
+          input.className = 'input-field';
+          document.getElementById('claudeTokenValidation').innerHTML = '';
+        }
+      } else {
+        // API Key mode
+        document.getElementById('apiKeySection').style.display = '';
+        btn.disabled = true;
+        const input = document.getElementById('apiKeyInput');
+        input.value = state.apiKey || '';
+        input.className = 'input-field';
+        document.getElementById('apiKeyValidation').innerHTML = '';
+        setupApiKeyHint();
+      }
+    }
+
+    function setupApiKeyHint() {
+      const link = keyLinks[state.provider] || '#';
+      const hint = document.getElementById('apiKeyHint');
+      if (state.language === 'es') {
+        hint.innerHTML = `Podés obtener tu API key en <a href="${link}" target="_blank">${state.provider}</a>`;
+      } else {
+        hint.innerHTML = `You can get your API key at <a href="${link}" target="_blank">${state.provider}</a>`;
+      }
+    }
+
+    // --- API Key input validation ---
+    document.getElementById('apiKeyInput').addEventListener('input', function () {
+      const val = this.value.trim();
+      const msgEl = document.getElementById('apiKeyValidation');
+      const btn = document.getElementById('btnApiKeyContinue');
+      const expectedPrefix = keyPrefixes[state.provider] || '';
+
+      if (!val) {
+        this.className = 'input-field';
+        msgEl.innerHTML = '';
+        btn.disabled = true;
+        return;
+      }
+
+      if (expectedPrefix && val.startsWith(expectedPrefix) && val.length > expectedPrefix.length + 5) {
+        this.className = 'input-field valid';
+        const msg = state.language === 'es' ? 'Formato válido' : 'Valid format';
+        msgEl.innerHTML = `<span class="validation-msg success">${msg}</span>`;
+        btn.disabled = false;
+      } else if (expectedPrefix && !val.startsWith(expectedPrefix)) {
+        this.className = 'input-field invalid';
+        const msg = state.language === 'es'
+          ? `La key debe empezar con <code>${expectedPrefix}</code>`
+          : `Key should start with <code>${expectedPrefix}</code>`;
+        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+        btn.disabled = true;
+      } else {
+        this.className = 'input-field';
+        msgEl.innerHTML = '';
+        btn.disabled = val.length < 10;
+      }
+    });
+
+    // --- OpenAI OAuth PKCE ---
+    function startOpenAIOAuth() {
+      // Show the heads-up dialog before opening the auth window
+      document.getElementById('oauthStartView').style.display = 'none';
+      document.getElementById('oauthHeadsUpView').style.display = '';
+    }
+
+    async function confirmOpenAIOAuth() {
+      const btn = document.getElementById('btnOauthConfirmOpen');
+      btn.disabled = true;
+      const origHTML = btn.innerHTML;
+      btn.innerHTML = '<div class="spinner" style="border-color:#fff;border-top-color:transparent;width:18px;height:18px"></div>';
+
+      // Open window FIRST to preserve user-gesture context
+      const popup = window.open('about:blank', '_blank');
+
+      try {
+        const res = await fetch(`/api/auth/openai/start?token=${SETUP_TOKEN}`);
+        if (!res.ok) throw new Error('Failed to start OAuth');
+        const data = await res.json();
+
+        popup.location.href = data.authUrl;
+
+        // Show paste-URL step
+        document.getElementById('oauthHeadsUpView').style.display = 'none';
+        document.getElementById('oauthPasteView').style.display = '';
+      } catch (err) {
+        if (popup) popup.close();
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        document.body.className = `lang-${state.language}`;
+        document.getElementById('oauthValidation').innerHTML =
+          `<span class="validation-msg error">${err.message}</span>`;
+      }
+    }
+
+    function onOAuthSuccess(email) {
+      state.subscriptionDone = true;
+      state.subscriptionEmail = email;
+
+      document.getElementById('oauthPasteView').style.display = 'none';
+      document.getElementById('oauthHeadsUpView').style.display = 'none';
+      document.getElementById('oauthSuccessView').style.display = '';
+      document.getElementById('oauthEmailEn').textContent = email || 'OpenAI';
+      document.getElementById('oauthEmailEs').textContent = email || 'OpenAI';
+      document.getElementById('btnApiKeyContinue').disabled = false;
+    }
+
+    // Paste URL validation + submit
+    document.getElementById('oauthCallbackInput').addEventListener('input', function () {
+      const val = this.value.trim();
+      document.getElementById('btnOauthConnect').disabled = !val || !val.includes('code=');
+      document.getElementById('oauthValidation').innerHTML = '';
+    });
+
+    async function submitOAuthCallback() {
+      const input = document.getElementById('oauthCallbackInput');
+      const url = input.value.trim();
+      if (!url) return;
+
+      const btn = document.getElementById('btnOauthConnect');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div>';
+
+      try {
+        const res = await fetch('/api/auth/openai/exchange', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ callbackUrl: url }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Exchange failed');
+        }
+        const data = await res.json();
+        onOAuthSuccess(data.email || '');
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = '<span data-lang="en">Connect</span><span data-lang="es">Conectar</span>';
+        document.body.className = `lang-${state.language}`;
+        document.getElementById('oauthValidation').innerHTML =
+          `<span class="validation-msg error">${err.message}</span>`;
+      }
+    }
+
+    // --- Anthropic setup-token ---
+    document.getElementById('claudeTokenInput').addEventListener('input', function () {
+      const val = this.value.trim();
+      const msgEl = document.getElementById('claudeTokenValidation');
+      const btn = document.getElementById('btnApiKeyContinue');
+
+      if (!val) {
+        this.className = 'input-field';
+        msgEl.innerHTML = '';
+        btn.disabled = true;
+        return;
+      }
+
+      if (val.length > 20) {
+        this.className = 'input-field valid';
+        msgEl.innerHTML = '';
+        btn.disabled = false;
+      } else {
+        this.className = 'input-field invalid';
+        const msg = state.language === 'es' ? 'Token demasiado corto' : 'Token too short';
+        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+        btn.disabled = true;
+      }
+    });
+
+    async function connectClaudeToken(token) {
+      const btn = document.getElementById('btnApiKeyContinue');
+      const origHTML = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div>';
+
+      try {
+        const res = await fetch('/api/auth/anthropic/token', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ token }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Validation failed');
+        }
+
+        state.subscriptionDone = true;
+
+        // Show success
+        document.getElementById('claudeSuccessView').style.display = '';
+        document.getElementById('claudeTokenInput').className = 'input-field valid';
+        document.getElementById('claudeTokenValidation').innerHTML = '';
+
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        document.body.className = `lang-${state.language}`;
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        document.body.className = `lang-${state.language}`;
+        const msgEl = document.getElementById('claudeTokenValidation');
+        msgEl.innerHTML = `<span class="validation-msg error">${err.message}</span>`;
+      }
+    }
+
+    // --- Copy command helper ---
+    function copyCommand(el) {
+      const cmd = el.querySelector('span:first-child').textContent;
+      navigator.clipboard.writeText(cmd).then(() => {
+        const hints = el.querySelectorAll('.copy-hint');
+        hints.forEach(h => {
+          const orig = h.textContent;
+          h.textContent = state.language === 'es' ? 'copiado!' : 'copied!';
+          h.style.color = 'var(--success)';
+          setTimeout(() => { h.textContent = orig; h.style.color = ''; }, 1500);
+        });
+      });
+    }
+
+    // --- Submit Step 4 ---
+    async function submitApiKey() {
+      // Anthropic subscription: validate token on server first
+      if (state.authMode === 'subscription' && state.provider === 'anthropic' && !state.subscriptionDone) {
+        const token = document.getElementById('claudeTokenInput').value.trim();
+        if (!token) return;
+        await connectClaudeToken(token);
+        if (!state.subscriptionDone) return; // validation failed
+      }
+
+      // API key mode: store key
+      if (state.authMode === 'api-key') {
+        state.apiKey = document.getElementById('apiKeyInput').value.trim();
+      }
+
+      goToStep(5);
+    }
+
+    // --- Step 5: Models ---
+    async function fetchModels() {
+      const container = document.getElementById('modelsContainer');
+      const btnRow = document.getElementById('modelBtnRow');
+      btnRow.style.display = 'none';
+
+      container.innerHTML = `
+        <div class="loading-models">
+          <div class="spinner"></div>
+          <span data-lang="en">Loading models...</span>
+          <span data-lang="es">Cargando modelos...</span>
+        </div>`;
+      // Re-apply lang visibility
+      document.body.className = `lang-${state.language}`;
+
+      try {
+        const res = await fetch(`/api/models?provider=${state.provider}&token=${SETUP_TOKEN}`);
+        if (!res.ok) throw new Error('Failed to fetch models');
+        const data = await res.json();
+        const models = data.models || [];
+
+        if (models.length === 0) {
+          container.innerHTML = `<p style="color:var(--text-sub);text-align:center;padding:24px">
+            <span data-lang="en">No models available</span>
+            <span data-lang="es">No hay modelos disponibles</span>
+          </p>`;
+          document.body.className = `lang-${state.language}`;
+          return;
+        }
+
+        container.innerHTML = '<div class="cards" id="modelCards"></div>';
+        const cardsEl = document.getElementById('modelCards');
+
+        models.forEach(m => {
+          const isDefault = m.default === true;
+          const card = document.createElement('div');
+          card.className = 'model-card' + (isDefault ? ' selected' : '');
+          card.dataset.model = m.id;
+          card.innerHTML = `
+            <span class="model-name">${m.name || m.id}</span>
+            ${isDefault ? `<span class="model-badge">
+              <span data-lang="en">default</span>
+              <span data-lang="es">predeterminado</span>
+            </span>` : ''}`;
+          card.addEventListener('click', () => selectModel(m.id));
+          cardsEl.appendChild(card);
+
+          if (isDefault) state.model = m.id;
+        });
+
+        document.body.className = `lang-${state.language}`;
+        btnRow.style.display = '';
+      } catch (err) {
+        container.innerHTML = `
+          <p style="color:var(--danger);text-align:center;padding:24px">
+            <span data-lang="en">Could not load models. Check your API key and try again.</span>
+            <span data-lang="es">No se pudieron cargar los modelos. Revisá tu API key e intentá de nuevo.</span>
+          </p>
+          <div class="btn-row">
+            <button class="btn-secondary" onclick="goToStep(4)">
+              <span data-lang="en">Go back</span>
+              <span data-lang="es">Volver</span>
+            </button>
+            <button class="btn-primary" onclick="fetchModels()">
+              <span data-lang="en">Retry</span>
+              <span data-lang="es">Reintentar</span>
+            </button>
+          </div>`;
+        document.body.className = `lang-${state.language}`;
+      }
+    }
+
+    function selectModel(id) {
+      state.model = id;
+      document.querySelectorAll('.model-card').forEach(c => {
+        c.classList.toggle('selected', c.dataset.model === id);
+      });
+    }
+
+    function submitModel() {
+      if (!state.model) return;
+      goToStep(6);
+    }
+
+    // --- Step 6: Telegram ---
+    function toggleTelegram() {
+      const enabled = document.getElementById('tgToggle').checked;
+      state.telegram.enabled = enabled;
+      document.getElementById('tgFields').classList.toggle('visible', enabled);
+    }
+
+    document.getElementById('tgTokenInput').addEventListener('input', function () {
+      const val = this.value.trim();
+      const msgEl = document.getElementById('tgTokenValidation');
+      // Telegram bot tokens look like: 123456:ABC-DEF...
+      const valid = /^\d+:.{20,}$/.test(val);
+      if (!val) {
+        this.className = 'input-field';
+        msgEl.innerHTML = '';
+        return;
+      }
+      if (valid) {
+        this.className = 'input-field valid';
+        msgEl.innerHTML = '';
+      } else {
+        this.className = 'input-field invalid';
+        const msg = state.language === 'es' ? 'Formato de token inválido' : 'Invalid token format';
+        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+      }
+    });
+
+    function skipTelegram() {
+      state.telegram.enabled = false;
+      state.telegram.botToken = '';
+      goToStep(7);
+    }
+
+    function submitTelegram() {
+      if (state.telegram.enabled) {
+        const token = document.getElementById('tgTokenInput').value.trim();
+        if (!token || !/^\d+:.{20,}$/.test(token)) {
+          const msgEl = document.getElementById('tgTokenValidation');
+          const msg = state.language === 'es' ? 'Ingresá un token válido o salteá este paso' : 'Enter a valid token or skip this step';
+          msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+          return;
+        }
+        state.telegram.botToken = token;
+        state.telegram.autoPair = document.getElementById('tgAutoPair').checked;
+      }
+      goToStep(7);
+    }
+
+    // --- Step 7: Summary ---
+    function buildSummary() {
+      const card = document.getElementById('summaryCard');
+      const l = state.language;
+
+      const items = [
+        {
+          label: l === 'es' ? 'Idioma' : 'Language',
+          value: state.language === 'es' ? 'Español (Argentina)' : 'English',
+          step: 1,
+        },
+        {
+          label: l === 'es' ? 'Proveedor' : 'Provider',
+          value: providerNames[state.provider] || state.provider,
+          step: 2,
+        },
+        {
+          label: l === 'es' ? 'Autenticación' : 'Authentication',
+          value: authModeNames[l][state.authMode] || state.authMode,
+          step: 3,
+          hide: state.provider === 'openrouter',
+        },
+        {
+          label: state.authMode === 'subscription'
+            ? (l === 'es' ? 'Cuenta' : 'Account')
+            : (l === 'es' ? 'Clave' : 'Key'),
+          value: state.authMode === 'subscription'
+            ? (state.subscriptionEmail || (l === 'es' ? 'Conectado' : 'Connected'))
+            : maskKey(state.apiKey),
+          step: 4,
+        },
+        {
+          label: l === 'es' ? 'Modelo' : 'Model',
+          value: state.model,
+          step: 5,
+        },
+        {
+          label: 'Telegram',
+          value: state.telegram.enabled
+            ? (l === 'es' ? 'Activado' : 'Enabled')
+            : (l === 'es' ? 'Desactivado' : 'Disabled'),
+          step: 6,
+        },
+      ];
+
+      card.innerHTML = items
+        .filter(i => !i.hide)
+        .map(i => `
+          <div class="summary-item" style="cursor:default">
+            <div>
+              <div class="summary-label">${i.label}</div>
+              <div class="summary-value">${i.value}</div>
+            </div>
+          </div>
+        `).join('');
+
+      // Reset error
+      document.getElementById('confirmError').classList.remove('visible');
+    }
+
+    function maskKey(key) {
+      if (!key) return '—';
+      if (key.length <= 12) return key.substring(0, 4) + '...' + key.slice(-4);
+      return key.substring(0, 8) + '...' + key.slice(-4);
+    }
+
+    function startOver() {
+      state.provider = null;
+      state.authMode = null;
+      state.apiKey = '';
+      state.model = null;
+      state.subscriptionDone = false;
+      state.subscriptionEmail = '';
+      state.telegram = { enabled: true, botToken: '', autoPair: true };
+      document.getElementById('tgToggle').checked = true;
+      document.getElementById('tgFields').classList.add('visible');
+      goToStep(1);
+    }
+
+    // --- Submit ---
+    async function submitConfig() {
+      const btn = document.getElementById('btnConfirm');
+      const errorBanner = document.getElementById('confirmError');
+      const errorText = document.getElementById('confirmErrorText');
+
+      errorBanner.classList.remove('visible');
+      btn.disabled = true;
+      btn.innerHTML = `<div class="spinner"></div> <span data-lang="en">Configuring...</span><span data-lang="es">Configurando...</span>`;
+      document.body.className = `lang-${state.language}`;
+
+      const payload = {
+        language: state.language,
+        provider: state.provider,
+        authMode: state.authMode,
+        model: state.model,
+        telegram: {
+          enabled: state.telegram.enabled,
+          botToken: state.telegram.enabled ? state.telegram.botToken : '',
+          autoPair: state.telegram.autoPair,
+        },
+      };
+      if (state.authMode === 'api-key') {
+        payload.apiKey = state.apiKey;
+      }
+
+      try {
+        const res = await fetch('/api/configure', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Server error (${res.status})`);
+        }
+
+        showSuccess();
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = `<span data-lang="en">Start Limbo</span><span data-lang="es">Iniciar Limbo</span>`;
+        document.body.className = `lang-${state.language}`;
+        errorText.textContent = err.message || (state.language === 'es' ? 'Error al configurar' : 'Configuration failed');
+        errorBanner.classList.add('visible');
+      }
+    }
+
+    function showSuccess() {
+      // Hide all steps and nav
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.getElementById('progress').style.display = 'none';
+      document.querySelector('.nav-header').style.display = 'none';
+
+      const screen = document.getElementById('successScreen');
+      screen.classList.add('active');
+
+      // Show the right message based on Telegram config
+      if (state.telegram.enabled && state.telegram.botToken) {
+        document.getElementById('successMsgTelegram').style.display = 'block';
+      } else {
+        const gwUrl = `ws://${window.location.hostname}:${window.location.port || '18789'}`;
+        const gwUrlEn = document.getElementById('gwUrlEn');
+        const gwUrlEs = document.getElementById('gwUrlEs');
+        if (gwUrlEn) gwUrlEn.textContent = gwUrl;
+        if (gwUrlEs) gwUrlEs.textContent = gwUrl;
+        document.getElementById('successMsgNoTelegram').style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>
