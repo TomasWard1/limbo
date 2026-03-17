@@ -1,7 +1,7 @@
 {
   "gateway": {
     "mode": "local",
-    "port": 18789,
+    "port": $LIMBO_PORT,
     "bind": "loopback",
     "auth": { "mode": "token" }
   },
