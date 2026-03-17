@@ -167,6 +167,7 @@ function composeContent() {
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
+      NODE_OPTIONS: "--max-old-space-size=1024"
     healthcheck:
       test:
         - CMD-SHELL
@@ -226,6 +227,7 @@ function composeContentHardened() {
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
+      NODE_OPTIONS: "--max-old-space-size=1024"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
       NO_PROXY: "127.0.0.1,localhost"
@@ -968,7 +970,8 @@ function pullOrBuildImage(lang) {
 }
 
 function runOpenClaw(args, opts = {}) {
-  return runDockerCompose(['run', '--rm', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
+  // 512MB heap: sufficient for config get/set/validate on low-memory VPS.
+  return runDockerCompose(['run', '--rm', '-e', 'NODE_OPTIONS=--max-old-space-size=512', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
 }
 
 // Fix volume ownership before any docker compose run commands.
@@ -1452,14 +1455,27 @@ function cmdUpdate() {
   if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
 
   // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
-  const compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
+  let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
   const patched = compose.replace(
     /image:\s*ghcr\.io\/tomasward1\/limbo:\S+/g,
     `image: ${GHCR_IMAGE}:${DEFAULT_TAG}`
   );
   if (patched !== compose) {
-    fs.writeFileSync(COMPOSE_FILE, patched);
+    compose = patched;
+    fs.writeFileSync(COMPOSE_FILE, compose);
     log('Patched compose image tag to :latest');
+  }
+
+  // Inject NODE_OPTIONS into existing compose files to prevent OOM on low-memory VPS
+  if (!compose.includes('NODE_OPTIONS')) {
+    const injected = compose.replace(
+      /^(\s+)(LIMBO_PORT:\s*.+)$/m,
+      '$1$2\n$1NODE_OPTIONS: "--max-old-space-size=1024"'
+    );
+    if (injected !== compose) {
+      fs.writeFileSync(COMPOSE_FILE, injected);
+      log('Added NODE_OPTIONS to compose environment');
+    }
   }
 
   log('Pulling latest image...');
