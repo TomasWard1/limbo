@@ -5,6 +5,9 @@
     "bind": "loopback",
     "auth": { "mode": "token" }
   },
+  "browser": {
+    "enabled": false
+  },
   "session": {
     "dmScope": "per-channel-peer"
   },

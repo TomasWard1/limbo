@@ -27,7 +27,7 @@ services:
     environment:
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
-      NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"
+      NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
     healthcheck:
       test:
         [

@@ -154,15 +154,40 @@ if [ ! -f /data/workspace/USER.md ]; then
   log "INFO  Generated USER.md from template"
 fi
 
-# ── Generate OpenClaw config only if one does not exist already ──────────────
-if [ ! -f "$OPENCLAW_CONFIG_PATH" ]; then
-  log "INFO  No persisted OpenClaw config found — generating fallback config"
-  export MODEL_PROVIDER MODEL_NAME TELEGRAM_ENABLED TELEGRAM_BOT_TOKEN OPENAI_API_KEY ANTHROPIC_API_KEY OPENCLAW_STATE_DIR OPENCLAW_CONFIG_PATH LIMBO_PORT
+# ── Generate or repair OpenClaw config ────────────────────────────────────────
+export MODEL_PROVIDER MODEL_NAME TELEGRAM_ENABLED TELEGRAM_BOT_TOKEN OPENAI_API_KEY ANTHROPIC_API_KEY OPENCLAW_STATE_DIR OPENCLAW_CONFIG_PATH LIMBO_PORT
+
+_regenerate_config() {
   envsubst '$MODEL_PROVIDER $MODEL_NAME $TELEGRAM_ENABLED $TELEGRAM_BOT_TOKEN $LIMBO_PORT' \
     < /app/openclaw.json.template > "$OPENCLAW_CONFIG_PATH"
+}
+
+if [ ! -f "$OPENCLAW_CONFIG_PATH" ]; then
+  log "INFO  No persisted OpenClaw config found — generating from template"
+  _regenerate_config
   log "INFO  OpenClaw config written to $OPENCLAW_CONFIG_PATH"
 else
-  log "INFO  Using persisted OpenClaw config at $OPENCLAW_CONFIG_PATH"
+  # Validate persisted config: port must match LIMBO_PORT, browser must be disabled.
+  # Stale configs from older images can silently break the gateway.
+  _needs_regen=false
+  _cfg_port="$(node -e "try{const c=JSON.parse(require('fs').readFileSync('$OPENCLAW_CONFIG_PATH','utf8'));process.stdout.write(String(c.gateway&&c.gateway.port||''))}catch{}" 2>/dev/null || echo "")"
+  _cfg_browser="$(node -e "try{const c=JSON.parse(require('fs').readFileSync('$OPENCLAW_CONFIG_PATH','utf8'));process.stdout.write(String(c.browser&&c.browser.enabled))}catch{}" 2>/dev/null || echo "")"
+
+  if [ -n "$_cfg_port" ] && [ "$_cfg_port" != "$LIMBO_PORT" ]; then
+    log "WARN  Config port ($_cfg_port) != LIMBO_PORT ($LIMBO_PORT) — regenerating"
+    _needs_regen=true
+  fi
+  if [ "$_cfg_browser" != "false" ]; then
+    log "WARN  Config has browser enabled — regenerating to disable"
+    _needs_regen=true
+  fi
+
+  if [ "$_needs_regen" = "true" ]; then
+    _regenerate_config
+    log "INFO  OpenClaw config regenerated at $OPENCLAW_CONFIG_PATH"
+  else
+    log "INFO  Using persisted OpenClaw config at $OPENCLAW_CONFIG_PATH"
+  fi
 fi
 
 # ── Run migrations ────────────────────────────────────────────────────────────
