@@ -105,6 +105,18 @@ else
   ok "Docker installed: $(docker --version)"
 fi
 
+# ─── Install Node.js (for npx limbo-ai commands) ────────────────────────────
+header "Checking Node.js..."
+
+if command -v node &>/dev/null && node -v | grep -qE '^v(1[89]|2[0-9])'; then
+  ok "Node.js already installed: $(node -v)"
+else
+  log "Installing Node.js 22 LTS..."
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y -qq nodejs
+  ok "Node.js installed: $(node -v)"
+fi
+
 # ─── Detect port conflicts ───────────────────────────────────────────────────
 header "Checking for port conflicts..."
 
