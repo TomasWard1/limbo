@@ -545,6 +545,24 @@ const warn = (msg) => console.log(`${c.yellow}[limbo]${c.reset} ${msg}`);
 const die = (msg) => { console.error(`${c.red}[limbo] ERROR:${c.reset} ${msg}`); process.exit(1); };
 const header = (msg) => console.log(`\n${c.bold}${msg}${c.reset}`);
 
+// Single-line spinner: overwrites the same line on TTY, falls back to log() on pipe/CI.
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+let _spinnerFrame = 0;
+function spinnerWrite(msg) {
+  if (process.stdout.isTTY) {
+    const frame = SPINNER_FRAMES[_spinnerFrame++ % SPINNER_FRAMES.length];
+    const line = `\r${c.cyan}[limbo]${c.reset} ${frame} ${msg}`;
+    process.stdout.write(line.padEnd(process.stdout.columns || 80));
+  } else {
+    log(msg);
+  }
+}
+function spinnerClear() {
+  if (process.stdout.isTTY) {
+    process.stdout.write('\r' + ' '.repeat(process.stdout.columns || 80) + '\r');
+  }
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function t(lang, key, ...args) {
@@ -732,11 +750,12 @@ function waitForHealthy(lang, maxAttempts = 12) {
   for (let i = 1; i <= maxAttempts; i++) {
     try {
       const raw = runQuiet('docker compose ps --format json');
-      if (raw.includes('"healthy"')) return true;
+      if (raw.includes('"healthy"')) { spinnerClear(); return true; }
     } catch {}
-    log(t(lang, 'waitingHealth', i, maxAttempts));
+    spinnerWrite(`${t(lang, 'waitingHealth', i, maxAttempts)}`);
     sleep(5000);
   }
+  spinnerClear();
   return false;
 }
 
@@ -1099,12 +1118,12 @@ async function createSetupTunnel(port, tunnelDomain) {
     // Warmup: wait for DNS to propagate AND tunnel to respond before returning.
     // Chrome uses its own DoH resolver and won't see the URL until DNS is globally propagated.
     // We check DNS resolution (not just HTTP reachability) to ensure browsers can reach it.
-    log('Waiting for tunnel to be reachable...');
     const https = require('https');
     const dns = require('dns').promises;
     const tunnelHost = tunnelUrl.replace('https://', '');
     let reachable = false;
     for (let i = 0; i < 30; i++) {
+      spinnerWrite(`Waiting for tunnel to be reachable... (${i + 1}/30)`);
       try {
         // First verify DNS resolves (catches DoH propagation issues)
         await dns.lookup(tunnelHost);
@@ -1121,6 +1140,7 @@ async function createSetupTunnel(port, tunnelDomain) {
       } catch {}
       sleep(2000);
     }
+    spinnerClear();
     if (!reachable) {
       warn('Tunnel created but DNS has not fully propagated. The URL may take a moment to work.');
     }
@@ -1553,11 +1573,12 @@ function extractWizardUrl(maxAttempts = 15) {
       });
       const output = logs.stdout || '';
       const match = output.match(/SETUP_URL=(https?:\/\/\S+)/);
-      if (match) return match[1];
+      if (match) { spinnerClear(); return match[1]; }
     } catch {}
-    log(`Waiting for setup wizard URL... (${i}/${maxAttempts})`);
+    spinnerWrite(`Waiting for setup wizard URL... (${i}/${maxAttempts})`);
     sleep(2000);
   }
+  spinnerClear();
   return null;
 }
 
