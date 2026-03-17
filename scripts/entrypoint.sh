@@ -21,10 +21,10 @@ log "INFO  Limbo container starting"
 read_secret() {
   local docker_secret="/run/secrets/$1"
   local wizard_secret="/data/secrets/$1"
-  # Check Docker secrets first, but only if non-empty (empty files are placeholders)
-  if [ -f "$docker_secret" ] && [ -s "$docker_secret" ]; then
+  # Check Docker secrets first, but only if non-empty and readable
+  if [ -f "$docker_secret" ] && [ -s "$docker_secret" ] && [ -r "$docker_secret" ]; then
     cat "$docker_secret"
-  elif [ -f "$wizard_secret" ] && [ -s "$wizard_secret" ]; then
+  elif [ -f "$wizard_secret" ] && [ -s "$wizard_secret" ] && [ -r "$wizard_secret" ]; then
     cat "$wizard_secret"
   else
     echo ""
