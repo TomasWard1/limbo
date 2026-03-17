@@ -167,12 +167,12 @@ function composeContent() {
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "--max-old-space-size=1024"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"
     healthcheck:
       test:
         - CMD-SHELL
         - >-
-          node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
+          NODE_OPTIONS= node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
           done=(c)=>{try{s.destroy()}catch{};process.exit(c)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);"
       interval: 30s
       timeout: 10s
@@ -227,7 +227,7 @@ function composeContentHardened() {
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "--max-old-space-size=1024"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
       NO_PROXY: "127.0.0.1,localhost"
@@ -237,7 +237,7 @@ function composeContentHardened() {
       test:
         - CMD-SHELL
         - >-
-          node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
+          NODE_OPTIONS= node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
           done=(c)=>{try{s.destroy()}catch{};process.exit(c)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);"
       interval: 30s
       timeout: 10s
@@ -1466,14 +1466,16 @@ function cmdUpdate() {
     log('Patched compose image tag to :latest');
   }
 
-  // Inject NODE_OPTIONS into existing compose files to prevent OOM on low-memory VPS
+  // Inject NODE_OPTIONS into existing compose files to prevent OOM on low-memory VPS.
+  // Uses LIMBO_NODE_OPTIONS env var with 1024MB default so users on bigger servers can override.
   if (!compose.includes('NODE_OPTIONS')) {
     const injected = compose.replace(
       /^(\s+)(LIMBO_PORT:\s*.+)$/m,
-      '$1$2\n$1NODE_OPTIONS: "--max-old-space-size=1024"'
+      '$1$2\n$1NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"'
     );
     if (injected !== compose) {
-      fs.writeFileSync(COMPOSE_FILE, injected);
+      compose = injected;
+      fs.writeFileSync(COMPOSE_FILE, compose);
       log('Added NODE_OPTIONS to compose environment');
     }
   }
