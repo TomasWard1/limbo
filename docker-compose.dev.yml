@@ -1,0 +1,9 @@
+# Dev override — mounts local code for testing without rebuild
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  limbo:
+    volumes:
+      - ./setup-server:/app/setup-server:ro
+      - ./scripts/entrypoint.sh:/entrypoint.sh:ro
+      - ./migrations:/app/migrations:ro
+      - ./workspace:/app/workspace:ro

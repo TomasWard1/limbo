@@ -11,3 +11,4 @@ data/
 # Agent runtime data (personal memory, daily notes, plans)
 agents/*/life/
 agents/*/memory/
+.worktrees
