@@ -152,7 +152,7 @@ function composeContent() {
       - /tmp:size=100M,noexec,nosuid,nodev
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
     ports:
-      - "127.0.0.1:${PORT}:${PORT}"
+      - "${isServerEnvironment() ? '0.0.0.0' : '127.0.0.1'}:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
@@ -212,7 +212,7 @@ function composeContentHardened() {
       - /tmp:size=100M,noexec,nosuid,nodev
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
     ports:
-      - "127.0.0.1:${PORT}:${PORT}"
+      - "${isServerEnvironment() ? '0.0.0.0' : '127.0.0.1'}:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
@@ -1001,6 +1001,127 @@ function ensureVolumePermissions() {
   ], { stdio: 'pipe' });
 }
 
+// ─── Server detection & Cloudflare tunnel for remote wizard access ──────────
+
+function isServerEnvironment() {
+  return !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT ||
+    (os.platform() === 'linux' && !process.env.DISPLAY));
+}
+
+function hasCloudflared() {
+  try { execSync('which cloudflared', { stdio: 'pipe' }); return true; } catch { return false; }
+}
+
+function installCloudflared() {
+  log('Installing cloudflared...');
+  const platform = os.platform();
+  try {
+    if (platform === 'linux') {
+      execSync('curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared && chmod +x /tmp/cloudflared && sudo mv /tmp/cloudflared /usr/local/bin/cloudflared', { stdio: 'pipe' });
+    } else if (platform === 'darwin') {
+      execSync('brew install cloudflared', { stdio: 'pipe' });
+    }
+    return true;
+  } catch {
+    warn('Could not install cloudflared automatically.');
+    return false;
+  }
+}
+
+function hasCloudflaredCredentials() {
+  const certPath = path.join(os.homedir(), '.cloudflared', 'cert.pem');
+  return fs.existsSync(certPath);
+}
+
+function createSetupTunnel(port) {
+  if (!hasCloudflared() && !installCloudflared()) return null;
+  if (!hasCloudflared()) return null;
+
+  const tunnelId = crypto.randomBytes(4).toString('hex');
+
+  // Branded tunnel with subdomain if Cloudflare credentials exist
+  if (hasCloudflaredCredentials()) {
+    const tunnelName = `limbo-setup-${tunnelId}`;
+    const subdomain = `setup-${tunnelId}.limbo.tomasward.com`;
+    try {
+      execSync(`cloudflared tunnel create ${tunnelName}`, { stdio: 'pipe' });
+      execSync(`cloudflared tunnel route dns ${tunnelName} ${subdomain}`, { stdio: 'pipe' });
+
+      // Write a minimal config for this tunnel
+      const cfHome = path.join(os.homedir(), '.cloudflared');
+      const credFiles = fs.readdirSync(cfHome).filter(f => f.endsWith('.json') && f !== 'config.yml');
+      // Find the credential file for this tunnel
+      const tunnelInfoRaw = execSync(`cloudflared tunnel info ${tunnelName} 2>&1`, { encoding: 'utf8', stdio: 'pipe' });
+      const tunnelUuid = tunnelInfoRaw.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/)?.[1];
+
+      if (!tunnelUuid) throw new Error('Could not find tunnel UUID');
+
+      const credFile = path.join(cfHome, `${tunnelUuid}.json`);
+      const configPath = path.join(LIMBO_DIR, 'cloudflared-setup.yml');
+      fs.writeFileSync(configPath, [
+        `tunnel: ${tunnelUuid}`,
+        `credentials-file: ${credFile}`,
+        'ingress:',
+        `  - hostname: ${subdomain}`,
+        `    service: http://localhost:${port}`,
+        '  - service: http_status:404',
+      ].join('\n'));
+
+      // Start tunnel in background
+      const tunnelProc = spawn('cloudflared', ['tunnel', '--config', configPath, 'run'], {
+        detached: true, stdio: 'ignore',
+      });
+      tunnelProc.unref();
+
+      // Wait for tunnel to register
+      sleep(5000);
+
+      return { type: 'branded', url: `https://${subdomain}`, tunnelName, tunnelUuid, configPath, pid: tunnelProc.pid };
+    } catch (err) {
+      warn(`Could not create branded tunnel: ${err.message}`);
+      // Fall through to quick tunnel
+    }
+  }
+
+  // Quick tunnel (no credentials needed)
+  try {
+    const logFile = path.join(LIMBO_DIR, 'cloudflared-setup.log');
+    const tunnelProc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--url', `http://localhost:${port}`], {
+      detached: true,
+      stdio: ['ignore', fs.openSync(logFile, 'w'), fs.openSync(logFile, 'a')],
+    });
+    tunnelProc.unref();
+
+    // Wait for URL to appear in logs
+    for (let i = 0; i < 15; i++) {
+      sleep(1000);
+      try {
+        const logs = fs.readFileSync(logFile, 'utf8');
+        const match = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+        if (match) return { type: 'quick', url: match[0], pid: tunnelProc.pid, logFile };
+      } catch {}
+    }
+    warn('Could not start cloudflare tunnel.');
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function teardownSetupTunnel(tunnel) {
+  if (!tunnel) return;
+  // Kill the tunnel process
+  try { process.kill(tunnel.pid); } catch {}
+
+  if (tunnel.type === 'branded') {
+    // Clean up DNS and tunnel
+    try { execSync(`cloudflared tunnel route dns -f ${tunnel.tunnelName} ${tunnel.tunnelName}`, { stdio: 'pipe' }); } catch {}
+    try { execSync(`cloudflared tunnel delete ${tunnel.tunnelName}`, { stdio: 'pipe' }); } catch {}
+    try { fs.unlinkSync(tunnel.configPath); } catch {}
+  }
+  if (tunnel.logFile) try { fs.unlinkSync(tunnel.logFile); } catch {}
+}
+
 function installGlobalAlias() {
   // Create a `limbo` shell wrapper so users don't have to type `npx limbo-ai` every time.
   // Tries /usr/local/bin first (macOS, Linux with sudo), falls back to ~/.local/bin (no sudo).
@@ -1421,8 +1542,18 @@ function extractWizardUrl(maxAttempts = 15) {
   return null;
 }
 
-function printWizardUrl(url) {
-  const displayUrl = url.replace('0.0.0.0', '127.0.0.1');
+function printWizardUrl(url, tunnel) {
+  // Extract token from the original URL
+  const tokenMatch = url.match(/[?&]token=([^&\s]+)/);
+  const token = tokenMatch ? tokenMatch[1] : '';
+
+  let displayUrl;
+  if (tunnel) {
+    displayUrl = `${tunnel.url}/?token=${token}`;
+  } else {
+    displayUrl = url.replace('0.0.0.0', '127.0.0.1');
+  }
+
   console.log(`
 ${c.green}${c.bold}╔════════════════════════════════════════════════════════╗${c.reset}
 ${c.green}${c.bold}║            Setup wizard is ready!                      ║${c.reset}
@@ -1431,14 +1562,15 @@ ${c.green}${c.bold}╚═══════════════════�
   Open this URL to complete setup:
 
   ${c.cyan}${c.bold}${displayUrl}${c.reset}
-
+${tunnel ? `
+  ${c.green}🔒 Secured via Cloudflare (${tunnel.type === 'branded' ? tunnel.url.replace('https://', '') : 'HTTPS tunnel'})${c.reset}` : ''}
   The wizard will guide you through provider, API key, and model selection.
   Once complete, Limbo will restart and be ready to use.
 
   ${c.dim}Logs: limbo logs | Stop: limbo stop${c.reset}
 `);
   // Auto-open on macOS
-  if (os.platform() === 'darwin') {
+  if (os.platform() === 'darwin' && !tunnel) {
     try { execSync(`open "${displayUrl}"`, { stdio: 'pipe' }); } catch {}
   }
 }
@@ -1598,7 +1730,13 @@ async function cmdStart() {
 
   const wizardUrl = extractWizardUrl();
   if (wizardUrl) {
-    printWizardUrl(wizardUrl);
+    // On servers, create a secure tunnel for remote access
+    let tunnel = null;
+    if (isServerEnvironment()) {
+      log('Server environment detected — creating secure tunnel...');
+      tunnel = createSetupTunnel(PORT);
+    }
+    printWizardUrl(wizardUrl, tunnel);
   } else {
     // Fallback: container may have started without setup mode (e.g. config already inside volume)
     console.log(`
