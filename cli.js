@@ -1028,7 +1028,7 @@ function installCloudflared() {
   }
 }
 
-function createSetupTunnel(port, tunnelDomain) {
+async function createSetupTunnel(port, tunnelDomain) {
   if (!hasCloudflared() && !installCloudflared()) return null;
   if (!hasCloudflared()) return null;
 
@@ -1081,16 +1081,50 @@ function createSetupTunnel(port, tunnelDomain) {
     });
     tunnelProc.unref();
 
+    // Wait for tunnel URL to appear in logs
+    let tunnelUrl = null;
     for (let i = 0; i < 15; i++) {
       sleep(1000);
       try {
         const logs = fs.readFileSync(logFile, 'utf8');
         const match = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
-        if (match) return { type: 'quick', url: match[0], pid: tunnelProc.pid, logFile };
+        if (match) { tunnelUrl = match[0]; break; }
       } catch {}
     }
-    warn('Could not start cloudflare tunnel.');
-    return null;
+    if (!tunnelUrl) {
+      warn('Could not start cloudflare tunnel.');
+      return null;
+    }
+
+    // Warmup: wait for DNS to propagate AND tunnel to respond before returning.
+    // Chrome uses its own DoH resolver and won't see the URL until DNS is globally propagated.
+    // We check DNS resolution (not just HTTP reachability) to ensure browsers can reach it.
+    log('Waiting for tunnel to be reachable...');
+    const https = require('https');
+    const dns = require('dns').promises;
+    const tunnelHost = tunnelUrl.replace('https://', '');
+    let reachable = false;
+    for (let i = 0; i < 30; i++) {
+      try {
+        // First verify DNS resolves (catches DoH propagation issues)
+        await dns.lookup(tunnelHost);
+        // Then verify HTTP responds
+        const ok = await new Promise((resolve) => {
+          const req = https.get(tunnelUrl, { timeout: 5000 }, (res) => {
+            res.resume();
+            resolve(res.statusCode < 500);
+          });
+          req.on('error', () => resolve(false));
+          req.on('timeout', () => { req.destroy(); resolve(false); });
+        });
+        if (ok) { reachable = true; break; }
+      } catch {}
+      sleep(2000);
+    }
+    if (!reachable) {
+      warn('Tunnel created but DNS has not fully propagated. The URL may take a moment to work.');
+    }
+    return { type: 'quick', url: tunnelUrl, pid: tunnelProc.pid, logFile };
   } catch {
     return null;
   }
@@ -1720,7 +1754,7 @@ async function cmdStart() {
     let tunnel = null;
     if (isServerEnvironment()) {
       log('Server environment detected — creating secure tunnel...');
-      tunnel = createSetupTunnel(PORT, flagTunnelDomain);
+      tunnel = await createSetupTunnel(PORT, flagTunnelDomain);
     }
     printWizardUrl(wizardUrl, tunnel);
   } else {
