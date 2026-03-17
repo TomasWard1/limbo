@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # install.sh — Limbo one-line installer
-# Usage: curl -fsSL https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh | bash
+# NOTE: This script requires bash, not sh. Always pipe to `bash`, not `sh`.
+if [ -z "${BASH_VERSION:-}" ]; then
+  echo "ERROR: This script requires bash. Run with: curl -fsSL ... | bash" >&2
+  exit 1
+fi
 set -euo pipefail
 
 INSTALLER_URL="https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh"
