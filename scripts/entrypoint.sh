@@ -155,6 +155,9 @@ if [ ! -f /data/workspace/USER.md ]; then
 fi
 
 # ── Generate or repair OpenClaw config ────────────────────────────────────────
+# Prevent Playwright from downloading Chromium (browser is disabled in config)
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
 export MODEL_PROVIDER MODEL_NAME TELEGRAM_ENABLED TELEGRAM_BOT_TOKEN OPENAI_API_KEY ANTHROPIC_API_KEY OPENCLAW_STATE_DIR OPENCLAW_CONFIG_PATH LIMBO_PORT
 
 _regenerate_config() {

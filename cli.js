@@ -167,7 +167,7 @@ function composeContent() {
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=768}"
     healthcheck:
       test:
         - CMD-SHELL
@@ -227,7 +227,7 @@ function composeContentHardened() {
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=768}"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
       NO_PROXY: "127.0.0.1,localhost"
@@ -1001,7 +1001,7 @@ function pullOrBuildImage(lang) {
 }
 
 function runOpenClaw(args, opts = {}) {
-  return runDockerCompose(['run', '--rm', '-e', 'NODE_OPTIONS=--max-old-space-size=512', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
+  return runDockerCompose(['run', '--rm', '-e', 'NODE_OPTIONS=--max-old-space-size=768', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
 }
 
 // Fix volume ownership before any docker compose run commands.
@@ -1865,11 +1865,11 @@ function cmdUpdate() {
   }
 
   // Inject NODE_OPTIONS into existing compose files to prevent OOM on low-memory VPS.
-  // Uses LIMBO_NODE_OPTIONS env var with 512MB default (browser disabled = ~300MB baseline).
+  // Uses LIMBO_NODE_OPTIONS env var with 768MB default (memory plugins + browser disabled).
   if (!compose.includes('NODE_OPTIONS')) {
     const injected = compose.replace(
       /^(\s+)(LIMBO_PORT:\s*.+)$/m,
-      '$1$2\n$1NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"'
+      '$1$2\n$1NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=768}"'
     );
     if (injected !== compose) {
       compose = injected;
@@ -1878,11 +1878,13 @@ function cmdUpdate() {
     }
   }
 
-  // Downgrade existing 1024MB heap limits to 512MB (browser is now disabled, needs far less).
-  if (compose.includes('max-old-space-size=1024')) {
-    compose = compose.replace(/max-old-space-size=1024/g, 'max-old-space-size=512');
+  // Migrate heap limits from older versions to 768MB (memory plugins + browser disabled).
+  const heapMatch = compose.match(/max-old-space-size=(\d+)/);
+  if (heapMatch && heapMatch[1] !== '768') {
+    const oldSize = heapMatch[1];
+    compose = compose.replace(/max-old-space-size=\d+/g, 'max-old-space-size=768');
     fs.writeFileSync(COMPOSE_FILE, compose);
-    log('Reduced heap limit from 1024MB to 512MB (browser disabled)');
+    log(`Adjusted heap limit from ${oldSize}MB to 768MB`);
   }
 
   log('Pulling latest image...');

@@ -8,6 +8,11 @@
   "browser": {
     "enabled": false
   },
+  "plugins": {
+    "slots": {
+      "memory": "none"
+    }
+  },
   "session": {
     "dmScope": "per-channel-peer"
   },
@@ -39,7 +44,10 @@
   "agents": {
     "defaults": {
       "model": { "primary": "${MODEL_PROVIDER}/${MODEL_NAME}" },
-      "workspace": "/data/workspace"
+      "workspace": "/data/workspace",
+      "memorySearch": {
+        "enabled": false
+      }
     }
   },
   "channels": {
