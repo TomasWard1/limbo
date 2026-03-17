@@ -1075,7 +1075,7 @@ function createSetupTunnel(port, tunnelDomain) {
   // Default: quick tunnel (zero config, works for everyone)
   try {
     const logFile = path.join(LIMBO_DIR, 'cloudflared-setup.log');
-    const tunnelProc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--url', `http://localhost:${port}`], {
+    const tunnelProc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--config', '/dev/null', '--url', `http://localhost:${port}`], {
       detached: true,
       stdio: ['ignore', fs.openSync(logFile, 'w'), fs.openSync(logFile, 'a')],
     });
