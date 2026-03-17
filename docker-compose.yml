@@ -27,11 +27,12 @@ services:
     environment:
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
+      NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "node -e \"const s=require('net').connect(18789,'127.0.0.1');const done=(code)=>{try{s.destroy()}catch{};process.exit(code)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);\"",
+          "NODE_OPTIONS= node -e \"const s=require('net').connect(18789,'127.0.0.1');const done=(code)=>{try{s.destroy()}catch{};process.exit(code)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);\"",
         ]
       interval: 30s
       timeout: 10s

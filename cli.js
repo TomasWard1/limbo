@@ -167,11 +167,12 @@ function composeContent() {
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"
     healthcheck:
       test:
         - CMD-SHELL
         - >-
-          node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
+          NODE_OPTIONS= node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
           done=(c)=>{try{s.destroy()}catch{};process.exit(c)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);"
       interval: 30s
       timeout: 10s
@@ -226,6 +227,7 @@ function composeContentHardened() {
       OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
       OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
       NO_PROXY: "127.0.0.1,localhost"
@@ -235,7 +237,7 @@ function composeContentHardened() {
       test:
         - CMD-SHELL
         - >-
-          node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
+          NODE_OPTIONS= node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
           done=(c)=>{try{s.destroy()}catch{};process.exit(c)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);"
       interval: 30s
       timeout: 10s
@@ -361,6 +363,12 @@ const TEXT = {
     configFlowSlow: 'This may take a couple of minutes.',
     configFlowDone: 'Configuration applied.',
     configFlowFailed: 'Could not apply configuration. Check your settings and try again.',
+    configOom: 'Configuration failed: out of memory. The server does not have enough free RAM.',
+    configOomContainers: (n) => `  Found ${n} running Limbo container(s) using memory. Stop them first:\n    npx limbo stop`,
+    configOomHint: '  Try closing other programs or upgrading to a server with more RAM.',
+    configOomOverride: '  If your server has enough RAM, increase the limit in .env:\n    LIMBO_NODE_OPTIONS=--max-old-space-size=2048',
+    staleContainersFound: (n) => `Found ${n} running Limbo container(s). Stopping to free memory...`,
+    staleContainersStopped: 'Stopped existing containers.',
     composing: 'Initializing...',
     success: 'Limbo is running!',
     gateway: 'Gateway',
@@ -475,6 +483,12 @@ const TEXT = {
     configFlowSlow: 'Esto puede tardar un par de minutos.',
     configFlowDone: 'Configuracion aplicada.',
     configFlowFailed: 'No se pudo aplicar la configuracion. Revisa los ajustes e intenta de nuevo.',
+    configOom: 'La configuracion fallo: sin memoria. El servidor no tiene suficiente RAM libre.',
+    configOomContainers: (n) => `  Se encontraron ${n} container(s) de Limbo corriendo que usan memoria. Frenalos primero:\n    npx limbo stop`,
+    configOomHint: '  Proba cerrando otros programas o usando un servidor con mas RAM.',
+    configOomOverride: '  Si tu servidor tiene suficiente RAM, podes aumentar el limite en .env:\n    LIMBO_NODE_OPTIONS=--max-old-space-size=2048',
+    staleContainersFound: (n) => `Se encontraron ${n} container(s) de Limbo corriendo. Frenando para liberar memoria...`,
+    staleContainersStopped: 'Containers existentes frenados.',
     composing: 'Inicializando...',
     success: 'Limbo esta corriendo!',
     gateway: 'Gateway',
@@ -968,7 +982,8 @@ function pullOrBuildImage(lang) {
 }
 
 function runOpenClaw(args, opts = {}) {
-  return runDockerCompose(['run', '--rm', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
+  // 1024MB heap: openclaw config needs ~800MB; 512/768 OOM in 2GB VPS tests.
+  return runDockerCompose(['run', '--rm', '-e', 'NODE_OPTIONS=--max-old-space-size=1024', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
 }
 
 // Fix volume ownership before any docker compose run commands.
@@ -986,9 +1001,51 @@ function ensureVolumePermissions() {
   ], { stdio: 'pipe' });
 }
 
+function isOomError(stderr) {
+  return typeof stderr === 'string' && (
+    stderr.includes('heap out of memory') ||
+    stderr.includes('Allocation failed') ||
+    stderr.includes('FATAL ERROR: Reached heap limit')
+  );
+}
+
+function countRunningLimboContainers() {
+  try {
+    const result = spawnSync('docker', ['compose', 'ps', '-q', '--status', 'running'], {
+      cwd: LIMBO_DIR, stdio: 'pipe', encoding: 'utf8',
+    });
+    if (result.status !== 0 || !result.stdout) return 0;
+    return result.stdout.trim().split('\n').filter(Boolean).length;
+  } catch { return 0; }
+}
+
+function stopExistingContainers(lang) {
+  const running = countRunningLimboContainers();
+  if (running > 0) {
+    warn(t(lang, 'staleContainersFound', running));
+    runDockerCompose(['down', '--remove-orphans'], { stdio: 'pipe' });
+    ok(t(lang, 'staleContainersStopped'));
+  }
+  return running;
+}
+
+function handleConfigOom(lang) {
+  console.log('');
+  die([
+    t(lang, 'configOom'),
+    countRunningLimboContainers() > 0
+      ? t(lang, 'configOomContainers', countRunningLimboContainers())
+      : t(lang, 'configOomHint'),
+    t(lang, 'configOomOverride'),
+  ].join('\n'));
+}
+
 function applyOpenClawConfig(cfg) {
   header(t(cfg.language, 'configFlowStart'));
   log(t(cfg.language, 'configFlowSlow'));
+
+  // Stop existing containers to free memory before running config commands
+  stopExistingContainers(cfg.language);
 
   const setCommands = [
     ['config', 'set', 'gateway.mode', 'local'],
@@ -1014,6 +1071,7 @@ function applyOpenClawConfig(cfg) {
     process.stdout.write(`\r${c.dim}  [${step}/${total}] ${command.slice(1, 4).join(' ')}${c.reset}`.padEnd(60));
     const result = runOpenClaw(command, { stdio: 'pipe' });
     if (result.status !== 0) {
+      if (isOomError(result.stderr)) handleConfigOom(cfg.language);
       console.log('');
       process.stdout.write(result.stdout || '');
       process.stderr.write(result.stderr || '');
@@ -1029,6 +1087,7 @@ function applyOpenClawConfig(cfg) {
   process.stdout.write(`\r${c.dim}  [${step}/${total}] config validate${c.reset}`.padEnd(60));
   const validateResult = runOpenClaw(['config', 'validate'], { stdio: 'pipe' });
   if (validateResult.status !== 0) {
+    if (isOomError(validateResult.stderr)) handleConfigOom(cfg.language);
     console.log('');
     process.stdout.write(validateResult.stdout || '');
     process.stderr.write(validateResult.stderr || '');
@@ -1452,14 +1511,29 @@ function cmdUpdate() {
   if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
 
   // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
-  const compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
+  let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
   const patched = compose.replace(
     /image:\s*ghcr\.io\/tomasward1\/limbo:\S+/g,
     `image: ${GHCR_IMAGE}:${DEFAULT_TAG}`
   );
   if (patched !== compose) {
-    fs.writeFileSync(COMPOSE_FILE, patched);
+    compose = patched;
+    fs.writeFileSync(COMPOSE_FILE, compose);
     log('Patched compose image tag to :latest');
+  }
+
+  // Inject NODE_OPTIONS into existing compose files to prevent OOM on low-memory VPS.
+  // Uses LIMBO_NODE_OPTIONS env var with 1024MB default so users on bigger servers can override.
+  if (!compose.includes('NODE_OPTIONS')) {
+    const injected = compose.replace(
+      /^(\s+)(LIMBO_PORT:\s*.+)$/m,
+      '$1$2\n$1NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"'
+    );
+    if (injected !== compose) {
+      compose = injected;
+      fs.writeFileSync(COMPOSE_FILE, compose);
+      log('Added NODE_OPTIONS to compose environment');
+    }
   }
 
   log('Pulling latest image...');
