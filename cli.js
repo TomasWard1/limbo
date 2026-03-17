@@ -970,8 +970,8 @@ function pullOrBuildImage(lang) {
 }
 
 function runOpenClaw(args, opts = {}) {
-  // 512MB heap: sufficient for config get/set/validate on low-memory VPS.
-  return runDockerCompose(['run', '--rm', '-e', 'NODE_OPTIONS=--max-old-space-size=512', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
+  // 1024MB heap: openclaw config needs ~800MB; 512/768 OOM in 2GB VPS tests.
+  return runDockerCompose(['run', '--rm', '-e', 'NODE_OPTIONS=--max-old-space-size=1024', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
 }
 
 // Fix volume ownership before any docker compose run commands.
