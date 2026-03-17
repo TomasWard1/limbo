@@ -1001,6 +1001,34 @@ function ensureVolumePermissions() {
   ], { stdio: 'pipe' });
 }
 
+function installGlobalAlias() {
+  // Create a `limbo` shell wrapper so users don't have to type `npx limbo-ai` every time.
+  // Tries /usr/local/bin first (macOS, Linux with sudo), falls back to ~/.local/bin (no sudo).
+  const wrapper = '#!/bin/sh\nexec npx limbo-ai "$@"\n';
+  const candidates = [
+    path.join(os.homedir(), '.local', 'bin', 'limbo'),
+    '/usr/local/bin/limbo',
+  ];
+
+  for (const target of candidates) {
+    try {
+      // Skip if already installed and current
+      if (fs.existsSync(target)) {
+        const existing = fs.readFileSync(target, 'utf8');
+        if (existing.includes('limbo-ai')) return;
+      }
+      const dir = path.dirname(target);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(target, wrapper, { mode: 0o755 });
+      log(`Installed ${c.bold}limbo${c.reset} command → ${target}`);
+      return;
+    } catch {
+      // Permission denied — try next candidate
+    }
+  }
+  // Silent failure — not critical, user can still use npx limbo-ai
+}
+
 function isOomError(stderr) {
   return typeof stderr === 'string' && (
     stderr.includes('heap out of memory') ||
@@ -1622,6 +1650,8 @@ async function startContainerWithConfig(cfg, existingEnv, alreadyHasEnv) {
   }
 
   console.log(`\n  ${c.yellow}⚠  ${t(cfg.language, 'securityNotice')}${c.reset}\n`);
+
+  installGlobalAlias();
 
   printSuccess({
     language: cfg.language,
