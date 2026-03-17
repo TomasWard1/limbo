@@ -1352,16 +1352,97 @@ ${c.green}${c.bold}╚═══════════════════�
   console.log(`  "${t(cfg.language, 'nonTelegramPrompt', gatewayToken)}"`);
 }
 
+// ─── Docker auto-install ──────────────────────────────────────────────────────
+
+function installDocker() {
+  const platform = os.platform();
+  if (platform === 'linux') {
+    header('Installing Docker...');
+    try {
+      execSync('curl -fsSL https://get.docker.com | sh', { stdio: 'inherit' });
+      ok('Docker installed.');
+    } catch {
+      die('Failed to install Docker. Install it manually: https://docs.docker.com/get-docker/');
+    }
+  } else if (platform === 'darwin') {
+    die(`Docker is required but not installed.
+
+  Install Docker Desktop for Mac:
+  ${c.cyan}https://docs.docker.com/desktop/install/mac-install/${c.reset}
+
+  Then run ${c.bold}npx limbo-ai${c.reset} again.`);
+  } else {
+    die('Docker is required but not installed. See https://docs.docker.com/get-docker/');
+  }
+}
+
+function extractWizardUrl(maxAttempts = 15) {
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      const logs = runDockerCompose(['logs', '--no-log-prefix'], {
+        stdio: 'pipe',
+        encoding: 'utf8',
+      });
+      const output = logs.stdout || '';
+      const match = output.match(/SETUP_URL=(https?:\/\/\S+)/);
+      if (match) return match[1];
+    } catch {}
+    log(`Waiting for setup wizard URL... (${i}/${maxAttempts})`);
+    sleep(2000);
+  }
+  return null;
+}
+
+function printWizardUrl(url) {
+  const displayUrl = url.replace('0.0.0.0', '127.0.0.1');
+  console.log(`
+${c.green}${c.bold}╔════════════════════════════════════════════════════════╗${c.reset}
+${c.green}${c.bold}║            Setup wizard is ready!                      ║${c.reset}
+${c.green}${c.bold}╚════════════════════════════════════════════════════════╝${c.reset}
+
+  Open this URL to complete setup:
+
+  ${c.cyan}${c.bold}${displayUrl}${c.reset}
+
+  The wizard will guide you through provider, API key, and model selection.
+  Once complete, Limbo will restart and be ready to use.
+
+  ${c.dim}Logs: limbo logs | Stop: limbo stop${c.reset}
+`);
+  // Auto-open on macOS
+  if (os.platform() === 'darwin') {
+    try { execSync(`open "${displayUrl}"`, { stdio: 'pipe' }); } catch {}
+  }
+}
+
+function writeMinimalEnv() {
+  ensureComposeFile(false);
+  const gatewayToken = ensureGatewayToken({});
+  const content = `CLI_LANGUAGE=en\nLIMBO_PORT=${PORT}\n`;
+  fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
+  // Ensure gateway token secret exists for compose
+  writeSecretFile('gateway_token', gatewayToken);
+  return gatewayToken;
+}
+
 // ─── Commands ────────────────────────────────────────────────────────────────
 
 async function cmdStart() {
-  if (!hasDocker()) die(t('en', 'dockerMissing'));
+  // ── Auto-install Docker if missing ────────────────────────────────────────
+  if (!hasDocker()) {
+    installDocker();
+    // Verify it worked
+    if (!hasDocker()) die(t('en', 'dockerMissing'));
+  }
 
   const hardened = process.argv.includes('--hardened');
+  const cliMode = process.argv.includes('--cli');
+  const reconfig = process.argv.includes('--reconfigure');
 
-  // ── Detect existing OpenClaw ──────────────────────────────────────────────
+  // ── Detect existing OpenClaw / port selection ─────────────────────────────
   const existingEnv = parseEnvFile();
   const alreadyHasEnv = fs.existsSync(ENV_FILE);
+  const hasProviderConfig = alreadyHasEnv && existingEnv.MODEL_PROVIDER;
 
   if (existingEnv.LIMBO_PORT) {
     const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
@@ -1385,10 +1466,8 @@ async function cmdStart() {
   }
 
   ensureComposeFile(hardened);
-  let cfg;
-  let lang = existingEnv.CLI_LANGUAGE || 'en';
 
-  // ── Headless mode ──────────────────────────────────────────────────────────
+  // ── Route: Headless (--provider flag) ─────────────────────────────────────
   const flagProvider = parseFlag('--provider');
   const flagApiKey = parseFlag('--api-key');
   const flagModel = parseFlag('--model');
@@ -1403,13 +1482,13 @@ async function cmdStart() {
       die(t(flagLang, 'headlessMissingApiKey'));
     }
 
-    lang = flagLang;
+    const lang = flagLang;
     const providerFamily = deriveProviderFamily(flagProvider);
     const catalog = getModelCatalog(providerFamily, 'api-key');
     const modelName = flagModel || catalog.defaultModel;
 
     log(t(lang, 'headlessStarting'));
-    cfg = {
+    const cfg = {
       language: lang,
       authMode: 'api-key',
       provider: catalog.provider,
@@ -1423,34 +1502,89 @@ async function cmdStart() {
     };
     writeEnv({ ...cfg, CLI_LANGUAGE: cfg.language }, existingEnv);
     ok(t(cfg.language, 'envWritten'));
-  } else if (alreadyHasEnv) {
-    log(existingEnv.MODEL_PROVIDER ? t(lang, 'foundExistingConfig') : `Found existing config at ${ENV_FILE}`);
-    const reconfig = process.argv.includes('--reconfigure');
-    if (!reconfig) {
-      lang = existingEnv.CLI_LANGUAGE || 'en';
-      log(t(lang, 'reconfigureHint'));
-      ensureGatewayToken(existingEnv);
-      cfg = {
-        language: lang,
-        provider: existingEnv.MODEL_PROVIDER || 'anthropic',
-        providerFamily: deriveProviderFamily(existingEnv.MODEL_PROVIDER),
-        authMode: existingEnv.AUTH_MODE || 'api-key',
-        modelName: existingEnv.MODEL_NAME || 'claude-opus-4-6',
-        telegramEnabled: existingEnv.TELEGRAM_ENABLED || 'false',
-      };
-    } else {
-      header(t(lang, 'reconfiguration'));
-      cfg = await collectConfig(existingEnv);
-      writeEnv({ ...cfg, CLI_LANGUAGE: cfg.language }, existingEnv);
-      ok(t(cfg.language, 'envWritten'));
-    }
-  } else {
-    header(t('en', 'configuration'));
-    cfg = await collectConfig(existingEnv);
-    writeEnv({ ...cfg, CLI_LANGUAGE: cfg.language }, existingEnv);
-    ok(t(cfg.language, 'envWritten'));
+    return startContainerWithConfig(cfg, existingEnv, alreadyHasEnv);
   }
 
+  // ── Route: Existing config, no reconfigure ────────────────────────────────
+  if (hasProviderConfig && !reconfig) {
+    const lang = existingEnv.CLI_LANGUAGE || 'en';
+    log(t(lang, 'foundExistingConfig'));
+    log(t(lang, 'reconfigureHint'));
+    ensureGatewayToken(existingEnv);
+    const cfg = {
+      language: lang,
+      provider: existingEnv.MODEL_PROVIDER || 'anthropic',
+      providerFamily: deriveProviderFamily(existingEnv.MODEL_PROVIDER),
+      authMode: existingEnv.AUTH_MODE || 'api-key',
+      modelName: existingEnv.MODEL_NAME || 'claude-opus-4-6',
+      telegramEnabled: existingEnv.TELEGRAM_ENABLED || 'false',
+    };
+    return startContainerWithConfig(cfg, existingEnv, alreadyHasEnv);
+  }
+
+  // ── Route: CLI prompts (--cli flag or --reconfigure --cli) ────────────────
+  if (cliMode) {
+    const lang = existingEnv.CLI_LANGUAGE || 'en';
+    header(reconfig ? t(lang, 'reconfiguration') : t('en', 'configuration'));
+    const cfg = await collectConfig(existingEnv);
+    writeEnv({ ...cfg, CLI_LANGUAGE: cfg.language }, existingEnv);
+    ok(t(cfg.language, 'envWritten'));
+    return startContainerWithConfig(cfg, existingEnv, alreadyHasEnv);
+  }
+
+  // ── Route: Wizard reconfigure (--reconfigure, no --cli) ───────────────────
+  if (reconfig && hasProviderConfig) {
+    log('Resetting configuration for setup wizard...');
+    // Remove provider config from .env so container enters setup mode
+    const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\n`;
+    fs.writeFileSync(ENV_FILE, minimalContent, { mode: 0o600 });
+    // Keep gateway token secret intact
+    ensureGatewayToken(existingEnv);
+  }
+
+  // ── Route: Wizard (default for fresh install or wizard reconfigure) ───────
+  log('Starting Limbo with setup wizard...');
+  if (!alreadyHasEnv || (reconfig && hasProviderConfig)) {
+    writeMinimalEnv();
+  }
+
+  pullOrBuildImage('en');
+  ensureVolumePermissions();
+
+  header('Starting Limbo...');
+  log('Starting container...');
+  const upResult = runDockerCompose(['up', '-d', '--remove-orphans'], { stdio: 'pipe' });
+  if (upResult.status !== 0) {
+    process.stderr.write(upResult.stderr || '');
+    die('Container failed to start. Run `limbo logs` to investigate.');
+  }
+
+  header('Waiting for setup wizard...');
+  const healthy = waitForHealthy('en');
+  if (!healthy) {
+    warn('Container did not become healthy in time.');
+    warn('Check logs with: limbo logs');
+  } else {
+    ok('Container is healthy.');
+  }
+
+  const wizardUrl = extractWizardUrl();
+  if (wizardUrl) {
+    printWizardUrl(wizardUrl);
+  } else {
+    // Fallback: container may have started without setup mode (e.g. config already inside volume)
+    console.log(`
+  ${c.yellow}Could not detect setup wizard URL.${c.reset}
+  The container may already be configured.
+
+  Try: ${c.cyan}http://127.0.0.1:${PORT}${c.reset}
+  Logs: ${c.dim}limbo logs${c.reset}
+`);
+  }
+}
+
+// Shared path for headless, CLI-prompt, and existing-config routes
+async function startContainerWithConfig(cfg, existingEnv, alreadyHasEnv) {
   const mergedEnv = parseEnvFile();
   if (!cfg.language) cfg.language = mergedEnv.CLI_LANGUAGE || 'en';
   if (!mergedEnv.CLI_LANGUAGE) {
@@ -1567,7 +1701,8 @@ ${c.bold}Commands:${c.reset}
   help          Show this help
 
 ${c.bold}Flags:${c.reset}
-  --reconfigure        Reconfigure auth and onboarding settings (use with start)
+  --cli                Use interactive CLI prompts instead of the web setup wizard
+  --reconfigure        Reconfigure settings (opens wizard, or CLI prompts with --cli)
   --hardened           Enable egress proxy (restricts outbound to AI provider APIs only)
   --provider <name>    Set provider for headless install (openai, anthropic, openrouter)
   --api-key <key>      API key for headless install
