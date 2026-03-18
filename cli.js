@@ -1566,6 +1566,11 @@ async function cmdStart() {
     fs.writeFileSync(ENV_FILE, minimalContent, { mode: 0o600 });
     // Keep gateway token secret intact
     ensureGatewayToken(existingEnv);
+    // Clean config inside the Docker volume so entrypoint re-enters setup mode
+    try {
+      runDockerCompose(['run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
+        '-c', 'rm -f /data/config/.env /home/limbo/.zeroclaw/config.toml'], { stdio: 'pipe' });
+    } catch {}
   }
 
   // ── Route: Wizard (default for fresh install or wizard reconfigure) ───────
@@ -1578,7 +1583,8 @@ async function cmdStart() {
   ensureVolumePermissions();
 
   header('Starting Limbo...');
-  const upResult = runDockerCompose(['up', '-d', '--remove-orphans'], { stdio: 'pipe' });
+  // Force recreate so the container picks up the clean .env (enters setup mode)
+  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
   if (upResult.status !== 0) {
     process.stderr.write(upResult.stderr || '');
     die('Container failed to start. Run `limbo logs` to investigate.');

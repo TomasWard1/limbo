@@ -1113,26 +1113,42 @@
           <div class="validation-msg" id="tgTokenValidation"></div>
         </div>
 
-        <div class="toggle-row" style="margin-top: 4px;">
-          <div>
-            <div class="toggle-label">
-              <span data-lang="en">Auto-pair with your account</span>
-              <span data-lang="es">Auto-vincular con tu cuenta</span>
-            </div>
-            <div class="toggle-sub">
-              <span data-lang="en">Only the first Telegram user to message the bot will be linked</span>
-              <span data-lang="es">Solo el primer usuario que le escriba al bot será vinculado</span>
+      </div>
+
+      <!-- Pairing panel (shown after token validation) -->
+      <div id="tgPairing" style="display: none;">
+        <div class="guide-steps">
+          <div class="guide-step">
+            <div class="guide-num">5</div>
+            <div class="guide-text">
+              <span data-lang="en">Open your bot in Telegram: <strong id="tgBotHandle"></strong></span>
+              <span data-lang="es">Abrí tu bot en Telegram: <strong id="tgBotHandleEs"></strong></span>
             </div>
           </div>
-          <label class="toggle">
-            <input type="checkbox" id="tgAutoPair" checked>
-            <span class="toggle-track"></span>
-            <span class="toggle-thumb"></span>
-          </label>
+          <div class="guide-step">
+            <div class="guide-num">6</div>
+            <div class="guide-text">
+              <span data-lang="en">Send any message (e.g. "hello")</span>
+              <span data-lang="es">Mandá cualquier mensaje (ej: "hola")</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="tgPairingStatus" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--bg-3); border-radius: var(--r-md); margin-top: 16px;">
+          <div class="spinner" style="border-color: var(--accent); border-top-color: transparent; width: 20px; height: 20px; border-width: 2px;"></div>
+          <span style="color: var(--text-sub);">
+            <span data-lang="en">Waiting for your message...</span>
+            <span data-lang="es">Esperando tu mensaje...</span>
+          </span>
+        </div>
+
+        <div id="tgPairingSuccess" style="display: none; align-items: center; gap: 12px; padding: 16px; background: var(--bg-3); border-radius: var(--r-md); margin-top: 16px;">
+          <span style="color: var(--success); font-size: 20px; font-weight: 700;">&#10003;</span>
+          <span id="tgPairingSuccessMsg" style="color: var(--success);"></span>
         </div>
       </div>
 
-      <div class="btn-row">
+      <div class="btn-row" id="tgBtnRow">
         <button class="btn-secondary" onclick="skipTelegram()">
           <span data-lang="en">Skip</span>
           <span data-lang="es">Omitir</span>
@@ -1216,7 +1232,7 @@
       authMode: null,
       apiKey: '',
       model: null,
-      telegram: { enabled: true, botToken: '', autoPair: true },
+      telegram: { enabled: true, botToken: '' },
       subscriptionDone: false,
       subscriptionEmail: '',
     };
@@ -1275,6 +1291,7 @@
       // Step-specific setup
       if (n === 4) setupApiKeyStep();
       if (n === 5) fetchModels();
+      if (n === 6) resetTelegramUI();
       if (n === 7) buildSummary();
     }
 
@@ -1714,25 +1731,116 @@
       }
     });
 
+    let pairingActive = false;
+
     function skipTelegram() {
+      pairingActive = false;
       state.telegram.enabled = false;
       state.telegram.botToken = '';
       goToStep(7);
     }
 
-    function submitTelegram() {
-      if (state.telegram.enabled) {
-        const token = document.getElementById('tgTokenInput').value.trim();
-        if (!token || !/^\d+:.{20,}$/.test(token)) {
+    function resetTelegramUI() {
+      document.getElementById('tgFields').classList.toggle('visible', state.telegram.enabled);
+      document.getElementById('tgPairing').style.display = 'none';
+      document.getElementById('tgPairingStatus').style.display = 'flex';
+      document.getElementById('tgPairingSuccess').style.display = 'none';
+      const btn = document.getElementById('btnTgContinue');
+      btn.disabled = false;
+      btn.style.display = '';
+      btn.innerHTML = `<span data-lang="en">Continue</span><span data-lang="es">Continuar</span>`;
+      document.body.className = `lang-${state.language}`;
+    }
+
+    async function submitTelegram() {
+      if (!state.telegram.enabled) {
+        goToStep(7);
+        return;
+      }
+
+      const token = document.getElementById('tgTokenInput').value.trim();
+      if (!token || !/^\d+:.{20,}$/.test(token)) {
+        const msgEl = document.getElementById('tgTokenValidation');
+        const msg = state.language === 'es' ? 'Ingresá un token válido o salteá este paso' : 'Enter a valid token or skip this step';
+        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+        return;
+      }
+
+      state.telegram.botToken = token;
+      const btn = document.getElementById('btnTgContinue');
+      btn.disabled = true;
+      btn.innerHTML = `<div class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;"></div>`;
+
+      try {
+        // Validate token with Telegram getMe
+        const validateRes = await fetch('/api/telegram/validate-token', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ botToken: token }),
+        });
+        const validateData = await validateRes.json();
+
+        if (!validateData.valid) {
           const msgEl = document.getElementById('tgTokenValidation');
-          const msg = state.language === 'es' ? 'Ingresá un token válido o salteá este paso' : 'Enter a valid token or skip this step';
+          const msg = state.language === 'es' ? 'Token inválido. Revisá que sea correcto.' : 'Invalid token. Please check and try again.';
           msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+          btn.disabled = false;
+          btn.innerHTML = `<span data-lang="en">Continue</span><span data-lang="es">Continuar</span>`;
+          document.body.className = `lang-${state.language}`;
           return;
         }
-        state.telegram.botToken = token;
-        state.telegram.autoPair = document.getElementById('tgAutoPair').checked;
+
+        // Show pairing panel
+        const handle = `@${validateData.botUsername}`;
+        document.getElementById('tgBotHandle').textContent = handle;
+        document.getElementById('tgBotHandleEs').textContent = handle;
+        document.getElementById('tgFields').classList.remove('visible');
+        document.getElementById('tgPairing').style.display = 'block';
+        btn.style.display = 'none';
+
+        // Start long-poll pairing loop
+        pairingActive = true;
+        startTelegramPairing(token);
+      } catch (err) {
+        const msgEl = document.getElementById('tgTokenValidation');
+        msgEl.innerHTML = `<span class="validation-msg error">${err.message}</span>`;
+        btn.disabled = false;
+        btn.innerHTML = `<span data-lang="en">Continue</span><span data-lang="es">Continuar</span>`;
+        document.body.className = `lang-${state.language}`;
       }
-      goToStep(7);
+    }
+
+    async function startTelegramPairing(token) {
+      while (pairingActive) {
+        try {
+          const res = await fetch('/api/telegram/pair', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ botToken: token, language: state.language }),
+          });
+          const data = await res.json();
+
+          if (!pairingActive) return;
+
+          if (data.paired) {
+            pairingActive = false;
+            document.getElementById('tgPairingStatus').style.display = 'none';
+            const successEl = document.getElementById('tgPairingSuccess');
+            successEl.style.display = 'flex';
+            const msg = state.language === 'es'
+              ? `Conectado${data.firstName ? ' con ' + data.firstName : ''}. Saludo enviado.`
+              : `Connected${data.firstName ? ' with ' + data.firstName : ''}. Greeting sent.`;
+            document.getElementById('tgPairingSuccessMsg').textContent = msg;
+
+            setTimeout(() => goToStep(7), 2000);
+            return;
+          }
+          // Not paired yet — the server already waited ~25s, loop immediately
+        } catch {
+          if (!pairingActive) return;
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
     }
 
     // --- Step 7: Summary ---
@@ -1808,9 +1916,10 @@
       state.model = null;
       state.subscriptionDone = false;
       state.subscriptionEmail = '';
-      state.telegram = { enabled: true, botToken: '', autoPair: true };
+      state.telegram = { enabled: true, botToken: '' };
+      pairingActive = false;
       document.getElementById('tgToggle').checked = true;
-      document.getElementById('tgFields').classList.add('visible');
+      resetTelegramUI();
       goToStep(1);
     }
 
@@ -1833,7 +1942,6 @@
         telegram: {
           enabled: state.telegram.enabled,
           botToken: state.telegram.enabled ? state.telegram.botToken : '',
-          autoPair: state.telegram.autoPair,
         },
       };
       if (state.authMode === 'api-key') {
