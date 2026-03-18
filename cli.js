@@ -995,117 +995,43 @@ function isServerEnvironment() {
     (os.platform() === 'linux' && !process.env.DISPLAY));
 }
 
-function hasCloudflared() {
-  try { execSync('which cloudflared', { stdio: 'pipe' }); return true; } catch { return false; }
-}
-
-function installCloudflared() {
-  log('Installing cloudflared...');
-  const platform = os.platform();
+// Creates a public HTTPS tunnel via localhost.run (SSH-based, zero install).
+// Falls back gracefully if SSH is unavailable or the service is down.
+async function createSetupTunnel(port) {
   try {
-    if (platform === 'linux') {
-      execSync('curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared && chmod +x /tmp/cloudflared && sudo mv /tmp/cloudflared /usr/local/bin/cloudflared', { stdio: 'pipe' });
-    } else if (platform === 'darwin') {
-      execSync('brew install cloudflared', { stdio: 'pipe' });
-    }
-    return true;
-  } catch {
-    warn('Could not install cloudflared automatically.');
-    return false;
-  }
-}
-
-async function createSetupTunnel(port, tunnelDomain) {
-  if (!hasCloudflared() && !installCloudflared()) return null;
-  if (!hasCloudflared()) return null;
-
-  const tunnelId = crypto.randomBytes(4).toString('hex');
-
-  // Admin mode: branded subdomain (requires cloudflared login for the zone)
-  if (tunnelDomain) {
-    const tunnelName = `limbo-setup-${tunnelId}`;
-    const subdomain = `setup-${tunnelId}.${tunnelDomain}`;
-    try {
-      execSync(`cloudflared tunnel create ${tunnelName}`, { stdio: 'pipe', encoding: 'utf8' });
-      execSync(`cloudflared tunnel route dns ${tunnelName} ${subdomain}`, { stdio: 'pipe', encoding: 'utf8' });
-
-      const cfHome = path.join(os.homedir(), '.cloudflared');
-      const tunnelInfoRaw = execSync(`cloudflared tunnel info ${tunnelName} 2>&1`, { encoding: 'utf8', stdio: 'pipe' });
-      const tunnelUuid = tunnelInfoRaw.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/)?.[1];
-      if (!tunnelUuid) throw new Error('Could not find tunnel UUID');
-
-      const credFile = path.join(cfHome, `${tunnelUuid}.json`);
-      const configPath = path.join(LIMBO_DIR, 'cloudflared-setup.yml');
-      fs.writeFileSync(configPath, [
-        `tunnel: ${tunnelUuid}`,
-        `credentials-file: ${credFile}`,
-        'ingress:',
-        `  - hostname: ${subdomain}`,
-        `    service: http://localhost:${port}`,
-        '  - service: http_status:404',
-      ].join('\n'));
-
-      const tunnelProc = spawn('cloudflared', ['tunnel', '--config', configPath, 'run'], {
-        detached: true, stdio: 'ignore',
-      });
-      tunnelProc.unref();
-      sleep(5000);
-
-      return { type: 'branded', url: `https://${subdomain}`, tunnelName, tunnelUuid, configPath, pid: tunnelProc.pid };
-    } catch (err) {
-      warn(`Could not create branded tunnel: ${err.message}`);
-      warn('Make sure you ran `cloudflared login` for this domain first.');
-      // Fall through to quick tunnel
-    }
-  }
-
-  // Default: quick tunnel (zero config, works for everyone)
-  try {
-    const logFile = path.join(LIMBO_DIR, 'cloudflared-setup.log');
-    const tunnelProc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--config', '/dev/null', '--url', `http://localhost:${port}`], {
+    const logFile = path.join(LIMBO_DIR, 'tunnel-setup.log');
+    // localhost.run provides instant HTTPS URLs via SSH reverse tunneling.
+    // No binary to install, no DNS propagation delay, no Chrome caching issues.
+    const tunnelProc = spawn('ssh', [
+      '-o', 'StrictHostKeyChecking=accept-new',
+      '-o', 'ServerAliveInterval=30',
+      '-R', `80:localhost:${port}`,
+      'nokey@localhost.run',
+    ], {
       detached: true,
       stdio: ['ignore', fs.openSync(logFile, 'w'), fs.openSync(logFile, 'a')],
     });
     tunnelProc.unref();
 
-    // Wait for tunnel URL to appear in logs
+    // localhost.run prints the URL almost instantly (no DNS propagation needed)
     let tunnelUrl = null;
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 10; i++) {
+      spinnerWrite('Securing tunnel...');
       sleep(1000);
       try {
         const logs = fs.readFileSync(logFile, 'utf8');
-        const match = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+        const match = logs.match(/https:\/\/[a-z0-9]+\.lhr\.life/);
         if (match) { tunnelUrl = match[0]; break; }
       } catch {}
     }
+    spinnerClear();
+
     if (!tunnelUrl) {
-      warn('Could not start cloudflare tunnel.');
+      warn('Could not create public tunnel. Use SSH port forwarding instead.');
+      try { tunnelProc.kill(); } catch {}
       return null;
     }
 
-    // Brief warmup: give DNS a few seconds to propagate before showing URL.
-    // If it's not ready yet, the browser will retry — no need to block the CLI.
-    const https = require('https');
-    const dns = require('dns').promises;
-    const tunnelHost = tunnelUrl.replace('https://', '');
-    let reachable = false;
-    for (let i = 0; i < 8; i++) {
-      spinnerWrite('Securing tunnel...');
-      try {
-        await dns.lookup(tunnelHost);
-        const ok = await new Promise((resolve) => {
-          const req = https.get(tunnelUrl, { timeout: 3000 }, (res) => {
-            res.resume();
-            resolve(res.statusCode < 500);
-          });
-          req.on('error', () => resolve(false));
-          req.on('timeout', () => { req.destroy(); resolve(false); });
-        });
-        if (ok) { reachable = true; break; }
-      } catch {}
-      sleep(1000);
-    }
-    spinnerClear();
     return { type: 'quick', url: tunnelUrl, pid: tunnelProc.pid, logFile };
   } catch {
     return null;
@@ -1115,11 +1041,6 @@ async function createSetupTunnel(port, tunnelDomain) {
 function teardownSetupTunnel(tunnel) {
   if (!tunnel) return;
   try { process.kill(tunnel.pid); } catch {}
-
-  if (tunnel.type === 'branded') {
-    try { execSync(`cloudflared tunnel delete -f ${tunnel.tunnelName}`, { stdio: 'pipe' }); } catch {}
-    try { fs.unlinkSync(tunnel.configPath); } catch {}
-  }
   if (tunnel.logFile) try { fs.unlinkSync(tunnel.logFile); } catch {}
 }
 
@@ -1474,32 +1395,48 @@ function printWizardUrl(url, tunnel) {
   // Extract token from the original URL
   const tokenMatch = url.match(/[?&]token=([^&\s]+)/);
   const token = tokenMatch ? tokenMatch[1] : '';
-
-  let displayUrl;
-  if (tunnel) {
-    displayUrl = `${tunnel.url}/?token=${token}`;
-  } else {
-    displayUrl = url.replace('0.0.0.0', '127.0.0.1');
-  }
+  const localUrl = url.replace('0.0.0.0', '127.0.0.1');
+  const isSSH = !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT);
 
   console.log(`
 ${c.green}${c.bold}╔════════════════════════════════════════════════════════╗${c.reset}
 ${c.green}${c.bold}║            Setup wizard is ready!                      ║${c.reset}
 ${c.green}${c.bold}╚════════════════════════════════════════════════════════╝${c.reset}
+`);
 
-  Open this URL to complete setup:
+  if (tunnel) {
+    const tunnelUrl = `${tunnel.url}/?token=${token}`;
+    console.log(`  ${c.green}Public URL (works from any browser):${c.reset}
+  ${c.cyan}${c.bold}${tunnelUrl}${c.reset}
+`);
+  }
 
-  ${c.cyan}${c.bold}${displayUrl}${c.reset}
-${tunnel ? `
-  ${c.green}🔒 Secured via Cloudflare (${tunnel.type === 'branded' ? tunnel.url.replace('https://', '') : 'HTTPS tunnel'})${c.reset}` : ''}
-  The wizard will guide you through provider, API key, and model selection.
+  if (isSSH) {
+    // SSH_CONNECTION = "client_ip client_port server_ip server_port"
+    const sshParts = (process.env.SSH_CONNECTION || '').split(' ');
+    const serverHost = sshParts[2] || 'your-server';
+    const sshUser = process.env.USER || 'user';
+    console.log(`  ${c.green}SSH port forwarding (recommended):${c.reset}
+  Run this in a ${c.bold}new terminal${c.reset} on your computer:
+  ${c.yellow}ssh -L ${PORT}:localhost:${PORT} ${sshUser}@${serverHost}${c.reset}
+  Then open: ${c.cyan}${c.bold}${localUrl}${c.reset}
+`);
+  }
+
+  if (!tunnel && !isSSH) {
+    console.log(`  Open this URL to complete setup:
+  ${c.cyan}${c.bold}${localUrl}${c.reset}
+`);
+  }
+
+  console.log(`  The wizard will guide you through provider, API key, and model selection.
   Once complete, Limbo will restart and be ready to use.
 
   ${c.dim}Logs: limbo logs | Stop: limbo stop${c.reset}
 `);
-  // Auto-open on macOS
-  if (os.platform() === 'darwin' && !tunnel) {
-    try { execSync(`open "${displayUrl}"`, { stdio: 'pipe' }); } catch {}
+  // Auto-open on macOS (only when running locally, not via SSH/tunnel)
+  if (os.platform() === 'darwin' && !tunnel && !isSSH) {
+    try { execSync(`open "${localUrl}"`, { stdio: 'pipe' }); } catch {}
   }
 }
 
@@ -1650,17 +1587,16 @@ async function cmdStart() {
   // Extract wizard URL from container logs (polls briefly, no healthcheck needed)
   const wizardUrl = extractWizardUrl();
 
-  // On servers, create a secure tunnel for remote access
+  // On servers, try to create a public tunnel (non-blocking — show localhost/SSH first)
   let tunnel = null;
   if (isServerEnvironment()) {
-    tunnel = await createSetupTunnel(PORT, flagTunnelDomain);
+    tunnel = await createSetupTunnel(PORT);
   }
 
   if (wizardUrl) {
     printWizardUrl(wizardUrl, tunnel);
   } else {
-    // Container started but wizard URL not found — show direct access info
-    const fallbackUrl = tunnel ? tunnel.url : `http://127.0.0.1:${PORT}`;
+    const fallbackUrl = `http://127.0.0.1:${PORT}`;
     console.log(`
   ${c.green}${c.bold}Limbo is starting.${c.reset}
 

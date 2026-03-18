@@ -166,11 +166,18 @@ function checkToken(req) {
 }
 
 function sendForbidden(res) {
+  // Auto-retry page: if the user lands here without a token (e.g. DNS resolved
+  // but the browser dropped the ?token= query param, or Chrome served a stale
+  // error frame), retry with the full URL from the address bar every 2s.
+  // This prevents Chrome from getting stuck on chrome-error://chromewebdata/.
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>Limbo — Access Denied</title>
+    <title>Limbo — Connecting...</title>
     <style>body{font-family:system-ui;background:#0D0D0D;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
-    .c{text-align:center}.t{color:#9C9B99;margin-top:12px;font-size:14px}</style></head>
-    <body><div class="c"><h1>limbo</h1><p class="t">Setup token required. Check your server logs for the setup URL.</p></div></body></html>`;
+    .c{text-align:center}.t{color:#9C9B99;margin-top:12px;font-size:14px}.d{color:#555;font-size:12px;margin-top:8px}</style></head>
+    <body><div class="c"><h1>limbo</h1><p class="t" id="msg">Connecting...</p><p class="d" id="detail"></p></div>
+    <script>
+    (function(){var n=0,max=15;function retry(){if(n>=max){document.getElementById('msg').textContent='Setup token required.';document.getElementById('detail').textContent='Check your server logs for the setup URL.';return}n++;document.getElementById('detail').textContent='Attempt '+n+'/'+max;window.location.reload()}setTimeout(retry,2000)})();
+    </script></body></html>`;
   res.writeHead(403, { 'Content-Type': 'text/html', 'Content-Length': Buffer.byteLength(html) });
   res.end(html);
 }
@@ -608,6 +615,13 @@ async function handleRequest(req, res) {
   log(`${method} ${url}`);
 
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Prevent Cloudflare edge + browser disk cache from serving stale responses.
+  // Quick tunnels (trycloudflare.com) cache static assets by default (120min TTL).
+  // Chrome aggressively caches 403/301 responses, breaking revisits after token changes.
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   // OAuth callback bypass — no token needed (PKCE verifier is the security)
   if (method === 'GET' && url.startsWith('/auth/callback')) {
