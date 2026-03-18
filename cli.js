@@ -159,9 +159,12 @@ function composeContent() {
       - ${VAULT_DIR}:/data/vault
       - limbo-zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
+      - source: llm_api_key
+        mode: 0444
+      - source: telegram_bot_token
+        mode: 0444
+      - source: gateway_token
+        mode: 0444
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
@@ -215,9 +218,12 @@ function composeContentHardened() {
       - ${VAULT_DIR}:/data/vault
       - limbo-zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
+      - source: llm_api_key
+        mode: 0444
+      - source: telegram_bot_token
+        mode: 0444
+      - source: gateway_token
+        mode: 0444
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
@@ -1599,19 +1605,10 @@ async function cmdStart() {
     tunnel = await createSetupTunnel(PORT);
   }
 
-  if (wizardUrl) {
-    printWizardUrl(wizardUrl, tunnel);
-  } else {
-    const fallbackUrl = `http://127.0.0.1:${PORT}`;
-    console.log(`
-  ${c.green}${c.bold}Limbo is starting.${c.reset}
-
-  Open: ${c.cyan}${c.bold}${fallbackUrl}${c.reset}
-  ${c.dim}(may take a few seconds to be ready)${c.reset}
-
-  Logs: ${c.dim}limbo logs${c.reset}
-`);
-  }
+  // Always show the wizard URL with tunnel/SSH info, even if we couldn't
+  // extract the token-authenticated URL from logs.
+  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
+  printWizardUrl(displayUrl, tunnel);
 }
 
 // Shared path for headless, CLI-prompt, and existing-config routes
