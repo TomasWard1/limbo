@@ -179,10 +179,13 @@ function composeContent() {
 secrets:
   llm_api_key:
     file: ${SECRETS_DIR}/llm_api_key
+    mode: 0444
   telegram_bot_token:
     file: ${SECRETS_DIR}/telegram_bot_token
+    mode: 0444
   gateway_token:
     file: ${SECRETS_DIR}/gateway_token
+    mode: 0444
 
 volumes:
   limbo-data:
@@ -266,10 +269,13 @@ networks:
 secrets:
   llm_api_key:
     file: ${SECRETS_DIR}/llm_api_key
+    mode: 0444
   telegram_bot_token:
     file: ${SECRETS_DIR}/telegram_bot_token
+    mode: 0444
   gateway_token:
     file: ${SECRETS_DIR}/gateway_token
+    mode: 0444
 
 volumes:
   limbo-data:
@@ -1599,19 +1605,10 @@ async function cmdStart() {
     tunnel = await createSetupTunnel(PORT);
   }
 
-  if (wizardUrl) {
-    printWizardUrl(wizardUrl, tunnel);
-  } else {
-    const fallbackUrl = `http://127.0.0.1:${PORT}`;
-    console.log(`
-  ${c.green}${c.bold}Limbo is starting.${c.reset}
-
-  Open: ${c.cyan}${c.bold}${fallbackUrl}${c.reset}
-  ${c.dim}(may take a few seconds to be ready)${c.reset}
-
-  Logs: ${c.dim}limbo logs${c.reset}
-`);
-  }
+  // Always show the wizard URL with tunnel/SSH info, even if we couldn't
+  // extract the token-authenticated URL from logs.
+  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
+  printWizardUrl(displayUrl, tunnel);
 }
 
 // Shared path for headless, CLI-prompt, and existing-config routes
