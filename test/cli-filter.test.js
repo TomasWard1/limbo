@@ -38,7 +38,7 @@ function classify(rawLine) {
   urlRe.lastIndex = 0;
   const line = stripAnsi(rawLine);
   if (urlRe.test(line)) return 'url';
-  if (/openclaw/i.test(line)) return 'suppress';
+  if (/openclaw|zeroclaw/i.test(line)) return 'suppress';
   if (tuiChrome.test(line)) return 'suppress';
   if (!line.trim()) return 'suppress';
   return 'show';
@@ -113,10 +113,13 @@ test('classify: detects OAuth URLs', () => {
   assert.equal(classify('\x1b[36mhttps://example.com/auth\x1b[0m'), 'url');
 });
 
-test('classify: suppresses OpenClaw branding', () => {
+test('classify: suppresses OpenClaw and ZeroClaw branding', () => {
   assert.equal(classify('Starting OpenClaw gateway...'), 'suppress');
   assert.equal(classify('openclaw v1.2.3'), 'suppress');
   assert.equal(classify('  OpenClaw ready  '), 'suppress');
+  assert.equal(classify('Starting ZeroClaw daemon...'), 'suppress');
+  assert.equal(classify('zeroclaw v0.1.0'), 'suppress');
+  assert.equal(classify('  ZeroClaw ready  '), 'suppress');
 });
 
 test('classify: suppresses pure TUI chrome — spinner chars', () => {

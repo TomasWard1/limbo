@@ -17,7 +17,7 @@ services:
     volumes:
       - limbo-data:/data
       - ./vault:/data/vault
-      - limbo-openclaw-state:/home/limbo/.openclaw
+      - limbo-zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -25,19 +25,17 @@ services:
     env_file:
       - .env
     environment:
-      OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
-      OPENCLAW_STATE_DIR: /home/limbo/.openclaw
-      NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"
+      NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "NODE_OPTIONS= node -e \"const s=require('net').connect(18789,'127.0.0.1');const done=(code)=>{try{s.destroy()}catch{};process.exit(code)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);\"",
+          "zeroclaw status --format=exit-code 2>/dev/null || node -e \"require('http').get('http://127.0.0.1:${LIMBO_PORT:-18789}/',r=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))\"",
         ]
-      interval: 30s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 5s
 
 secrets:
   llm_api_key:
@@ -49,4 +47,4 @@ secrets:
 
 volumes:
   limbo-data:
-  limbo-openclaw-state:
+  limbo-zeroclaw-state:
