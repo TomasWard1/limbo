@@ -159,12 +159,9 @@ function composeContent() {
       - ${VAULT_DIR}:/data/vault
       - limbo-zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
-      - source: llm_api_key
-        mode: 0444
-      - source: telegram_bot_token
-        mode: 0444
-      - source: gateway_token
-        mode: 0444
+      - llm_api_key
+      - telegram_bot_token
+      - gateway_token
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
@@ -218,12 +215,9 @@ function composeContentHardened() {
       - ${VAULT_DIR}:/data/vault
       - limbo-zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
-      - source: llm_api_key
-        mode: 0444
-      - source: telegram_bot_token
-        mode: 0444
-      - source: gateway_token
-        mode: 0444
+      - llm_api_key
+      - telegram_bot_token
+      - gateway_token
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
@@ -713,7 +707,10 @@ function normalizeConfig(cfg, existingEnv = {}) {
 function writeSecretFile(name, value) {
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
   const filePath = path.join(SECRETS_DIR, name);
-  fs.writeFileSync(filePath, value || '', { mode: 0o600 });
+  // Use 0644 so any container user can read the mounted file.
+  // Docker Compose file-based secrets ignore uid/gid/mode settings,
+  // so the host file permissions are what the container sees.
+  fs.writeFileSync(filePath, value || '', { mode: 0o644 });
 }
 
 function writeSecrets(cfg, existingEnv = {}) {
@@ -927,7 +924,7 @@ function ensureComposeFile(hardened = false) {
   // Ensure secret files exist (Docker Compose secrets require the files to be present)
   for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token']) {
     const fp = path.join(SECRETS_DIR, name);
-    if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o600 });
+    if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o644 });
   }
   if (hardened) {
     // Copy squid config files for egress filtering
