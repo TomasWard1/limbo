@@ -12,8 +12,10 @@ const crypto = require('crypto');
 
 const PORT = parseInt(process.env.LIMBO_PORT, 10) || 18789;
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const CONFIG_DIR = '/data/config';
-const SECRETS_DIR = '/data/secrets';
+const DATA_DIR = process.env.LIMBO_DATA_DIR || '/data';
+const ZEROCLAW_STATE = process.env.ZEROCLAW_STATE_DIR || '/home/limbo/.zeroclaw';
+const CONFIG_DIR = path.join(DATA_DIR, 'config');
+const SECRETS_DIR = path.join(ZEROCLAW_STATE, 'secrets');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const SETUP_TOKEN_FILE = path.join(CONFIG_DIR, 'setup_token');
 
@@ -165,11 +167,18 @@ function checkToken(req) {
 }
 
 function sendForbidden(res) {
+  // Auto-retry page: if the user lands here without a token (e.g. DNS resolved
+  // but the browser dropped the ?token= query param, or Chrome served a stale
+  // error frame), retry with the full URL from the address bar every 2s.
+  // This prevents Chrome from getting stuck on chrome-error://chromewebdata/.
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>Limbo — Access Denied</title>
+    <title>Limbo — Connecting...</title>
     <style>body{font-family:system-ui;background:#0D0D0D;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
-    .c{text-align:center}.t{color:#9C9B99;margin-top:12px;font-size:14px}</style></head>
-    <body><div class="c"><h1>limbo</h1><p class="t">Setup token required. Check your server logs for the setup URL.</p></div></body></html>`;
+    .c{text-align:center}.t{color:#9C9B99;margin-top:12px;font-size:14px}.d{color:#555;font-size:12px;margin-top:8px}</style></head>
+    <body><div class="c"><h1>limbo</h1><p class="t" id="msg">Connecting...</p><p class="d" id="detail"></p></div>
+    <script>
+    (function(){var n=0,max=15;function retry(){if(n>=max){document.getElementById('msg').textContent='Setup token required.';document.getElementById('detail').textContent='Check your server logs for the setup URL.';return}n++;document.getElementById('detail').textContent='Attempt '+n+'/'+max;window.location.reload()}setTimeout(retry,2000)})();
+    </script></body></html>`;
   res.writeHead(403, { 'Content-Type': 'text/html', 'Content-Length': Buffer.byteLength(html) });
   res.end(html);
 }
@@ -217,49 +226,214 @@ function decodeJwtPayload(token) {
   return JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 }
 
+// ZeroClaw auth-profiles.json format:
+//   path: ~/.zeroclaw/auth-profiles.json
+//   fields: profile_name, kind, provider, access_token, refresh_token, expires_at (RFC3339)
+//   After writing, `zeroclaw auth use --provider X --profile Y` activates it.
+
 function buildCodexAuthProfile(profile) {
-  const profileId = profile.email ? `openai-codex:${profile.email}` : 'openai-codex:default';
+  const profileName = 'default';
+  const profileId = `openai-codex:${profileName}`;
   return {
     version: 1,
     profiles: {
       [profileId]: {
-        type: 'oauth',
+        profile_name: profileName,
+        kind: 'oauth',
         provider: 'openai-codex',
-        access: profile.access,
-        refresh: profile.refresh,
-        expires: profile.expires,
-        accountId: profile.accountId,
+        access_token: profile.access,
+        refresh_token: profile.refresh,
+        expires_at: new Date(profile.expires).toISOString(),
+        account_id: profile.accountId || '',
       },
     },
-    order: {},
-    lastGood: {},
+    order: { 'openai-codex': [profileId] },
+    lastGood: { 'openai-codex': profileId },
     usageStats: {},
   };
 }
 
 function buildAnthropicAuthProfile(token) {
+  const profileName = 'default';
+  const profileId = `anthropic:${profileName}`;
   return {
     version: 1,
     profiles: {
-      'anthropic:token': {
-        type: 'token',
+      [profileId]: {
+        profile_name: profileName,
+        kind: 'token',
         provider: 'anthropic',
-        token,
+        access_token: token,
       },
     },
-    order: { anthropic: ['anthropic:token'] },
-    lastGood: {},
+    order: { anthropic: [profileId] },
+    lastGood: { anthropic: profileId },
     usageStats: {},
   };
 }
 
-const AUTH_PROFILES_DIR = '/home/limbo/.openclaw/agents/main/agent';
-const AUTH_PROFILES_FILE = path.join(AUTH_PROFILES_DIR, 'auth-profiles.json');
+const AUTH_PROFILES_FILE = path.join(ZEROCLAW_STATE, 'auth-profiles.json');
 
 function writeAuthProfiles(store) {
-  fs.mkdirSync(AUTH_PROFILES_DIR, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(ZEROCLAW_STATE, { recursive: true, mode: 0o700 });
   fs.writeFileSync(AUTH_PROFILES_FILE, JSON.stringify(store, null, 2), { mode: 0o600 });
   log('Auth profile written to ' + AUTH_PROFILES_FILE);
+}
+
+// ─── Telegram API Helpers ────────────────────────────────────────────────────
+
+const https = require('https');
+
+function telegramApiGet(token, method, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const urlPath = `/bot${token}/${method}${qs ? '?' + qs : ''}`;
+  return new Promise((resolve, reject) => {
+    const req = https.get({
+      hostname: 'api.telegram.org',
+      path: urlPath,
+      timeout: 35000,
+    }, (r) => {
+      let data = '';
+      r.on('data', c => data += c);
+      r.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { reject(new Error('Invalid JSON from Telegram API')); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Telegram API timeout')); });
+  });
+}
+
+function telegramApiPost(token, method, body) {
+  const jsonBody = JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.telegram.org',
+      path: `/bot${token}/${method}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(jsonBody),
+      },
+      timeout: 10000,
+    }, (r) => {
+      let data = '';
+      r.on('data', c => data += c);
+      r.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { reject(new Error('Invalid JSON from Telegram API')); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Telegram API timeout')); });
+    req.write(jsonBody);
+    req.end();
+  });
+}
+
+// ─── Telegram Pairing Handlers ──────────────────────────────────────────────
+
+async function handleTelegramValidate(req, res) {
+  const body = await readBody(req);
+  const data = parseJSON(body);
+
+  if (!data || !data.botToken) {
+    return sendError(res, 400, 'Missing botToken');
+  }
+
+  try {
+    const result = await telegramApiGet(data.botToken, 'getMe');
+    if (result.ok) {
+      sendJSON(res, 200, {
+        valid: true,
+        botUsername: result.result.username,
+        botName: result.result.first_name,
+      });
+    } else {
+      sendJSON(res, 200, { valid: false, error: result.description });
+    }
+  } catch (err) {
+    sendError(res, 500, `Telegram API error: ${err.message}`);
+  }
+}
+
+async function handleTelegramPair(req, res) {
+  const body = await readBody(req);
+  const data = parseJSON(body);
+
+  if (!data || !data.botToken) {
+    return sendError(res, 400, 'Missing botToken');
+  }
+
+  const token = data.botToken;
+
+  try {
+    // Check for existing messages first (non-blocking)
+    let result = await telegramApiGet(token, 'getUpdates', { timeout: 0 });
+    if (!result.ok) {
+      return sendError(res, 502, `Telegram: ${result.description}`);
+    }
+
+    let updates = result.result || [];
+    let targetUpdate = null;
+
+    // Find the last message update
+    for (const u of updates) {
+      if (u.message && u.message.chat) targetUpdate = u;
+    }
+
+    if (!targetUpdate) {
+      // Long poll for a new message (25s — Telegram holds the connection)
+      const offset = updates.length > 0
+        ? updates[updates.length - 1].update_id + 1
+        : undefined;
+      const pollParams = { timeout: 25, limit: 1 };
+      if (offset !== undefined) pollParams.offset = offset;
+
+      result = await telegramApiGet(token, 'getUpdates', pollParams);
+      if (!result.ok) {
+        return sendError(res, 502, `Telegram: ${result.description}`);
+      }
+
+      for (const u of (result.result || [])) {
+        if (u.message && u.message.chat) targetUpdate = u;
+      }
+    }
+
+    if (!targetUpdate) {
+      return sendJSON(res, 200, { paired: false });
+    }
+
+    const chat = targetUpdate.message.chat;
+    const chatId = String(chat.id);
+    const firstName = chat.first_name || '';
+
+    // Acknowledge all updates up to this one
+    await telegramApiGet(token, 'getUpdates', {
+      offset: targetUpdate.update_id + 1,
+      timeout: 0,
+      limit: 1,
+    });
+
+    // Send greeting
+    const lang = data.language || 'en';
+    const greeting = lang === 'es'
+      ? `👋 ¡Hola${firstName ? ' ' + firstName : ''}! Limbo está configurado y listo. Podés hablarme por acá.`
+      : `👋 Hey${firstName ? ' ' + firstName : ''}! Limbo is set up and ready. You can talk to me here.`;
+
+    await telegramApiPost(token, 'sendMessage', { chat_id: chatId, text: greeting });
+
+    // Persist chat_id
+    writeSecretFile('telegram_chat_id', chatId);
+    log(`Telegram paired: chat_id=${chatId} name=${firstName}`);
+
+    sendJSON(res, 200, { paired: true, chatId, firstName });
+
+  } catch (err) {
+    log(`Telegram pair error: ${err.message}`);
+    sendError(res, 500, `Telegram pairing error: ${err.message}`);
+  }
 }
 
 // ─── Static File Serving ─────────────────────────────────────────────────────
@@ -343,7 +517,6 @@ function handleOAuthStart(req, res) {
 
 // Shared token exchange logic
 async function exchangeOAuthCode(code, verifier, redirectUri) {
-  const https = require('https');
   const tokenBody = new URLSearchParams({
     grant_type: 'authorization_code',
     client_id: OPENAI_OAUTH.clientId,
@@ -558,6 +731,7 @@ async function handleConfigure(req, res) {
     const telegram = data.telegram || {};
     if (telegram.botToken) {
       writeSecretFile('telegram_bot_token', telegram.botToken);
+      // chat_id is already captured by /api/telegram/pair during wizard Step 6
     }
 
     const gatewayToken = ensureGatewayToken();
@@ -571,8 +745,6 @@ async function handleConfigure(req, res) {
       MODEL_NAME:                 modelName,
       LIMBO_PORT:                 String(PORT),
       TELEGRAM_ENABLED:           telegram.enabled ? 'true' : 'false',
-      TELEGRAM_AUTO_PAIR_FIRST_DM: telegram.autoPair ? 'true' : 'false',
-      OPENCLAW_GATEWAY_TOKEN:     gatewayToken,
     };
 
     // Write .env file (quote values to handle special chars)
@@ -606,6 +778,13 @@ async function handleRequest(req, res) {
   log(`${method} ${url}`);
 
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Prevent Cloudflare edge + browser disk cache from serving stale responses.
+  // Quick tunnels (trycloudflare.com) cache static assets by default (120min TTL).
+  // Chrome aggressively caches 403/301 responses, breaking revisits after token changes.
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   // OAuth callback bypass — no token needed (PKCE verifier is the security)
   if (method === 'GET' && url.startsWith('/auth/callback')) {
@@ -642,6 +821,10 @@ async function handleRequest(req, res) {
       await handleOAuthExchange(req, res);
     } else if (method === 'POST' && url === '/api/auth/anthropic/token') {
       await handleAnthropicToken(req, res);
+    } else if (method === 'POST' && url === '/api/telegram/validate-token') {
+      await handleTelegramValidate(req, res);
+    } else if (method === 'POST' && url === '/api/telegram/pair') {
+      await handleTelegramPair(req, res);
     } else if (method === 'POST' && url === '/api/configure') {
       await handleConfigure(req, res);
     } else if (method === 'GET') {

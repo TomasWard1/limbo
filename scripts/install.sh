@@ -131,7 +131,7 @@ LIMBO_PORT=$DEFAULT_PORT
 
 if ss -tlnp 2>/dev/null | grep -q ":${DEFAULT_PORT} " || \
    netstat -tlnp 2>/dev/null | grep -q ":${DEFAULT_PORT} "; then
-  warn "Port ${DEFAULT_PORT} is already in use (likely an existing OpenClaw instance)."
+  warn "Port ${DEFAULT_PORT} is already in use (likely an existing ZeroClaw/Limbo instance)."
   log "Limbo will run on port ${COEXIST_PORT} to coexist safely."
   LIMBO_PORT=$COEXIST_PORT
 else
@@ -176,7 +176,7 @@ header "Downloading docker-compose.yml..."
 curl -fsSL "$COMPOSE_URL" -o /opt/limbo/docker-compose.yml
 ok "docker-compose.yml downloaded."
 
-# Patch compose port if coexisting with existing OpenClaw
+# Patch compose port if coexisting with existing instance
 if [ "$LIMBO_PORT" != "$DEFAULT_PORT" ]; then
   sed -i "s/18789/${LIMBO_PORT}/g" /opt/limbo/docker-compose.yml
   ok "Patched docker-compose.yml for port ${LIMBO_PORT}."
@@ -252,7 +252,7 @@ echo -e "${GREEN}${BOLD}║         Limbo installed successfully!        ║${NC
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 if [[ -n "$HEADLESS_API_KEY" ]]; then
-  echo -e "  ${BOLD}OpenClaw gateway:${NC} ws://127.0.0.1:${LIMBO_PORT}"
+  echo -e "  ${BOLD}ZeroClaw gateway:${NC} ws://127.0.0.1:${LIMBO_PORT}"
 else
   # Extract setup token from container logs
   SETUP_TOKEN=""

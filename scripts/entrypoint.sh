@@ -16,26 +16,24 @@ log() {
 
 log "INFO  Limbo container starting"
 
-# ── Read Docker secrets (with env var fallback for backwards compat) ──────────
-# Priority: /run/secrets/ (Docker secrets) > /data/secrets/ (wizard-written) > env vars
+# ── Read secrets ──────────────────────────────────────────────────────────────
+# Priority: /run/secrets/ (Docker secrets) > ZeroClaw secrets (wizard-written) > env vars
 read_secret() {
   local docker_secret="/run/secrets/$1"
-  local wizard_secret="/data/secrets/$1"
-  # Check Docker secrets first, but only if non-empty and readable
+  local zc_secret="${ZEROCLAW_STATE_DIR:-/home/limbo/.zeroclaw}/secrets/$1"
   if [ -f "$docker_secret" ] && [ -s "$docker_secret" ] && [ -r "$docker_secret" ]; then
     cat "$docker_secret"
-  elif [ -f "$wizard_secret" ] && [ -s "$wizard_secret" ] && [ -r "$wizard_secret" ]; then
-    cat "$wizard_secret"
+  elif [ -f "$zc_secret" ] && [ -s "$zc_secret" ] && [ -r "$zc_secret" ]; then
+    cat "$zc_secret"
   else
     echo ""
   fi
 }
 
-# API key auth is optional now because OpenClaw can also use persisted auth profiles.
+# API key auth is optional now because ZeroClaw can also use persisted auth profiles.
 # Prefer Docker secrets, fall back to env vars for backwards compatibility.
 _secret_llm="$(read_secret llm_api_key)"
 _secret_telegram="$(read_secret telegram_bot_token)"
-_secret_gateway="$(read_secret gateway_token)"
 
 LLM_API_KEY="${_secret_llm:-${LLM_API_KEY:-}}"
 
@@ -44,11 +42,10 @@ MODEL_PROVIDER="${MODEL_PROVIDER:-anthropic}"
 MODEL_NAME="${MODEL_NAME:-claude-opus-4-6}"
 TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
 TELEGRAM_BOT_TOKEN="${_secret_telegram:-${TELEGRAM_BOT_TOKEN:-}}"
-TELEGRAM_AUTO_PAIR_FIRST_DM="${TELEGRAM_AUTO_PAIR_FIRST_DM:-false}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
-OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/home/limbo/.openclaw}"
-OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-$OPENCLAW_STATE_DIR/openclaw.json}"
+ZEROCLAW_STATE_DIR="${ZEROCLAW_STATE_DIR:-/home/limbo/.zeroclaw}"
+ZEROCLAW_CONFIG_PATH="${ZEROCLAW_CONFIG_PATH:-$ZEROCLAW_STATE_DIR/config.toml}"
 
 if [ "$MODEL_PROVIDER" = "openai" ] && [ -n "$LLM_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
   OPENAI_API_KEY="$LLM_API_KEY"
@@ -71,14 +68,14 @@ else
 fi
 
 # ── Validate and resolve API key ─────────────────────────────────────────────
-# Subscription mode uses OAuth tokens stored in OpenClaw auth-profiles — no API key needed.
+# Subscription mode uses OAuth tokens stored in ZeroClaw auth-profiles — no API key needed.
 # Setup mode skips validation entirely — the wizard will configure keys.
 AUTH_MODE="${AUTH_MODE:-api-key}"
 
 if [ "$SETUP_MODE" = "true" ]; then
   log "INFO  Setup mode — skipping API key validation"
 elif [ "$AUTH_MODE" = "subscription" ]; then
-  log "INFO  Subscription mode — using OpenClaw auth profiles (no API key required)"
+  log "INFO  Subscription mode — using ZeroClaw auth profiles (no API key required)"
   # Export any API keys that happen to exist, but don't require them
   [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
   [ -n "$LLM_API_KEY" ] && export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$LLM_API_KEY}"
@@ -113,33 +110,39 @@ else
 fi
 
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
-mkdir -p /data/db /data/backups /data/logs /data/vault/notes /data/vault/maps /data/config /data/secrets "$OPENCLAW_STATE_DIR"
+ZC_SECRETS="$ZEROCLAW_STATE_DIR/secrets"
+mkdir -p /data/vault/notes /data/vault/maps /data/config "$ZEROCLAW_STATE_DIR" "$ZC_SECRETS"
 
-# ── Bootstrap workspace (layered: system symlinks + user seeds) ──────────────
-mkdir -p /data/workspace
+# Sync Docker secrets into ZeroClaw state dir.
+# Docker mounts secrets as read-only in /run/secrets/; we copy to a writable path.
+for secret_name in gateway_token llm_api_key telegram_bot_token; do
+  src="/run/secrets/$secret_name"
+  dst="$ZC_SECRETS/$secret_name"
+  if [ -f "$src" ] && [ -s "$src" ]; then
+    cp "$src" "$dst"
+  fi
+done
 
-# System files: symlink from read-only image on every boot.
-# Even if the agent or user deleted/modified these, they get restored.
-# Symlink targets are on read-only root FS — immutable at runtime.
+# ── Bootstrap workspace (ZeroClaw native) ─────────────────────────────────────
+# All workspace files live directly in $ZEROCLAW_STATE_DIR/workspace/.
+# System files are copied from the image on every boot (immutable source of truth).
+# User-seeded files are only written on first run (agent can modify them).
+ZC_WORKSPACE="$ZEROCLAW_STATE_DIR/workspace"
+mkdir -p "$ZC_WORKSPACE"
+
+# System files: copy from image on every boot (overwrite — image is source of truth)
 for f in /app/workspace/system/*.md; do
   [ -f "$f" ] || continue
-  fname=$(basename "$f")
-  target="/data/workspace/$fname"
-  if [ -f "$target" ] && [ ! -L "$target" ]; then
-    log "WARN  System file $fname was replaced — restoring from image"
-  fi
-  ln -sf "$f" "$target"
+  cp "$f" "$ZC_WORKSPACE/$(basename "$f")"
 done
-log "INFO  System workspace files linked from image"
+log "INFO  System workspace files copied to ZeroClaw workspace"
 
-# User files: seed from templates only on first run (never overwrite).
-# These are owned by limbo and writable by the agent.
+# User files: seed from templates only on first run (never overwrite)
 for f in /app/workspace/templates/*.md; do
   [ -f "$f" ] || continue
   fname=$(basename "$f")
-  # Skip the USER.md.template — handled separately via envsubst
   [ "$fname" = "USER.md.template" ] && continue
-  target="/data/workspace/$fname"
+  target="$ZC_WORKSPACE/$fname"
   if [ ! -f "$target" ]; then
     cp "$f" "$target"
     log "INFO  Seeded user file: $fname"
@@ -147,22 +150,50 @@ for f in /app/workspace/templates/*.md; do
 done
 
 # USER.md: generate from template via envsubst on first run
-if [ ! -f /data/workspace/USER.md ]; then
+if [ ! -f "$ZC_WORKSPACE/USER.md" ]; then
   export USER_NAME USER_TIMEZONE USER_LANGUAGE USER_CONTEXT
   envsubst '$USER_NAME $USER_TIMEZONE $USER_LANGUAGE $USER_CONTEXT' \
-    < /app/workspace/templates/USER.md.template > /data/workspace/USER.md
+    < /app/workspace/templates/USER.md.template > "$ZC_WORKSPACE/USER.md"
   log "INFO  Generated USER.md from template"
 fi
 
-# ── Generate OpenClaw config only if one does not exist already ──────────────
-if [ ! -f "$OPENCLAW_CONFIG_PATH" ]; then
-  log "INFO  No persisted OpenClaw config found — generating fallback config"
-  export MODEL_PROVIDER MODEL_NAME TELEGRAM_ENABLED TELEGRAM_BOT_TOKEN OPENAI_API_KEY ANTHROPIC_API_KEY OPENCLAW_STATE_DIR OPENCLAW_CONFIG_PATH LIMBO_PORT
-  envsubst '$MODEL_PROVIDER $MODEL_NAME $TELEGRAM_ENABLED $TELEGRAM_BOT_TOKEN $LIMBO_PORT' \
-    < /app/openclaw.json.template > "$OPENCLAW_CONFIG_PATH"
-  log "INFO  OpenClaw config written to $OPENCLAW_CONFIG_PATH"
+# ── Generate ZeroClaw config ──────────────────────────────────────────────────
+# Skip in setup mode (wizard hasn't configured anything yet).
+# Always regenerate from template so config.toml reflects the latest .env values.
+LIMBO_PORT="${LIMBO_PORT:-18789}"
+
+if [ "$SETUP_MODE" = "true" ]; then
+  log "INFO  Setup mode — skipping config generation"
 else
-  log "INFO  Using persisted OpenClaw config at $OPENCLAW_CONFIG_PATH"
+  # Subscription (OAuth) mode uses "openai-codex" provider, not "openai".
+  # The wizard saves MODEL_PROVIDER=openai in .env, but ZeroClaw's auth-profiles
+  # use "openai-codex" for OAuth-based auth. Remap here so config.toml matches.
+  if [ "$AUTH_MODE" = "subscription" ] && [ "$MODEL_PROVIDER" = "openai" ]; then
+    MODEL_PROVIDER="openai-codex"
+    log "INFO  Subscription mode: remapped provider openai → openai-codex"
+  fi
+
+  log "INFO  Generating ZeroClaw config from template"
+  export MODEL_PROVIDER MODEL_NAME LIMBO_PORT
+  envsubst '$MODEL_PROVIDER $MODEL_NAME $LIMBO_PORT' \
+    < /app/config.toml.template > "$ZEROCLAW_CONFIG_PATH"
+
+  # Telegram: channel is enabled by section presence, not a boolean flag.
+  # Only append [channels_config.telegram] when the user actually configured it.
+  if [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+    cat >> "$ZEROCLAW_CONFIG_PATH" <<TELEGRAM_EOF
+
+[channels_config]
+ack_reactions = false
+
+[channels_config.telegram]
+bot_token = "$TELEGRAM_BOT_TOKEN"
+allowed_users = ["*"]
+TELEGRAM_EOF
+    log "INFO  Telegram channel enabled in config"
+  fi
+
+  log "INFO  ZeroClaw config written to $ZEROCLAW_CONFIG_PATH"
 fi
 
 # ── Run migrations ────────────────────────────────────────────────────────────
@@ -170,85 +201,18 @@ log "INFO  Running migration runner"
 node /app/migrations/index.js
 log "INFO  Migrations OK"
 
-# ── Configure mcporter ────────────────────────────────────────────────────────
-export MCPORTER_CONFIG=/app/mcporter.json
-export OPENCLAW_STATE_DIR
-log "INFO  mcporter configured — MCPORTER_CONFIG=$MCPORTER_CONFIG"
-export OPENCLAW_CONFIG_PATH
+# ── Export state dir for ZeroClaw ─────────────────────────────────────────────
+export ZEROCLAW_STATE_DIR
+export ZEROCLAW_CONFIG_PATH
 
-# ── Gateway auth token (generate if not pre-set) ─────────────────────────────
-if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
-  OPENCLAW_GATEWAY_TOKEN="$(head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 32)"
-  log "INFO  Generated OPENCLAW_GATEWAY_TOKEN (not pre-set)"
-fi
-export OPENCLAW_GATEWAY_TOKEN
-
-start_telegram_auto_pair_worker() {
-  [ "$TELEGRAM_ENABLED" = "true" ] || return 0
-  [ "$TELEGRAM_AUTO_PAIR_FIRST_DM" = "true" ] || return 0
-  [ -n "$TELEGRAM_BOT_TOKEN" ] || return 0
-
-  SENTINEL_FILE="/data/config/telegram-first-pairing.done"
-  if [ -f "$SENTINEL_FILE" ]; then
-    log "INFO  Telegram first-pair bootstrap already completed"
-    return 0
-  fi
-
-  (
-    log "INFO  Telegram first-pair bootstrap worker started"
-    ATTEMPTS=90
-    for i in $(seq 1 "$ATTEMPTS"); do
-      json="$(openclaw pairing list telegram --json 2>/dev/null || true)"
-      if [ -z "$json" ]; then
-        sleep 2
-        continue
-      fi
-
-      code="$(printf '%s' "$json" | node -e "
-        const fs=require('fs');
-        const s=fs.readFileSync(0,'utf8');
-        try{
-          const j=JSON.parse(s);
-          const req=(j && Array.isArray(j.requests) && j.requests[0]) ? j.requests[0] : null;
-          if (!req) process.exit(1);
-          const direct=req.code || req.pairingCode || req.requestCode || req.id || '';
-          if (direct) { process.stdout.write(String(direct)); process.exit(0); }
-          const vals=Object.values(req).map(v=>String(v||''));
-          const guess=vals.find(v=>/^[A-Za-z0-9_-]{4,}$/.test(v));
-          if (guess) { process.stdout.write(guess); process.exit(0); }
-          process.exit(1);
-        } catch { process.exit(1); }
-      " 2>/dev/null || true)"
-
-      if [ -n "$code" ]; then
-        if openclaw pairing approve telegram "$code" --notify >/dev/null 2>&1; then
-          log "INFO  Telegram first-pair bootstrap approved pairing code"
-          date -u '+%Y-%m-%dT%H:%M:%SZ' > "$SENTINEL_FILE"
-          exit 0
-        else
-          log "WARN  Telegram first-pair bootstrap failed to approve pairing code"
-        fi
-      fi
-
-      sleep 2
-    done
-
-    log "WARN  Telegram first-pair bootstrap timed out without pending requests"
-  ) &
-}
-
-start_telegram_auto_pair_worker
-
-# ── Setup mode: start wizard instead of OpenClaw ─────────────────────────────
+# ── Setup mode: start wizard instead of ZeroClaw ─────────────────────────────
 # When setup completes, the server exits and Docker restarts the container.
 # On restart, /data/config/.env exists → normal startup path.
-LIMBO_PORT="${LIMBO_PORT:-18789}"
-
 if [ "$SETUP_MODE" = "true" ]; then
   log "INFO  No configuration found — starting setup wizard on port $LIMBO_PORT"
   exec node /app/setup-server/server.js
 fi
 
-# ── Start OpenClaw gateway ────────────────────────────────────────────────────
-log "INFO  Starting OpenClaw gateway on port ${LIMBO_PORT} (token auth, loopback)"
-exec openclaw gateway run --port "${LIMBO_PORT}" --bind loopback
+# ── Start ZeroClaw daemon ────────────────────────────────────────────────────
+log "INFO  Starting ZeroClaw daemon"
+exec zeroclaw daemon

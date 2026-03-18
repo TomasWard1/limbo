@@ -1,0 +1,23 @@
+# ZeroClaw config template for Limbo.
+# Rendered by entrypoint.sh via envsubst. Telegram section is appended
+# conditionally — see entrypoint.sh for details.
+
+default_provider = "${MODEL_PROVIDER}"
+default_model = "${MODEL_PROVIDER}/${MODEL_NAME}"
+
+[gateway]
+host = "127.0.0.1"
+port = ${LIMBO_PORT}
+require_pairing = false
+allow_public_bind = false
+
+[autonomy]
+level = "full"
+
+[mcp]
+enabled = true
+
+[[mcp.servers]]
+name = "limbo-vault"
+command = "node"
+args = ["/app/mcp-server/index.js"]

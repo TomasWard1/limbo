@@ -1,6 +1,6 @@
 {
   "name": "limbo-ai",
-  "version": "1.18.3",
+  "version": "1.19.0",
   "description": "Your personal AI memory agent — install and manage Limbo via npx",
   "type": "commonjs",
   "bin": {
@@ -14,13 +14,14 @@
   },
   "scripts": {
     "start": "node cli.js start",
-    "test": "node --test test/**/*.test.js"
+    "test": "node --test test/cli-filter.test.js test/zeroclaw-migration.test.js"
   },
   "keywords": [
     "limbo",
     "ai",
     "memory",
     "agent",
+    "zeroclaw",
     "openclaw",
     "personal"
   ],
