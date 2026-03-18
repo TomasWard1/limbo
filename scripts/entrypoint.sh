@@ -115,10 +115,13 @@ mkdir -p /data/vault/notes /data/vault/maps /data/config "$ZEROCLAW_STATE_DIR" "
 
 # Sync Docker secrets into ZeroClaw state dir.
 # Docker mounts secrets as read-only in /run/secrets/; we copy to a writable path.
+# Note: Docker Compose file-based secrets ignore uid/gid/mode settings,
+# so files may be owned by a different user. Use cp || true to tolerate
+# permission errors (e.g. during setup mode when secrets are placeholder files).
 for secret_name in gateway_token llm_api_key telegram_bot_token; do
   src="/run/secrets/$secret_name"
   dst="$ZC_SECRETS/$secret_name"
-  if [ -f "$src" ] && [ -s "$src" ]; then
+  if [ -f "$src" ] && [ -s "$src" ] && [ -r "$src" ]; then
     cp "$src" "$dst"
   fi
 done
