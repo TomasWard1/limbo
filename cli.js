@@ -182,13 +182,10 @@ function composeContent() {
 secrets:
   llm_api_key:
     file: ${SECRETS_DIR}/llm_api_key
-    mode: 0444
   telegram_bot_token:
     file: ${SECRETS_DIR}/telegram_bot_token
-    mode: 0444
   gateway_token:
     file: ${SECRETS_DIR}/gateway_token
-    mode: 0444
 
 volumes:
   limbo-data:
@@ -275,13 +272,10 @@ networks:
 secrets:
   llm_api_key:
     file: ${SECRETS_DIR}/llm_api_key
-    mode: 0444
   telegram_bot_token:
     file: ${SECRETS_DIR}/telegram_bot_token
-    mode: 0444
   gateway_token:
     file: ${SECRETS_DIR}/gateway_token
-    mode: 0444
 
 volumes:
   limbo-data:
