@@ -37,58 +37,74 @@ test('mcporter.json is deleted', () => {
   assert.ok(!exists('mcporter.json'), 'mcporter.json should not exist');
 });
 
-// ─── 2. New ZeroClaw config template exists and is valid TOML-ish ───────────
+// ─── 2. New ZeroClaw config template exists and matches ZeroClaw schema ─────
 
 test('config.toml.template exists', () => {
   assert.ok(exists('config.toml.template'));
 });
 
-test('config.toml.template contains required sections', () => {
+test('config.toml.template contains required ZeroClaw sections', () => {
   const toml = read('config.toml.template');
   const required = [
     '[gateway]',
-    '[gateway.auth]',
-    '[memory]',
-    '[security]',
-    '[tools]',
-    '[session]',
-    '[agents.defaults]',
-    '[channels.telegram]',
-    '[mcp.limbo-vault]',
+    '[mcp]',
+    '[[mcp.servers]]',
   ];
   for (const section of required) {
     assert.ok(toml.includes(section), `Missing section: ${section}`);
   }
 });
 
+test('config.toml.template does NOT contain unsupported sections', () => {
+  const toml = read('config.toml.template');
+  const forbidden = [
+    '[gateway.auth]',
+    '[memory]',
+    '[session]',
+    '[agents.defaults]',
+    '[channels.telegram]',
+    '[mcp.limbo-vault]',
+    '[security]',
+    '[tools]',
+  ];
+  for (const section of forbidden) {
+    assert.ok(!toml.includes(section), `Should not contain unsupported section: ${section}`);
+  }
+});
+
 test('config.toml.template uses envsubst variables', () => {
   const toml = read('config.toml.template');
-  const vars = ['${MODEL_PROVIDER}', '${MODEL_NAME}', '${LIMBO_PORT}', '${TELEGRAM_BOT_TOKEN}', '${TELEGRAM_ENABLED}'];
+  const vars = ['${MODEL_PROVIDER}', '${MODEL_NAME}', '${LIMBO_PORT}'];
   for (const v of vars) {
     assert.ok(toml.includes(v), `Missing envsubst variable: ${v}`);
   }
 });
 
-test('config.toml.template has gateway auth with token_file', () => {
+test('config.toml.template uses require_pairing for gateway auth', () => {
   const toml = read('config.toml.template');
-  assert.ok(toml.includes('token_file = "/run/secrets/gateway_token"'),
-    'Gateway auth must reference /run/secrets/gateway_token');
+  assert.ok(toml.includes('require_pairing = false'),
+    'Gateway must use require_pairing (ZeroClaw schema)');
 });
 
-test('config.toml.template has memory backend = none', () => {
+test('config.toml.template registers MCP server via [[mcp.servers]]', () => {
   const toml = read('config.toml.template');
-  assert.ok(toml.includes('backend = "none"'),
-    'Memory backend must be "none" (Limbo uses its own vault via MCP)');
-});
-
-test('config.toml.template registers MCP server natively', () => {
-  const toml = read('config.toml.template');
-  assert.ok(toml.includes('[mcp.limbo-vault]'));
+  assert.ok(toml.includes('[[mcp.servers]]'));
+  assert.ok(toml.includes('name = "limbo-vault"'));
   assert.ok(toml.includes('command = "node"'));
   assert.ok(toml.includes('"/app/mcp-server/index.js"'));
 });
 
-// ─── 3. Dockerfile references ZeroClaw, not OpenClaw ────────────────────────
+// ─── 3. Entrypoint conditionally appends Telegram config ────────────────────
+
+test('entrypoint.sh appends channels_config.telegram conditionally', () => {
+  const ep = read('scripts/entrypoint.sh');
+  assert.ok(ep.includes('[channels_config.telegram]'),
+    'Entrypoint must append [channels_config.telegram] section');
+  assert.ok(ep.includes('allowed_users'),
+    'Telegram config must include allowed_users');
+});
+
+// ─── 4. Dockerfile references ZeroClaw, not OpenClaw ────────────────────────
 
 test('Dockerfile pulls ZeroClaw binary from official image', () => {
   const df = read('Dockerfile');
@@ -112,7 +128,7 @@ test('Dockerfile copies config.toml.template', () => {
   assert.ok(df.includes('config.toml.template'));
 });
 
-// ─── 4. docker-compose.yml uses ZeroClaw volumes and healthcheck ────────────
+// ─── 5. docker-compose.yml uses ZeroClaw volumes and healthcheck ────────────
 
 test('docker-compose.yml uses limbo-zeroclaw-state volume', () => {
   const dc = read('docker-compose.yml');
@@ -138,7 +154,7 @@ test('docker-compose.yml mounts .zeroclaw state dir', () => {
   assert.ok(dc.includes('/home/limbo/.zeroclaw'));
 });
 
-// ─── 5. Entrypoint uses ZeroClaw ────────────────────────────────────────────
+// ─── 6. Entrypoint uses ZeroClaw ────────────────────────────────────────────
 
 test('entrypoint.sh starts zeroclaw daemon', () => {
   const ep = read('scripts/entrypoint.sh');
@@ -165,7 +181,7 @@ test('entrypoint.sh renders config.toml from template via envsubst', () => {
   assert.ok(ep.includes('envsubst'));
 });
 
-// ─── 6. Migration version bumped correctly ──────────────────────────────────
+// ─── 7. Migration version bumped correctly ──────────────────────────────────
 
 test('migration index has CURRENT_DATA_VERSION = 3', () => {
   const idx = read('migrations/index.js');
@@ -185,14 +201,14 @@ test('migration 003 exports version 3 and up function', () => {
     'Migration 003 must export an up function');
 });
 
-// ─── 7. CLI filter suppresses both openclaw and zeroclaw branding ───────────
+// ─── 8. CLI filter suppresses both openclaw and zeroclaw branding ───────────
 
 test('cli-filter.test.js classify regex handles both brands', () => {
   const t = read('test/cli-filter.test.js');
   assert.ok(t.includes('openclaw|zeroclaw'), 'Filter regex must suppress both openclaw and zeroclaw branding');
 });
 
-// ─── 8. No stale OPENCLAW env vars in core config files ─────────────────────
+// ─── 9. No stale OPENCLAW env vars in core config files ─────────────────────
 
 test('.env.example does not use OPENCLAW_ prefix', () => {
   if (!exists('.env.example')) return; // optional file
@@ -205,7 +221,7 @@ test('docker-compose.yml does not use OPENCLAW_ env vars', () => {
   assert.ok(!dc.includes('OPENCLAW_'));
 });
 
-// ─── 9. Workspace docs updated ──────────────────────────────────────────────
+// ─── 10. Workspace docs updated ─────────────────────────────────────────────
 
 test('IDENTITY.md does not reference OpenClaw gateway', () => {
   const id = read('workspace/templates/IDENTITY.md');
@@ -217,14 +233,14 @@ test('TOOLS.md does not reference mcporter', () => {
   assert.ok(!tools.toLowerCase().includes('mcporter'), 'TOOLS.md should not reference mcporter');
 });
 
-// ─── 10. Package.json includes zeroclaw keyword ─────────────────────────────
+// ─── 11. Package.json includes zeroclaw keyword ─────────────────────────────
 
 test('package.json keywords include zeroclaw', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.ok(pkg.keywords.includes('zeroclaw'), 'package.json keywords should include "zeroclaw"');
 });
 
-// ─── 11. Setup server uses ZeroClaw paths ───────────────────────────────────
+// ─── 12. Setup server uses ZeroClaw paths ───────────────────────────────────
 
 test('setup-server uses ZEROCLAW_STATE not OPENCLAW_STATE', () => {
   const srv = read('setup-server/server.js');
@@ -237,7 +253,7 @@ test('setup-server uses GATEWAY_TOKEN not OPENCLAW_GATEWAY_TOKEN', () => {
   assert.ok(!srv.includes('OPENCLAW_GATEWAY_TOKEN'), 'setup-server should not use OPENCLAW_GATEWAY_TOKEN');
 });
 
-// ─── 12. Security: sensitive dirs ───────────────────────────────────────────
+// ─── 13. Security: sensitive dirs ───────────────────────────────────────────
 
 test('Dockerfile does not install git in final image', () => {
   const df = read('Dockerfile');
