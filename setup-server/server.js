@@ -12,8 +12,9 @@ const crypto = require('crypto');
 
 const PORT = parseInt(process.env.LIMBO_PORT, 10) || 18789;
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const CONFIG_DIR = '/data/config';
-const SECRETS_DIR = '/data/secrets';
+const DATA_DIR = process.env.LIMBO_DATA_DIR || '/data';
+const CONFIG_DIR = path.join(DATA_DIR, 'config');
+const SECRETS_DIR = path.join(DATA_DIR, 'secrets');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const SETUP_TOKEN_FILE = path.join(CONFIG_DIR, 'setup_token');
 
@@ -253,7 +254,8 @@ function buildAnthropicAuthProfile(token) {
   };
 }
 
-const AUTH_PROFILES_DIR = '/home/limbo/.openclaw/agents/main/agent';
+const ZEROCLAW_STATE = process.env.ZEROCLAW_STATE_DIR || '/home/limbo/.zeroclaw';
+const AUTH_PROFILES_DIR = path.join(ZEROCLAW_STATE, 'agents/main/agent');
 const AUTH_PROFILES_FILE = path.join(AUTH_PROFILES_DIR, 'auth-profiles.json');
 
 function writeAuthProfiles(store) {
@@ -572,7 +574,7 @@ async function handleConfigure(req, res) {
       LIMBO_PORT:                 String(PORT),
       TELEGRAM_ENABLED:           telegram.enabled ? 'true' : 'false',
       TELEGRAM_AUTO_PAIR_FIRST_DM: telegram.autoPair ? 'true' : 'false',
-      OPENCLAW_GATEWAY_TOKEN:     gatewayToken,
+      GATEWAY_TOKEN:              gatewayToken,
     };
 
     // Write .env file (quote values to handle special chars)

@@ -1,0 +1,52 @@
+provider = "${MODEL_PROVIDER}"
+default_model = "${MODEL_NAME}"
+
+[gateway]
+host = "127.0.0.1"
+port = ${LIMBO_PORT}
+allow_public_bind = false
+
+[gateway.auth]
+mode = "token"
+token_file = "/run/secrets/gateway_token"
+
+[memory]
+backend = "none"
+
+[security]
+sandbox = true
+command_allowlist = []
+
+[tools]
+profile = "messaging"
+allow = ["web_search", "web_fetch"]
+deny = ["exec", "browser", "canvas", "nodes", "cron", "gateway", "sessions_spawn", "sessions_send", "process", "image", "group:automation", "group:runtime", "group:fs"]
+
+[tools.fs]
+workspace_only = true
+
+[tools.exec]
+security = "deny"
+ask = "always"
+
+[tools.elevated]
+enabled = false
+
+[session]
+dm_scope = "per-channel-peer"
+
+[agents.defaults]
+workspace = "/data/workspace"
+
+[agents.defaults.model]
+primary = "${MODEL_PROVIDER}/${MODEL_NAME}"
+
+[channels.telegram]
+enabled = ${TELEGRAM_ENABLED}
+bot_token = "${TELEGRAM_BOT_TOKEN}"
+dm_policy = "pairing"
+
+[mcp.limbo-vault]
+command = "node"
+args = ["/app/mcp-server/index.js"]
+tool_timeout_secs = 30

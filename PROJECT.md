@@ -4,7 +4,7 @@
 
 ## What Limbo Is
 
-A personal memory agent with a conversational interface. Stores atomic notes in a local vault with semantic search, maintains Maps of Content (MOCs), runs in Docker via OpenClaw gateway, accessible via Telegram or HTTP.
+A personal memory agent with a conversational interface. Stores atomic notes in a local vault with semantic search, maintains Maps of Content (MOCs), runs in Docker via ZeroClaw gateway, accessible via Telegram or HTTP.
 
 ## File Map
 
@@ -12,10 +12,9 @@ A personal memory agent with a conversational interface. Stores atomic notes in 
 /
 ├── Dockerfile                    # Multi-stage: deps → runtime (node:22-slim)
 ├── docker-compose.yml            # Single service, port 18789, volume limbo-data:/data
-├── openclaw.json.template        # OpenClaw config template (envsubst at runtime)
-├── mcporter.json                 # MCP server registry for OpenClaw
+├── config.toml.template           # ZeroClaw config template (envsubst at runtime)
 ├── scripts/
-│   └── entrypoint.sh             # Creates /data dirs, runs migrations, starts OpenClaw
+│   └── entrypoint.sh             # Creates /data dirs, runs migrations, starts ZeroClaw
 ├── mcp-server/                   # Custom MCP server (Node.js)
 │   ├── index.js                  # Server entry — registers tools
 │   ├── package.json              # Dependencies
@@ -49,8 +48,8 @@ docker compose up -d
 # Run one-off for testing
 docker run --rm -p 18789:18789 --env-file .env -v limbo-data:/data limbo:local
 
-# Check OpenClaw version inside container
-docker run --rm --entrypoint sh limbo:local -c "openclaw --version"
+# Check ZeroClaw version inside container
+docker run --rm --entrypoint sh limbo:local -c "zeroclaw --version"
 
 # Run migrations manually
 docker exec limbo node /app/migrations/index.js
@@ -58,24 +57,22 @@ docker exec limbo node /app/migrations/index.js
 
 ## Environment Variables (required in .env)
 
-- `ANTHROPIC_API_KEY` — Claude API key for OpenClaw
+- `ANTHROPIC_API_KEY` — Claude API key
 - `TELEGRAM_BOT_TOKEN` — Telegram bot token (optional, for Telegram gateway)
 
 ## Docker Architecture
 
-- **Stage 1 (deps)**: Installs `openclaw` and `mcporter` globally via npm, plus MCP server deps.
-- **Stage 2 (runtime)**: Copies node_modules from deps, creates symlinks for binaries, sets up non-root `limbo` user, exposes port 18789.
-- **Entrypoint**: Creates `/data/{vault,db,config,memory,backups,logs}`, runs migrations, renders `openclaw.json` from template via `envsubst`, starts `openclaw gateway`.
+- **Stage 1 (deps)**: Installs MCP server Node.js dependencies.
+- **Stage 2 (runtime)**: Copies ZeroClaw binary from official image, copies MCP server node_modules, sets up non-root `limbo` user, exposes port 18789.
+- **Entrypoint**: Creates `/data/{vault,db,config,memory,backups,logs}`, runs migrations, renders `config.toml` from template via `envsubst`, starts `zeroclaw daemon`.
 
 ### Docker Known Issues (RESOLVED)
 
 These issues have been identified and fixed in the current Dockerfile. Do NOT waste turns rediscovering them:
 
-1. **Symlink vs copy for openclaw binary**: The `openclaw` binary MUST be a symlink (`ln -s`) to `/usr/local/lib/node_modules/openclaw/openclaw.mjs`, NOT a `COPY`. A regular file copy breaks `./dist/entry.js` relative path resolution.
-2. **git required in deps stage**: `node-llama-cpp` (openclaw transitive dep) needs `git` during `npm install`. The deps stage includes `apt-get install git`.
-3. **File ownership**: `/app` is owned by the `limbo` user. The entrypoint writes `openclaw.json` there at runtime, so it must be writable.
-4. **OpenClaw commands**: Use `openclaw gateway` to start the server. `openclaw serve` is NOT a valid command. Check `openclaw --help` for available commands.
-5. **Config location**: OpenClaw config is rendered to `/app/openclaw.json` at runtime. It is NOT at `~/.openclaw/openclaw.json`.
+1. **ZeroClaw binary is static**: Copied from `ghcr.io/zeroclaw-labs/zeroclaw:latest`. No npm install needed.
+2. **Config is TOML, not JSON**: `config.toml.template` is rendered via `envsubst` at runtime to `~/.zeroclaw/config.toml`.
+3. **MCP is native**: ZeroClaw spawns the MCP server directly from config.toml `[mcp.limbo-vault]` section. No mcporter needed.
 
 ## Paperclip API Reference
 

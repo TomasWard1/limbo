@@ -1,6 +1,6 @@
 # Limbo
 
-A personal memory agent. Captures ideas, remembers things, and connects knowledge across time — running quietly in a Docker container, accessible via Telegram or the OpenClaw gateway.
+A personal memory agent. Captures ideas, remembers things, and connects knowledge across time — running quietly in a Docker container, accessible via Telegram or the ZeroClaw gateway.
 
 ## What it is
 
@@ -88,9 +88,9 @@ npx limbo-ai start --reconfigure
 
 Message your bot and Limbo will respond — full agent with personality, memory logic, and vault tools.
 
-#### OpenClaw client
+#### ZeroClaw client
 
-Any [OpenClaw](https://openclaw.dev)-compatible chat client can connect to:
+Any ZeroClaw-compatible chat client can connect via WebSocket to:
 
 ```
 ws://localhost:18789
@@ -131,9 +131,8 @@ Managed automatically by `npx limbo-ai start`, stored in `~/.limbo/.env`.
 | `TELEGRAM_ENABLED` | no | `false` | Enable Telegram bot integration |
 | `TELEGRAM_BOT_TOKEN` | no | — | Telegram bot token (required if `TELEGRAM_ENABLED=true`) |
 | `TELEGRAM_AUTO_PAIR_FIRST_DM` | no | `false` | Auto-approves the first Telegram DM sender and persists access (must opt-in explicitly) |
-| `OPENCLAW_GATEWAY_TOKEN` | no | generated | Stable gateway token for OpenClaw-compatible clients |
 
-> \* API keys are required only for `AUTH_MODE=api-key`. Subscription auth uses OpenClaw auth profiles instead.
+> \* API keys are required only for `AUTH_MODE=api-key`. Subscription auth uses ZeroClaw auth profiles instead.
 
 ---
 
@@ -159,7 +158,7 @@ Full tool specs in `workspace/TOOLS.md`.
 │              Docker Container           │
 │                                         │
 │  ┌─────────────┐    ┌────────────────┐  │
-│  │  OpenClaw   │◄──►│  LLM (Claude   │  │
+│  │  ZeroClaw   │◄──►│  LLM (Claude   │  │
 │  │  Gateway    │    │  or OpenAI)    │  │
 │  │  :18789     │    └────────┬───────┘  │
 │  └──────┬──────┘             │          │
@@ -174,7 +173,7 @@ Full tool specs in `workspace/TOOLS.md`.
 └─────────────────────────────────────────┘
 ```
 
-- **OpenClaw** — gateway that handles client connections, routes to the LLM, and integrates MCP tools
+- **ZeroClaw** — lightweight Rust gateway that handles client connections, routes to the LLM, and integrates MCP tools
 - **MCP server** — Node.js server providing vault read/write tools
 - **Vault** — plain markdown files with YAML frontmatter, persisted in a named Docker volume
 - **Migrations** — lightweight Node.js migration runner for vault schema changes
