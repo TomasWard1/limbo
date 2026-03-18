@@ -1,6 +1,6 @@
 # Limbo
 
-A personal memory agent. Captures ideas, remembers things, and connects knowledge across time — running quietly in a Docker container, accessible via Telegram or the OpenClaw gateway.
+A personal memory agent. Captures ideas, remembers things, and connects knowledge across time — running quietly in a Docker container, accessible via Telegram or the ZeroClaw gateway.
 
 ## What it is
 
@@ -80,17 +80,11 @@ There are two ways to connect: **talk to Limbo** (conversational, with its perso
 
 #### Telegram (recommended)
 
-Set `TELEGRAM_ENABLED=true` and `TELEGRAM_BOT_TOKEN` in `~/.limbo/.env`, then restart:
+During setup (`npx limbo-ai start`), the wizard will walk you through creating a Telegram bot via BotFather and pairing it. Message your bot and Limbo will respond — full agent with personality, memory logic, and vault tools.
 
-```sh
-npx limbo-ai start --reconfigure
-```
+#### ZeroClaw gateway
 
-Message your bot and Limbo will respond — full agent with personality, memory logic, and vault tools.
-
-#### OpenClaw client
-
-Any [OpenClaw](https://openclaw.dev)-compatible chat client can connect to:
+Any [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw)-compatible chat client can connect to:
 
 ```
 ws://localhost:18789
@@ -130,10 +124,8 @@ Managed automatically by `npx limbo-ai start`, stored in `~/.limbo/.env`.
 | `MODEL_NAME` | no | `claude-opus-4-6` | Model name (e.g. `claude-opus-4-6`, `claude-sonnet-4-6`, `gpt-5.4`) |
 | `TELEGRAM_ENABLED` | no | `false` | Enable Telegram bot integration |
 | `TELEGRAM_BOT_TOKEN` | no | — | Telegram bot token (required if `TELEGRAM_ENABLED=true`) |
-| `TELEGRAM_AUTO_PAIR_FIRST_DM` | no | `false` | Auto-approves the first Telegram DM sender and persists access (must opt-in explicitly) |
-| `OPENCLAW_GATEWAY_TOKEN` | no | generated | Stable gateway token for OpenClaw-compatible clients |
 
-> \* API keys are required only for `AUTH_MODE=api-key`. Subscription auth uses OpenClaw auth profiles instead.
+> \* API keys are required only for `AUTH_MODE=api-key`. Subscription auth uses ZeroClaw auth profiles instead.
 
 ---
 
@@ -159,13 +151,13 @@ Full tool specs in `workspace/TOOLS.md`.
 │              Docker Container           │
 │                                         │
 │  ┌─────────────┐    ┌────────────────┐  │
-│  │  OpenClaw   │◄──►│  LLM (Claude   │  │
-│  │  Gateway    │    │  or OpenAI)    │  │
+│  │  ZeroClaw   │◄──►│  LLM (Claude   │  │
+│  │  daemon     │    │  or OpenAI)    │  │
 │  │  :18789     │    └────────┬───────┘  │
 │  └──────┬──────┘             │          │
 │         │           ┌────────▼───────┐  │
-│  Telegram Bot        │  MCP Server   │  │
-│         │           │  limbo-vault  │  │
+│  Telegram Bot       │  MCP Server    │  │
+│         │           │  limbo-vault   │  │
 │         │           └────────┬───────┘  │
 │         └────────────────────┤          │
 │                              ▼          │
@@ -174,8 +166,8 @@ Full tool specs in `workspace/TOOLS.md`.
 └─────────────────────────────────────────┘
 ```
 
-- **OpenClaw** — gateway that handles client connections, routes to the LLM, and integrates MCP tools
-- **MCP server** — Node.js server providing vault read/write tools
+- **ZeroClaw** — lightweight Rust runtime (~5MB RAM) that handles client connections, routes to the LLM, manages Telegram, and integrates MCP tools natively
+- **MCP server** — Node.js server providing vault read/write tools (spawned by ZeroClaw, no mcporter needed)
 - **Vault** — plain markdown files with YAML frontmatter, persisted in a named Docker volume
 - **Migrations** — lightweight Node.js migration runner for vault schema changes
 
@@ -213,7 +205,7 @@ VAULT_PATH=./dev-vault node index.js
 
 ```sh
 docker build -t limbo:dev .
-docker run --rm -e LLM_API_KEY=sk-ant-... -p 18789:18789 limbo:dev
+docker compose up -d
 ```
 
 ### Run migrations standalone
