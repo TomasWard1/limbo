@@ -159,9 +159,12 @@ function composeContent() {
       - ${VAULT_DIR}:/data/vault
       - limbo-zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
+      - source: llm_api_key
+        mode: 0444
+      - source: telegram_bot_token
+        mode: 0444
+      - source: gateway_token
+        mode: 0444
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
@@ -218,9 +221,12 @@ function composeContentHardened() {
       - ${VAULT_DIR}:/data/vault
       - limbo-zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
+      - source: llm_api_key
+        mode: 0444
+      - source: telegram_bot_token
+        mode: 0444
+      - source: gateway_token
+        mode: 0444
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
