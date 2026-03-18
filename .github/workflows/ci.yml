@@ -44,3 +44,17 @@ jobs:
       - name: Check for syntax errors in MCP server
         working-directory: mcp-server
         run: node --check index.js
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run unit tests
+        run: node --test test/cli-filter.test.js test/zeroclaw-migration.test.js

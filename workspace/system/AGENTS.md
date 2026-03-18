@@ -1,6 +1,6 @@
 # How to Use Your Tools
 
-You have 4 vault tools accessible via `mcporter call`. This document explains when and how to use each one correctly.
+You have 4 vault tools available as native MCP tools. ZeroClaw invokes these directly — call them by name. This document explains when and how to use each one correctly.
 
 ## General Rules
 
@@ -15,8 +15,9 @@ You have 4 vault tools accessible via `mcporter call`. This document explains wh
 
 Use when: the user asks a question, recalls something, or you need to check if a note already exists.
 
-```sh
-mcporter call limbo-vault.vault_search query="your search term"
+Call `vault_search` with:
+```json
+{ "query": "your search term" }
 ```
 
 - `query` accepts regex or plain keywords
@@ -36,8 +37,9 @@ mcporter call limbo-vault.vault_search query="your search term"
 
 Use when: you found a note via search and need its full content.
 
-```sh
-mcporter call limbo-vault.vault_read noteId="note-id-here"
+Call `vault_read` with:
+```json
+{ "noteId": "note-id-here" }
 ```
 
 - `noteId` is the filename without the `.md` extension
@@ -50,14 +52,16 @@ mcporter call limbo-vault.vault_read noteId="note-id-here"
 
 Use when: the user shares something worth remembering, or asks you to capture/save something.
 
-```sh
-mcporter call limbo-vault.vault_write_note \
-  id="note-id" \
-  title="Note Title" \
-  type="fact" \
-  description="One sentence summarizing the core idea." \
-  content="Full markdown body." \
-  map="optional-moc-name"
+Call `vault_write_note` with:
+```json
+{
+  "id": "note-id",
+  "title": "Note Title",
+  "type": "fact",
+  "description": "One sentence summarizing the core idea.",
+  "content": "Full markdown body.",
+  "map": "optional-moc-name"
+}
 ```
 
 **ID conventions:**
@@ -88,11 +92,13 @@ mcporter call limbo-vault.vault_write_note \
 
 Use when: you've written a note that belongs to a Map of Content (MOC), or the user asks to organize notes.
 
-```sh
-mcporter call limbo-vault.vault_update_map \
-  map="map-name" \
-  section="Section Heading" \
-  entries='["[[note-id|Note Title]]"]'
+Call `vault_update_map` with:
+```json
+{
+  "map": "map-name",
+  "section": "Section Heading",
+  "entries": ["[[note-id|Note Title]]"]
+}
 ```
 
 - Creates the map file and/or section if they don't exist
@@ -109,16 +115,16 @@ mcporter call limbo-vault.vault_update_map \
 ## Common Patterns
 
 **Capture a new fact:**
-1. `mcporter call limbo-vault.vault_search query="..."` to check for duplicates
-2. `mcporter call limbo-vault.vault_write_note ...` with appropriate type and map
-3. `mcporter call limbo-vault.vault_update_map ...` if a relevant MOC exists
+1. `vault_search` with `{ "query": "..." }` to check for duplicates
+2. `vault_write_note` with appropriate type and map
+3. `vault_update_map` if a relevant MOC exists
 
 **Answer a recall question:**
-1. `mcporter call limbo-vault.vault_search query="..."` with relevant keywords
-2. `mcporter call limbo-vault.vault_read noteId="..."` on top results if needed
+1. `vault_search` with `{ "query": "..." }` with relevant keywords
+2. `vault_read` with `{ "noteId": "..." }` on top results if needed
 3. Synthesize and respond — cite note IDs when quoting
 
 **Organize a topic:**
-1. `mcporter call limbo-vault.vault_search query="..."` to find all related notes
-2. `mcporter call limbo-vault.vault_update_map ...` to collect them under a coherent section
+1. `vault_search` with `{ "query": "..." }` to find all related notes
+2. `vault_update_map` to collect them under a coherent section
 3. Report what you found and organized

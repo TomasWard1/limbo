@@ -72,14 +72,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           description: { type: "string", description: "One-sentence falsifiable description of the note's claim" },
           content: { type: "string", description: "Full markdown body of the note" },
-          subdirectory: { type: "string", description: "Optional subdirectory under notes/ (e.g. 'openclaw', 'research', 'aios/infrastructure'). Created if it doesn't exist." },
+          subdirectory: { type: "string", description: "Optional subdirectory under notes/ (e.g. 'limbo', 'research', 'aios/infrastructure'). Created if it doesn't exist." },
           status: { type: "string", description: "Optional: current, outdated, superseded. Defaults to none." },
-          domain: { type: "string", description: "Optional: knowledge domain (e.g. openclaw, aios, research, personal)" },
+          domain: { type: "string", description: "Optional: knowledge domain (e.g. limbo, aios, research, personal)" },
           source: { type: "string", description: "Optional: provenance (e.g. limbo, claude-code, web)" },
           topics: {
             type: "array",
             items: { type: "string" },
-            description: "Optional: map references as wikilinks, e.g. [\"[[openclaw-map]]\"]",
+            description: "Optional: map references as wikilinks, e.g. [\"[[limbo-map]]\"]",
           },
         },
         required: ["id", "title", "type", "description", "content"],
@@ -94,7 +94,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           map: {
             type: "string",
-            description: "Map filename without extension (e.g. 'openclaw-map', 'ai-research-map')",
+            description: "Map filename without extension (e.g. 'limbo-map', 'ai-research-map')",
           },
           section: {
             type: "string",

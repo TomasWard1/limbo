@@ -23,7 +23,7 @@ const DEFAULT_PORT = 18789;
 const COEXIST_PORT = 18900;
 let PORT = DEFAULT_PORT;
 
-// ─── OpenClaw Detection ─────────────────────────────────────────────────────
+// ─── ZeroClaw Detection ─────────────────────────────────────────────────────
 
 function isPortInUse(port) {
   try {
@@ -37,7 +37,7 @@ function isPortInUse(port) {
   }
 }
 
-function detectExistingOpenClaw() {
+function detectExistingZeroClaw() {
   if (!isPortInUse(DEFAULT_PORT)) return null;
 
   let processInfo = 'unknown process';
@@ -46,7 +46,7 @@ function detectExistingOpenClaw() {
     if (lsof) {
       const pid = lsof.split('\n')[0];
       const cmdline = execSync(`ps -p ${pid} -o command= 2>/dev/null`, { encoding: 'utf8', stdio: 'pipe' }).trim();
-      if (cmdline.includes('openclaw')) processInfo = 'OpenClaw';
+      if (cmdline.includes('zeroclaw')) processInfo = 'ZeroClaw';
       else if (cmdline.includes('docker')) processInfo = 'Docker container';
       else processInfo = cmdline.slice(0, 60);
     }
@@ -57,6 +57,7 @@ function detectExistingOpenClaw() {
 
 function findExistingApiKeys() {
   const searchPaths = [
+    path.join(os.homedir(), '.zeroclaw', '.env'),
     '/opt/openclaw/.env',
     '/opt/openclaw/secrets/llm_api_key',
     path.join(os.homedir(), '.openclaw', '.env'),
@@ -88,10 +89,10 @@ function findExistingApiKeys() {
   return null;
 }
 
-// OpenClaw compatibility snapshots from official docs:
-// - https://docs.openclaw.ai/providers/openai
-// - https://docs.openclaw.ai/providers/anthropic
-// - https://docs.openclaw.ai/start/wizard-cli-reference
+// ZeroClaw compatibility snapshots from official docs:
+// - https://docs.zeroclaw.dev/providers/openai
+// - https://docs.zeroclaw.dev/providers/anthropic
+// - https://docs.zeroclaw.dev/start/wizard-cli-reference
 const MODEL_CATALOG = {
   'openai:subscription': {
     provider: 'openai-codex',
@@ -156,7 +157,7 @@ function composeContent() {
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
-      - limbo-openclaw-state:/home/limbo/.openclaw
+      - limbo-zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -164,20 +165,16 @@ function composeContent() {
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
-      OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
-      OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
     healthcheck:
       test:
         - CMD-SHELL
-        - >-
-          NODE_OPTIONS= node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
-          done=(c)=>{try{s.destroy()}catch{};process.exit(c)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);"
-      interval: 30s
-      timeout: 10s
+        - zeroclaw status --format=exit-code 2>/dev/null || node -e "require('http').get('http://127.0.0.1:'\${LIMBO_PORT:-18789}'/',r=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 5s
 
 secrets:
   llm_api_key:
@@ -189,7 +186,7 @@ secrets:
 
 volumes:
   limbo-data:
-  limbo-openclaw-state:
+  limbo-zeroclaw-state:
 `;
 }
 
@@ -216,7 +213,7 @@ function composeContentHardened() {
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
-      - limbo-openclaw-state:/home/limbo/.openclaw
+      - limbo-zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -224,10 +221,8 @@ function composeContentHardened() {
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
-      OPENCLAW_CONFIG_PATH: /home/limbo/.openclaw/openclaw.json
-      OPENCLAW_STATE_DIR: /home/limbo/.openclaw
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
       NO_PROXY: "127.0.0.1,localhost"
@@ -236,13 +231,11 @@ function composeContentHardened() {
     healthcheck:
       test:
         - CMD-SHELL
-        - >-
-          NODE_OPTIONS= node -e "const s=require('net').connect(${PORT},'127.0.0.1');const
-          done=(c)=>{try{s.destroy()}catch{};process.exit(c)};s.on('connect',()=>done(0));s.on('error',()=>done(1));setTimeout(()=>done(1),2000);"
-      interval: 30s
-      timeout: 10s
+        - zeroclaw status --format=exit-code 2>/dev/null || node -e "require('http').get('http://127.0.0.1:'\${LIMBO_PORT:-18789}'/',r=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 5s
 
   squid:
     image: ubuntu/squid:latest
@@ -280,7 +273,7 @@ secrets:
 
 volumes:
   limbo-data:
-  limbo-openclaw-state:
+  limbo-zeroclaw-state:
 `;
 }
 
@@ -339,11 +332,7 @@ const TEXT = {
     buildingFallback: 'Building from local Dockerfile...',
     buildOk: (tag) => `Built: ${GHCR_IMAGE}:${tag}`,
     starting: 'Starting Limbo...',
-    verifying: 'Verifying health...',
-    waitingHealth: (i, max) => `Waiting for container to be healthy... (${i}/${max})`,
-    healthTimeout: 'Container did not report healthy within timeout.',
-    logsHint: 'Check logs with: limbo logs',
-    healthy: 'Container is healthy.',
+    healthy: 'Limbo started.',
     subscriptionSetup: 'Provider authentication',
     openaiSubscriptionIntro: 'Limbo will authenticate with your OpenAI account. A URL will open in your browser — log in and authorize access.',
     anthropicSubscriptionIntro: 'Generate a Claude setup-token on any machine with `claude setup-token`, then paste it into the next step.',
@@ -369,7 +358,7 @@ const TEXT = {
     configOomOverride: '  If your server has enough RAM, increase the limit in .env:\n    LIMBO_NODE_OPTIONS=--max-old-space-size=2048',
     staleContainersFound: (n) => `Found ${n} running Limbo container(s). Stopping to free memory...`,
     staleContainersStopped: 'Stopped existing containers.',
-    composing: 'Initializing...',
+
     success: 'Limbo is running!',
     gateway: 'Gateway',
     gatewayToken: 'Gateway token',
@@ -459,11 +448,7 @@ const TEXT = {
     buildingFallback: 'Construyendo desde el Dockerfile local...',
     buildOk: (tag) => `Imagen construida: ${GHCR_IMAGE}:${tag}`,
     starting: 'Arrancando Limbo...',
-    verifying: 'Verificando health...',
-    waitingHealth: (i, max) => `Esperando a que el container quede healthy... (${i}/${max})`,
-    healthTimeout: 'El container no reporto healthy dentro del timeout.',
-    logsHint: 'Mira los logs con: limbo logs',
-    healthy: 'El container esta healthy.',
+    healthy: 'Limbo arrancó.',
     subscriptionSetup: 'Autenticacion del provider',
     openaiSubscriptionIntro: 'Limbo va a autenticarse con tu cuenta de OpenAI. Se va a abrir una URL en tu navegador — inicia sesion y autoriza el acceso.',
     anthropicSubscriptionIntro: 'Genera un Claude setup-token en cualquier maquina con `claude setup-token` y pegalo en el siguiente paso.',
@@ -489,7 +474,7 @@ const TEXT = {
     configOomOverride: '  Si tu servidor tiene suficiente RAM, podes aumentar el limite en .env:\n    LIMBO_NODE_OPTIONS=--max-old-space-size=2048',
     staleContainersFound: (n) => `Se encontraron ${n} container(s) de Limbo corriendo. Frenando para liberar memoria...`,
     staleContainersStopped: 'Containers existentes frenados.',
-    composing: 'Inicializando...',
+
     success: 'Limbo esta corriendo!',
     gateway: 'Gateway',
     gatewayToken: 'Token del gateway',
@@ -700,7 +685,7 @@ function generateGatewayToken() {
 }
 
 function normalizeConfig(cfg, existingEnv = {}) {
-  const gatewayToken = cfg.gatewayToken || existingEnv.OPENCLAW_GATEWAY_TOKEN || generateGatewayToken();
+  const gatewayToken = cfg.gatewayToken || existingEnv.GATEWAY_TOKEN || generateGatewayToken();
   const base = {
     CLI_LANGUAGE: cfg.language || existingEnv.CLI_LANGUAGE || 'en',
     AUTH_MODE: cfg.authMode || existingEnv.AUTH_MODE || 'api-key',
@@ -713,7 +698,7 @@ function normalizeConfig(cfg, existingEnv = {}) {
     TELEGRAM_ENABLED: cfg.telegramEnabled || existingEnv.TELEGRAM_ENABLED || 'false',
     TELEGRAM_BOT_TOKEN: cfg.telegramToken || (cfg.keepExisting ? existingEnv.TELEGRAM_BOT_TOKEN || '' : ''),
     TELEGRAM_AUTO_PAIR_FIRST_DM: cfg.telegramAutoPair || existingEnv.TELEGRAM_AUTO_PAIR_FIRST_DM || 'false',
-    OPENCLAW_GATEWAY_TOKEN: gatewayToken,
+    GATEWAY_TOKEN: gatewayToken,
   };
 
   return base;
@@ -729,12 +714,12 @@ function writeSecrets(cfg, existingEnv = {}) {
   const normalized = normalizeConfig(cfg, existingEnv);
   writeSecretFile('llm_api_key', normalized.LLM_API_KEY);
   writeSecretFile('telegram_bot_token', normalized.TELEGRAM_BOT_TOKEN);
-  writeSecretFile('gateway_token', normalized.OPENCLAW_GATEWAY_TOKEN);
+  writeSecretFile('gateway_token', normalized.GATEWAY_TOKEN);
 }
 
 const SECRET_KEYS = new Set([
   'LLM_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY',
-  'TELEGRAM_BOT_TOKEN', 'OPENCLAW_GATEWAY_TOKEN',
+  'TELEGRAM_BOT_TOKEN', 'GATEWAY_TOKEN',
 ]);
 
 function writeEnv(cfg, existingEnv = {}) {
@@ -746,18 +731,6 @@ function writeEnv(cfg, existingEnv = {}) {
   fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
 }
 
-function waitForHealthy(lang, maxAttempts = 12) {
-  for (let i = 1; i <= maxAttempts; i++) {
-    try {
-      const raw = runQuiet('docker compose ps --format json');
-      if (raw.includes('"healthy"')) { spinnerClear(); return true; }
-    } catch {}
-    spinnerWrite(`${t(lang, 'waitingHealth', i, maxAttempts)}`);
-    sleep(5000);
-  }
-  spinnerClear();
-  return false;
-}
 
 function deriveProviderFamily(provider) {
   if (!provider) return 'anthropic';
@@ -807,7 +780,7 @@ async function chooseModel(lang, providerFamily, authMode) {
 async function collectConfig(existingEnv = {}) {
   console.log(`${c.cyan}${ASCII_ART}${c.reset}`);
 
-  // Check for existing API keys from another OpenClaw installation
+  // Check for existing API keys from another ZeroClaw installation
   const existingKeys = findExistingApiKeys();
   if (existingKeys && !existingEnv.LLM_API_KEY && !existingEnv.ANTHROPIC_API_KEY && !existingEnv.OPENAI_API_KEY) {
     const keyValue = existingKeys.keys.LLM_API_KEY || existingKeys.keys.ANTHROPIC_API_KEY || existingKeys.keys.OPENAI_API_KEY || existingKeys.keys.OPENROUTER_API_KEY || '';
@@ -936,7 +909,7 @@ async function collectConfig(existingEnv = {}) {
     telegramEnabled: telegramChoice.value,
     telegramToken,
     telegramAutoPair,
-    gatewayToken: existingEnv.OPENCLAW_GATEWAY_TOKEN || generateGatewayToken(),
+    gatewayToken: existingEnv.GATEWAY_TOKEN || generateGatewayToken(),
   };
 }
 
@@ -973,9 +946,9 @@ function ensureGatewayToken(existingEnv) {
   // Check secret file first, then legacy env
   const fromFile = readSecretFile('gateway_token');
   if (fromFile) return fromFile;
-  if (existingEnv.OPENCLAW_GATEWAY_TOKEN) {
-    writeSecretFile('gateway_token', existingEnv.OPENCLAW_GATEWAY_TOKEN);
-    return existingEnv.OPENCLAW_GATEWAY_TOKEN;
+  if (existingEnv.GATEWAY_TOKEN) {
+    writeSecretFile('gateway_token', existingEnv.GATEWAY_TOKEN);
+    return existingEnv.GATEWAY_TOKEN;
   }
   writeEnv({ keepExisting: true }, existingEnv);
   return readSecretFile('gateway_token');
@@ -1000,11 +973,6 @@ function pullOrBuildImage(lang) {
   }
 }
 
-function runOpenClaw(args, opts = {}) {
-  // 1024MB heap: openclaw config needs ~800MB; 512/768 OOM in 2GB VPS tests.
-  return runDockerCompose(['run', '--rm', '-e', 'NODE_OPTIONS=--max-old-space-size=1024', '--entrypoint', 'openclaw', 'limbo', ...args], opts);
-}
-
 // Fix volume ownership before any docker compose run commands.
 // cap_drop:ALL strips CAP_DAC_OVERRIDE from root, so a root-user container
 // cannot write to limbo-owned volumes.  This one-shot container runs as root
@@ -1016,7 +984,7 @@ function ensureVolumePermissions() {
     '--cap-add', 'DAC_OVERRIDE',
     '--entrypoint', 'sh',
     'limbo',
-    '-c', 'chown -R limbo:limbo /data /home/limbo/.openclaw 2>/dev/null; true',
+    '-c', 'chown -R limbo:limbo /data /home/limbo/.zeroclaw 2>/dev/null; true',
   ], { stdio: 'pipe' });
 }
 
@@ -1027,123 +995,43 @@ function isServerEnvironment() {
     (os.platform() === 'linux' && !process.env.DISPLAY));
 }
 
-function hasCloudflared() {
-  try { execSync('which cloudflared', { stdio: 'pipe' }); return true; } catch { return false; }
-}
-
-function installCloudflared() {
-  log('Installing cloudflared...');
-  const platform = os.platform();
+// Creates a public HTTPS tunnel via localhost.run (SSH-based, zero install).
+// Falls back gracefully if SSH is unavailable or the service is down.
+async function createSetupTunnel(port) {
   try {
-    if (platform === 'linux') {
-      execSync('curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared && chmod +x /tmp/cloudflared && sudo mv /tmp/cloudflared /usr/local/bin/cloudflared', { stdio: 'pipe' });
-    } else if (platform === 'darwin') {
-      execSync('brew install cloudflared', { stdio: 'pipe' });
-    }
-    return true;
-  } catch {
-    warn('Could not install cloudflared automatically.');
-    return false;
-  }
-}
-
-async function createSetupTunnel(port, tunnelDomain) {
-  if (!hasCloudflared() && !installCloudflared()) return null;
-  if (!hasCloudflared()) return null;
-
-  const tunnelId = crypto.randomBytes(4).toString('hex');
-
-  // Admin mode: branded subdomain (requires cloudflared login for the zone)
-  if (tunnelDomain) {
-    const tunnelName = `limbo-setup-${tunnelId}`;
-    const subdomain = `setup-${tunnelId}.${tunnelDomain}`;
-    try {
-      execSync(`cloudflared tunnel create ${tunnelName}`, { stdio: 'pipe', encoding: 'utf8' });
-      execSync(`cloudflared tunnel route dns ${tunnelName} ${subdomain}`, { stdio: 'pipe', encoding: 'utf8' });
-
-      const cfHome = path.join(os.homedir(), '.cloudflared');
-      const tunnelInfoRaw = execSync(`cloudflared tunnel info ${tunnelName} 2>&1`, { encoding: 'utf8', stdio: 'pipe' });
-      const tunnelUuid = tunnelInfoRaw.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/)?.[1];
-      if (!tunnelUuid) throw new Error('Could not find tunnel UUID');
-
-      const credFile = path.join(cfHome, `${tunnelUuid}.json`);
-      const configPath = path.join(LIMBO_DIR, 'cloudflared-setup.yml');
-      fs.writeFileSync(configPath, [
-        `tunnel: ${tunnelUuid}`,
-        `credentials-file: ${credFile}`,
-        'ingress:',
-        `  - hostname: ${subdomain}`,
-        `    service: http://localhost:${port}`,
-        '  - service: http_status:404',
-      ].join('\n'));
-
-      const tunnelProc = spawn('cloudflared', ['tunnel', '--config', configPath, 'run'], {
-        detached: true, stdio: 'ignore',
-      });
-      tunnelProc.unref();
-      sleep(5000);
-
-      return { type: 'branded', url: `https://${subdomain}`, tunnelName, tunnelUuid, configPath, pid: tunnelProc.pid };
-    } catch (err) {
-      warn(`Could not create branded tunnel: ${err.message}`);
-      warn('Make sure you ran `cloudflared login` for this domain first.');
-      // Fall through to quick tunnel
-    }
-  }
-
-  // Default: quick tunnel (zero config, works for everyone)
-  try {
-    const logFile = path.join(LIMBO_DIR, 'cloudflared-setup.log');
-    const tunnelProc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--config', '/dev/null', '--url', `http://localhost:${port}`], {
+    const logFile = path.join(LIMBO_DIR, 'tunnel-setup.log');
+    // localhost.run provides instant HTTPS URLs via SSH reverse tunneling.
+    // No binary to install, no DNS propagation delay, no Chrome caching issues.
+    const tunnelProc = spawn('ssh', [
+      '-o', 'StrictHostKeyChecking=accept-new',
+      '-o', 'ServerAliveInterval=30',
+      '-R', `80:localhost:${port}`,
+      'nokey@localhost.run',
+    ], {
       detached: true,
       stdio: ['ignore', fs.openSync(logFile, 'w'), fs.openSync(logFile, 'a')],
     });
     tunnelProc.unref();
 
-    // Wait for tunnel URL to appear in logs
+    // localhost.run prints the URL almost instantly (no DNS propagation needed)
     let tunnelUrl = null;
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 10; i++) {
+      spinnerWrite('Securing tunnel...');
       sleep(1000);
       try {
         const logs = fs.readFileSync(logFile, 'utf8');
-        const match = logs.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+        const match = logs.match(/https:\/\/[a-z0-9]+\.lhr\.life/);
         if (match) { tunnelUrl = match[0]; break; }
       } catch {}
     }
+    spinnerClear();
+
     if (!tunnelUrl) {
-      warn('Could not start cloudflare tunnel.');
+      warn('Could not create public tunnel. Use SSH port forwarding instead.');
+      try { tunnelProc.kill(); } catch {}
       return null;
     }
 
-    // Warmup: wait for DNS to propagate AND tunnel to respond before returning.
-    // Chrome uses its own DoH resolver and won't see the URL until DNS is globally propagated.
-    // We check DNS resolution (not just HTTP reachability) to ensure browsers can reach it.
-    const https = require('https');
-    const dns = require('dns').promises;
-    const tunnelHost = tunnelUrl.replace('https://', '');
-    let reachable = false;
-    for (let i = 0; i < 30; i++) {
-      spinnerWrite(`Waiting for tunnel to be reachable... (${i + 1}/30)`);
-      try {
-        // First verify DNS resolves (catches DoH propagation issues)
-        await dns.lookup(tunnelHost);
-        // Then verify HTTP responds
-        const ok = await new Promise((resolve) => {
-          const req = https.get(tunnelUrl, { timeout: 5000 }, (res) => {
-            res.resume();
-            resolve(res.statusCode < 500);
-          });
-          req.on('error', () => resolve(false));
-          req.on('timeout', () => { req.destroy(); resolve(false); });
-        });
-        if (ok) { reachable = true; break; }
-      } catch {}
-      sleep(2000);
-    }
-    spinnerClear();
-    if (!reachable) {
-      warn('Tunnel created but DNS has not fully propagated. The URL may take a moment to work.');
-    }
     return { type: 'quick', url: tunnelUrl, pid: tunnelProc.pid, logFile };
   } catch {
     return null;
@@ -1153,11 +1041,6 @@ async function createSetupTunnel(port, tunnelDomain) {
 function teardownSetupTunnel(tunnel) {
   if (!tunnel) return;
   try { process.kill(tunnel.pid); } catch {}
-
-  if (tunnel.type === 'branded') {
-    try { execSync(`cloudflared tunnel delete -f ${tunnel.tunnelName}`, { stdio: 'pipe' }); } catch {}
-    try { fs.unlinkSync(tunnel.configPath); } catch {}
-  }
   if (tunnel.logFile) try { fs.unlinkSync(tunnel.logFile); } catch {}
 }
 
@@ -1189,13 +1072,6 @@ function installGlobalAlias() {
   // Silent failure — not critical, user can still use npx limbo-ai
 }
 
-function isOomError(stderr) {
-  return typeof stderr === 'string' && (
-    stderr.includes('heap out of memory') ||
-    stderr.includes('Allocation failed') ||
-    stderr.includes('FATAL ERROR: Reached heap limit')
-  );
-}
 
 function countRunningLimboContainers() {
   try {
@@ -1217,77 +1093,9 @@ function stopExistingContainers(lang) {
   return running;
 }
 
-function handleConfigOom(lang) {
-  console.log('');
-  die([
-    t(lang, 'configOom'),
-    countRunningLimboContainers() > 0
-      ? t(lang, 'configOomContainers', countRunningLimboContainers())
-      : t(lang, 'configOomHint'),
-    t(lang, 'configOomOverride'),
-  ].join('\n'));
-}
-
-function applyOpenClawConfig(cfg) {
-  header(t(cfg.language, 'configFlowStart'));
-  log(t(cfg.language, 'configFlowSlow'));
-
-  // Stop existing containers to free memory before running config commands
-  stopExistingContainers(cfg.language);
-
-  const setCommands = [
-    ['config', 'set', 'gateway.mode', 'local'],
-    ['config', 'set', 'gateway.port', String(PORT), '--strict-json'],
-    ['config', 'set', 'gateway.bind', 'loopback'],
-    ['config', 'set', 'gateway.auth.mode', 'token'],
-    ['config', 'set', 'agents.defaults.workspace', '/data/workspace'],
-    ['config', 'set', 'agents.defaults.model.primary', `${cfg.provider}/${cfg.modelName}`],
-  ];
-
-  if (cfg.telegramEnabled === 'true') {
-    setCommands.push(
-      ['config', 'set', 'channels.telegram.enabled', 'true', '--strict-json'],
-      ['config', 'set', 'channels.telegram.botToken', cfg.telegramToken],
-    );
-  }
-
-  const total = setCommands.length + 1; // +1 for validate
-  let step = 0;
-
-  for (const command of setCommands) {
-    step++;
-    process.stdout.write(`\r${c.dim}  [${step}/${total}] ${command.slice(1, 4).join(' ')}${c.reset}`.padEnd(60));
-    const result = runOpenClaw(command, { stdio: 'pipe' });
-    if (result.status !== 0) {
-      if (isOomError(result.stderr)) handleConfigOom(cfg.language);
-      console.log('');
-      process.stdout.write(result.stdout || '');
-      process.stderr.write(result.stderr || '');
-      die(t(cfg.language, 'configFlowFailed'));
-    }
-  }
-
-  if (cfg.telegramEnabled !== 'true') {
-    runOpenClaw(['config', 'unset', 'channels.telegram'], { stdio: 'pipe' });
-  }
-
-  step++;
-  process.stdout.write(`\r${c.dim}  [${step}/${total}] config validate${c.reset}`.padEnd(60));
-  const validateResult = runOpenClaw(['config', 'validate'], { stdio: 'pipe' });
-  if (validateResult.status !== 0) {
-    if (isOomError(validateResult.stderr)) handleConfigOom(cfg.language);
-    console.log('');
-    process.stdout.write(validateResult.stdout || '');
-    process.stderr.write(validateResult.stderr || '');
-    die(t(cfg.language, 'configFlowFailed'));
-  }
-
-  process.stdout.write('\r' + ' '.repeat(60) + '\r');
-  ok(t(cfg.language, 'configFlowDone'));
-}
 
 // ─── Native OAuth (PKCE) for OpenAI Codex ───────────────────────────────────
-// Implements the full OAuth flow locally so we never need OpenClaw's interactive TUI.
+// Implements the full OAuth flow locally so we never need ZeroClaw's interactive TUI.
 
 const OPENAI_OAUTH = {
   clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
@@ -1366,7 +1174,7 @@ function decodeJwtPayload(token) {
 
 function writeAuthProfilesToDocker(store) {
   const json = JSON.stringify(store, null, 2);
-  const destDir = '/home/limbo/.openclaw/agents/main/agent';
+  const destDir = '/home/limbo/.zeroclaw/agents/main/agent';
   const destFile = `${destDir}/auth-profiles.json`;
   spawnSync('docker', [
     'compose', 'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
@@ -1564,8 +1372,9 @@ function installDocker() {
   }
 }
 
-function extractWizardUrl(maxAttempts = 15) {
-  for (let i = 1; i <= maxAttempts; i++) {
+function extractWizardUrl(maxWaitSecs = 15) {
+  const deadline = Date.now() + maxWaitSecs * 1000;
+  while (Date.now() < deadline) {
     try {
       const logs = runDockerCompose(['logs', '--no-log-prefix'], {
         stdio: 'pipe',
@@ -1575,8 +1384,8 @@ function extractWizardUrl(maxAttempts = 15) {
       const match = output.match(/SETUP_URL=(https?:\/\/\S+)/);
       if (match) { spinnerClear(); return match[1]; }
     } catch {}
-    spinnerWrite(`Waiting for setup wizard URL... (${i}/${maxAttempts})`);
-    sleep(2000);
+    spinnerWrite('Starting...');
+    sleep(500);
   }
   spinnerClear();
   return null;
@@ -1586,32 +1395,48 @@ function printWizardUrl(url, tunnel) {
   // Extract token from the original URL
   const tokenMatch = url.match(/[?&]token=([^&\s]+)/);
   const token = tokenMatch ? tokenMatch[1] : '';
-
-  let displayUrl;
-  if (tunnel) {
-    displayUrl = `${tunnel.url}/?token=${token}`;
-  } else {
-    displayUrl = url.replace('0.0.0.0', '127.0.0.1');
-  }
+  const localUrl = url.replace('0.0.0.0', '127.0.0.1');
+  const isSSH = !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT);
 
   console.log(`
 ${c.green}${c.bold}╔════════════════════════════════════════════════════════╗${c.reset}
 ${c.green}${c.bold}║            Setup wizard is ready!                      ║${c.reset}
 ${c.green}${c.bold}╚════════════════════════════════════════════════════════╝${c.reset}
+`);
 
-  Open this URL to complete setup:
+  if (tunnel) {
+    const tunnelUrl = `${tunnel.url}/?token=${token}`;
+    console.log(`  ${c.green}Public URL (works from any browser):${c.reset}
+  ${c.cyan}${c.bold}${tunnelUrl}${c.reset}
+`);
+  }
 
-  ${c.cyan}${c.bold}${displayUrl}${c.reset}
-${tunnel ? `
-  ${c.green}🔒 Secured via Cloudflare (${tunnel.type === 'branded' ? tunnel.url.replace('https://', '') : 'HTTPS tunnel'})${c.reset}` : ''}
-  The wizard will guide you through provider, API key, and model selection.
+  if (isSSH) {
+    // SSH_CONNECTION = "client_ip client_port server_ip server_port"
+    const sshParts = (process.env.SSH_CONNECTION || '').split(' ');
+    const serverHost = sshParts[2] || 'your-server';
+    const sshUser = process.env.USER || 'user';
+    console.log(`  ${c.green}SSH port forwarding (recommended):${c.reset}
+  Run this in a ${c.bold}new terminal${c.reset} on your computer:
+  ${c.yellow}ssh -L ${PORT}:localhost:${PORT} ${sshUser}@${serverHost}${c.reset}
+  Then open: ${c.cyan}${c.bold}${localUrl}${c.reset}
+`);
+  }
+
+  if (!tunnel && !isSSH) {
+    console.log(`  Open this URL to complete setup:
+  ${c.cyan}${c.bold}${localUrl}${c.reset}
+`);
+  }
+
+  console.log(`  The wizard will guide you through provider, API key, and model selection.
   Once complete, Limbo will restart and be ready to use.
 
   ${c.dim}Logs: limbo logs | Stop: limbo stop${c.reset}
 `);
-  // Auto-open on macOS
-  if (os.platform() === 'darwin' && !tunnel) {
-    try { execSync(`open "${displayUrl}"`, { stdio: 'pipe' }); } catch {}
+  // Auto-open on macOS (only when running locally, not via SSH/tunnel)
+  if (os.platform() === 'darwin' && !tunnel && !isSSH) {
+    try { execSync(`open "${localUrl}"`, { stdio: 'pipe' }); } catch {}
   }
 }
 
@@ -1639,7 +1464,7 @@ async function cmdStart() {
   const cliMode = process.argv.includes('--cli');
   const reconfig = process.argv.includes('--reconfigure');
 
-  // ── Detect existing OpenClaw / port selection ─────────────────────────────
+  // ── Detect existing ZeroClaw / port selection ─────────────────────────────
   const existingEnv = parseEnvFile();
   const alreadyHasEnv = fs.existsSync(ENV_FILE);
   const hasProviderConfig = alreadyHasEnv && existingEnv.MODEL_PROVIDER;
@@ -1652,13 +1477,13 @@ async function cmdStart() {
       PORT = parsed;
     }
   } else {
-    const existing = detectExistingOpenClaw();
+    const existing = detectExistingZeroClaw();
     if (existing) {
       console.log(`
-  ${c.yellow}${c.bold}Existing OpenClaw detected${c.reset}
+  ${c.yellow}${c.bold}Existing ZeroClaw detected${c.reset}
   ${c.dim}Port ${existing.port} is in use (${existing.processInfo})${c.reset}
 
-  Limbo will run its own OpenClaw instance on port ${c.bold}${COEXIST_PORT}${c.reset}.
+  Limbo will run its own ZeroClaw instance on port ${c.bold}${COEXIST_PORT}${c.reset}.
   Both can coexist safely — separate containers, separate data.
 `);
       PORT = COEXIST_PORT;
@@ -1753,38 +1578,31 @@ async function cmdStart() {
   ensureVolumePermissions();
 
   header('Starting Limbo...');
-  log('Starting container...');
   const upResult = runDockerCompose(['up', '-d', '--remove-orphans'], { stdio: 'pipe' });
   if (upResult.status !== 0) {
     process.stderr.write(upResult.stderr || '');
     die('Container failed to start. Run `limbo logs` to investigate.');
   }
 
-  header('Waiting for setup wizard...');
-  const healthy = waitForHealthy('en');
-  if (!healthy) {
-    warn('Container did not become healthy in time.');
-    warn('Check logs with: limbo logs');
-  } else {
-    ok('Container is healthy.');
+  // Extract wizard URL from container logs (polls briefly, no healthcheck needed)
+  const wizardUrl = extractWizardUrl();
+
+  // On servers, try to create a public tunnel (non-blocking — show localhost/SSH first)
+  let tunnel = null;
+  if (isServerEnvironment()) {
+    tunnel = await createSetupTunnel(PORT);
   }
 
-  const wizardUrl = extractWizardUrl();
   if (wizardUrl) {
-    // On servers, create a secure tunnel for remote access
-    let tunnel = null;
-    if (isServerEnvironment()) {
-      log('Server environment detected — creating secure tunnel...');
-      tunnel = await createSetupTunnel(PORT, flagTunnelDomain);
-    }
     printWizardUrl(wizardUrl, tunnel);
   } else {
-    // Fallback: container may have started without setup mode (e.g. config already inside volume)
+    const fallbackUrl = `http://127.0.0.1:${PORT}`;
     console.log(`
-  ${c.yellow}Could not detect setup wizard URL.${c.reset}
-  The container may already be configured.
+  ${c.green}${c.bold}Limbo is starting.${c.reset}
 
-  Try: ${c.cyan}http://127.0.0.1:${PORT}${c.reset}
+  Open: ${c.cyan}${c.bold}${fallbackUrl}${c.reset}
+  ${c.dim}(may take a few seconds to be ready)${c.reset}
+
   Logs: ${c.dim}limbo logs${c.reset}
 `);
   }
@@ -1805,28 +1623,13 @@ async function startContainerWithConfig(cfg, existingEnv, alreadyHasEnv) {
     await runSubscriptionAuthFlow(cfg);
   }
 
-  applyOpenClawConfig({
-    ...cfg,
-    telegramToken: mergedEnv.TELEGRAM_BOT_TOKEN || cfg.telegramToken || '',
-    telegramEnabled: mergedEnv.TELEGRAM_ENABLED || cfg.telegramEnabled || 'false',
-  });
-
   header(t(cfg.language, 'starting'));
-  log(t(cfg.language, 'composing'));
   const upResult = runDockerCompose(['up', '-d', '--remove-orphans'], { stdio: 'pipe' });
   if (upResult.status !== 0) {
     process.stderr.write(upResult.stderr || '');
     die('Container failed to start. Run `limbo logs` to investigate.');
   }
-
-  header(t(cfg.language, 'verifying'));
-  const healthy = waitForHealthy(cfg.language);
-  if (!healthy) {
-    warn(t(cfg.language, 'healthTimeout'));
-    warn(t(cfg.language, 'logsHint'));
-  } else {
-    ok(t(cfg.language, 'healthy'));
-  }
+  ok(t(cfg.language, 'healthy'));
 
   console.log(`\n  ${c.yellow}⚠  ${t(cfg.language, 'securityNotice')}${c.reset}\n`);
 
@@ -1835,7 +1638,7 @@ async function startContainerWithConfig(cfg, existingEnv, alreadyHasEnv) {
   printSuccess({
     language: cfg.language,
     telegramEnabled: mergedEnv.TELEGRAM_ENABLED || cfg.telegramEnabled || 'false',
-  }, readSecretFile('gateway_token') || mergedEnv.OPENCLAW_GATEWAY_TOKEN);
+  }, readSecretFile('gateway_token') || mergedEnv.GATEWAY_TOKEN);
 }
 
 function cmdStop() {
@@ -1863,20 +1666,6 @@ function cmdUpdate() {
     compose = patched;
     fs.writeFileSync(COMPOSE_FILE, compose);
     log('Patched compose image tag to :latest');
-  }
-
-  // Inject NODE_OPTIONS into existing compose files to prevent OOM on low-memory VPS.
-  // Uses LIMBO_NODE_OPTIONS env var with 1024MB default so users on bigger servers can override.
-  if (!compose.includes('NODE_OPTIONS')) {
-    const injected = compose.replace(
-      /^(\s+)(LIMBO_PORT:\s*.+)$/m,
-      '$1$2\n$1NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=1024}"'
-    );
-    if (injected !== compose) {
-      compose = injected;
-      fs.writeFileSync(COMPOSE_FILE, compose);
-      log('Added NODE_OPTIONS to compose environment');
-    }
   }
 
   log('Pulling latest image...');
