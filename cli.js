@@ -1670,8 +1670,31 @@ function cmdLogs() {
   run('docker compose logs -f');
 }
 
+function selfUpdateCli() {
+  const pkg = require('./package.json');
+  try {
+    const latest = execSync('npm view limbo-ai version', { encoding: 'utf8', timeout: 10000 }).trim();
+    if (!latest || latest === pkg.version) return;
+    const cur = pkg.version.split('.').map(Number);
+    const lat = latest.split('.').map(Number);
+    const isNewer = lat[0] > cur[0] || (lat[0] === cur[0] && lat[1] > cur[1]) ||
+      (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
+    if (!isNewer) return;
+
+    log(`Updating CLI: ${pkg.version} → ${latest}...`);
+    execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
+    ok(`CLI updated to ${latest}.`);
+  } catch {
+    warn('Could not self-update CLI. Run: npm install -g limbo-ai@latest');
+  }
+}
+
 function cmdUpdate() {
   if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
+
+  // Self-update the CLI if installed globally
+  const isGlobal = !process.argv[1].includes('npx') && !process.argv[1].includes('node_modules/.cache');
+  if (isGlobal) selfUpdateCli();
 
   // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
   let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
