@@ -74,7 +74,7 @@ test('config.toml.template does NOT contain unsupported sections', () => {
 
 test('config.toml.template uses envsubst variables', () => {
   const toml = read('config.toml.template');
-  const vars = ['${MODEL_PROVIDER}', '${MODEL_NAME}', '${LIMBO_PORT}'];
+  const vars = ['${MODEL_PROVIDER}', '${ZEROCLAW_MODEL}', '${LIMBO_PORT}'];
   for (const v of vars) {
     assert.ok(toml.includes(v), `Missing envsubst variable: ${v}`);
   }
@@ -108,7 +108,8 @@ test('entrypoint.sh appends channels_config.telegram conditionally', () => {
 
 test('Dockerfile pulls ZeroClaw binary from official image', () => {
   const df = read('Dockerfile');
-  assert.ok(df.includes('FROM ghcr.io/zeroclaw-labs/zeroclaw:latest AS zeroclaw'));
+  assert.ok(df.match(/FROM ghcr\.io\/zeroclaw-labs\/zeroclaw:\S+ AS zeroclaw/),
+    'Dockerfile must pull ZeroClaw from ghcr.io/zeroclaw-labs/zeroclaw');
   assert.ok(df.includes('COPY --from=zeroclaw /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw'));
 });
 
