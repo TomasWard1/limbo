@@ -13,7 +13,7 @@ RUN cd mcp-server && npm ci --omit=dev
 # ──────────────────────────────────────────────
 # Stage 2: ZeroClaw binary
 # ──────────────────────────────────────────────
-FROM ghcr.io/zeroclaw-labs/zeroclaw:latest AS zeroclaw
+FROM ghcr.io/zeroclaw-labs/zeroclaw:v0.5.0-beta.345 AS zeroclaw
 
 # ──────────────────────────────────────────────
 # Stage 3: final runtime image
