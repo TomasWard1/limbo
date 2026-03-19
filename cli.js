@@ -163,6 +163,8 @@ function composeContent() {
       - llm_api_key
       - telegram_bot_token
       - gateway_token
+      - groq_api_key
+      - brave_api_key
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
@@ -184,6 +186,10 @@ secrets:
     file: ${SECRETS_DIR}/telegram_bot_token
   gateway_token:
     file: ${SECRETS_DIR}/gateway_token
+  groq_api_key:
+    file: ${SECRETS_DIR}/groq_api_key
+  brave_api_key:
+    file: ${SECRETS_DIR}/brave_api_key
 
 volumes:
   limbo-data:
@@ -219,6 +225,8 @@ function composeContentHardened() {
       - llm_api_key
       - telegram_bot_token
       - gateway_token
+      - groq_api_key
+      - brave_api_key
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
@@ -271,6 +279,10 @@ secrets:
     file: ${SECRETS_DIR}/telegram_bot_token
   gateway_token:
     file: ${SECRETS_DIR}/gateway_token
+  groq_api_key:
+    file: ${SECRETS_DIR}/groq_api_key
+  brave_api_key:
+    file: ${SECRETS_DIR}/brave_api_key
 
 volumes:
   limbo-data:
@@ -700,6 +712,8 @@ function normalizeConfig(cfg, existingEnv = {}) {
     TELEGRAM_BOT_TOKEN: cfg.telegramToken || (cfg.keepExisting ? existingEnv.TELEGRAM_BOT_TOKEN || '' : ''),
     TELEGRAM_AUTO_PAIR_FIRST_DM: cfg.telegramAutoPair || existingEnv.TELEGRAM_AUTO_PAIR_FIRST_DM || 'false',
     GATEWAY_TOKEN: gatewayToken,
+    VOICE_ENABLED: cfg.voiceEnabled || existingEnv.VOICE_ENABLED || 'false',
+    WEB_SEARCH_ENABLED: cfg.webSearchEnabled || existingEnv.WEB_SEARCH_ENABLED || 'false',
   };
 
   return base;
@@ -719,6 +733,8 @@ function writeSecrets(cfg, existingEnv = {}) {
   writeSecretFile('llm_api_key', normalized.LLM_API_KEY);
   writeSecretFile('telegram_bot_token', normalized.TELEGRAM_BOT_TOKEN);
   writeSecretFile('gateway_token', normalized.GATEWAY_TOKEN);
+  writeSecretFile('groq_api_key', cfg.groqApiKey || readSecretFile('groq_api_key'));
+  writeSecretFile('brave_api_key', cfg.braveApiKey || readSecretFile('brave_api_key'));
 }
 
 const SECRET_KEYS = new Set([
@@ -923,7 +939,7 @@ function ensureComposeFile(hardened = false) {
   fs.mkdirSync(path.join(VAULT_DIR, 'maps'), { recursive: true });
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
   // Ensure secret files exist (Docker Compose secrets require the files to be present)
-  for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token']) {
+  for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
     const fp = path.join(SECRETS_DIR, name);
     if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o644 });
   }
@@ -1684,6 +1700,98 @@ function cmdStatus() {
   run('docker compose ps');
 }
 
+function cmdConfig() {
+  const args = process.argv.slice(3);
+  const feature = args[0];
+
+  if (!feature || !['voice', 'web-search'].includes(feature)) {
+    console.log(`
+${c.bold}Usage:${c.reset}
+  limbo config voice --enable --api-key <key>
+  limbo config voice --disable
+  limbo config voice --status
+  limbo config web-search --enable --api-key <key>
+  limbo config web-search --disable
+  limbo config web-search --status
+`);
+    return;
+  }
+
+  if (!fs.existsSync(ENV_FILE)) {
+    die('Limbo is not configured. Run "limbo start" first.');
+  }
+
+  const existingEnv = {};
+  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+  for (const line of envContent.split('\n')) {
+    const match = line.match(/^([A-Z_]+)=(.*)$/);
+    if (match) existingEnv[match[1]] = match[2].replace(/^"|"$/g, '');
+  }
+
+  const isVoice = feature === 'voice';
+  const envKey = isVoice ? 'VOICE_ENABLED' : 'WEB_SEARCH_ENABLED';
+  const secretName = isVoice ? 'groq_api_key' : 'brave_api_key';
+  const featureLabel = isVoice ? 'Voice transcription' : 'Web search';
+
+  const hasEnable = args.includes('--enable');
+  const hasDisable = args.includes('--disable');
+  const hasStatus = args.includes('--status');
+  const apiKeyIdx = args.indexOf('--api-key');
+  const apiKey = apiKeyIdx !== -1 ? args[apiKeyIdx + 1] : null;
+
+  if (hasStatus) {
+    const enabled = existingEnv[envKey] === 'true';
+    const key = readSecretFile(secretName);
+    console.log(`${featureLabel}: ${enabled ? `${c.green}enabled${c.reset}` : `${c.dim}disabled${c.reset}`}`);
+    if (key) {
+      const masked = key.length > 8 ? key.substring(0, 4) + '...' + key.slice(-4) : '***';
+      console.log(`API Key: ${masked}`);
+    }
+    return;
+  }
+
+  if (!hasEnable && !hasDisable) {
+    die('Specify --enable, --disable, or --status');
+  }
+
+  if (hasEnable) {
+    if (apiKey) {
+      if (isVoice && !apiKey.startsWith('gsk_')) {
+        warn('Groq API keys typically start with gsk_');
+      }
+      if (!isVoice && !apiKey.startsWith('BSA')) {
+        warn('Brave API keys typically start with BSA');
+      }
+      writeSecretFile(secretName, apiKey);
+      ok(`${featureLabel} API key saved.`);
+    } else {
+      const existing = readSecretFile(secretName);
+      if (!existing) {
+        die(`No API key found. Use --api-key <key> to set one.`);
+      }
+    }
+    existingEnv[envKey] = 'true';
+  } else {
+    existingEnv[envKey] = 'false';
+  }
+
+  const newContent = Object.entries(existingEnv)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n') + '\n';
+  fs.writeFileSync(ENV_FILE, newContent, { mode: 0o600 });
+  ok(`${featureLabel} ${hasEnable ? 'enabled' : 'disabled'}.`);
+
+  if (fs.existsSync(COMPOSE_FILE)) {
+    log('Restarting container...');
+    try {
+      execSync(`docker compose -f "${COMPOSE_FILE}" restart limbo`, { stdio: 'inherit' });
+      ok('Container restarted.');
+    } catch {
+      warn('Could not restart container. Restart manually with: limbo stop && limbo start');
+    }
+  }
+}
+
 function cmdHelp() {
   console.log(`
 ${c.bold}limbo${c.reset} - personal AI memory agent
@@ -1697,6 +1805,7 @@ ${c.bold}Commands:${c.reset}
   logs          Tail container logs
   update        Pull latest image and restart
   status        Show container status
+  config        Configure optional features (voice, web-search)
   help          Show this help
 
 ${c.bold}Flags:${c.reset}
@@ -1708,6 +1817,13 @@ ${c.bold}Flags:${c.reset}
   --model <name>       Model name (optional, uses provider default)
   --language <code>    Language: en, es (default: en)
   --tunnel-domain <d>  Admin: use branded subdomain for setup tunnel (e.g. limbo.tomasward.com)
+
+${c.bold}Config:${c.reset}
+  limbo config voice --enable --api-key gsk_xxx     Enable voice transcription
+  limbo config voice --disable                       Disable voice transcription
+  limbo config web-search --enable --api-key BSAxxx  Enable web search
+  limbo config web-search --disable                  Disable web search
+  limbo config voice --status                        Show feature status
 
 ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 `);
@@ -1781,30 +1897,50 @@ function notifyUpdate() {
   } catch {}
 }
 
+// ─── Exports (for testing) ────────────────────────────────────────────────────
+
+module.exports = {
+  MODEL_CATALOG,
+  normalizeConfig,
+  parseEnvFile,
+  deriveProviderFamily,
+  getModelCatalog,
+  parseCallbackInput,
+  decodeJwtPayload,
+  parseClaudeSetupToken,
+  buildCodexAuthProfile,
+  buildAnthropicAuthProfile,
+  generatePKCE,
+  buildOAuthUrl,
+};
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-const [,, cmd = 'start'] = process.argv;
+if (require.main === module) {
+  const [,, cmd = 'start'] = process.argv;
 
-(async () => {
-  checkForUpdateInBackground();
+  (async () => {
+    checkForUpdateInBackground();
 
-  switch (cmd) {
-    case 'start':
-    case 'install': await cmdStart(); break;
-    case 'stop':    cmdStop(); break;
-    case 'logs':    cmdLogs(); break;
-    case 'update':  cmdUpdate(); break;
-    case 'status':  cmdStatus(); break;
-    case 'help':
-    case '--help':
-    case '-h':      cmdHelp(); break;
-    default:
-      warn(t('en', 'unknownCommand', cmd));
-      cmdHelp();
-      process.exit(1);
-  }
+    switch (cmd) {
+      case 'start':
+      case 'install': await cmdStart(); break;
+      case 'stop':    cmdStop(); break;
+      case 'logs':    cmdLogs(); break;
+      case 'update':  cmdUpdate(); break;
+      case 'status':  cmdStatus(); break;
+      case 'config':  cmdConfig(); break;
+      case 'help':
+      case '--help':
+      case '-h':      cmdHelp(); break;
+      default:
+        warn(t('en', 'unknownCommand', cmd));
+        cmdHelp();
+        process.exit(1);
+    }
 
-  notifyUpdate();
-})().catch((err) => {
-  die(err.message || String(err));
-});
+    notifyUpdate();
+  })().catch((err) => {
+    die(err.message || String(err));
+  });
+}
