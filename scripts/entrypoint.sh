@@ -42,6 +42,8 @@ MODEL_PROVIDER="${MODEL_PROVIDER:-anthropic}"
 MODEL_NAME="${MODEL_NAME:-claude-opus-4-6}"
 TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
 TELEGRAM_BOT_TOKEN="${_secret_telegram:-${TELEGRAM_BOT_TOKEN:-}}"
+VOICE_ENABLED="${VOICE_ENABLED:-false}"
+WEB_SEARCH_ENABLED="${WEB_SEARCH_ENABLED:-false}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
 ZEROCLAW_STATE_DIR="${ZEROCLAW_STATE_DIR:-/home/limbo/.zeroclaw}"
@@ -118,7 +120,7 @@ mkdir -p /data/vault/notes /data/vault/maps /data/config "$ZEROCLAW_STATE_DIR" "
 # Note: Docker Compose file-based secrets ignore uid/gid/mode settings,
 # so files may be owned by a different user. Use cp || true to tolerate
 # permission errors (e.g. during setup mode when secrets are placeholder files).
-for secret_name in gateway_token llm_api_key telegram_bot_token; do
+for secret_name in gateway_token llm_api_key telegram_bot_token groq_api_key brave_api_key; do
   src="/run/secrets/$secret_name"
   dst="$ZC_SECRETS/$secret_name"
   if [ -f "$src" ] && [ -s "$src" ] && [ -r "$src" ]; then
@@ -194,6 +196,41 @@ bot_token = "$TELEGRAM_BOT_TOKEN"
 allowed_users = ["*"]
 TELEGRAM_EOF
     log "INFO  Telegram channel enabled in config"
+  fi
+
+  # Voice transcription (Groq Whisper)
+  _secret_groq="$(read_secret groq_api_key)"
+  GROQ_API_KEY="${_secret_groq:-${GROQ_API_KEY:-}}"
+
+  if [ "$VOICE_ENABLED" = "true" ] && [ -n "$GROQ_API_KEY" ]; then
+    VOICE_LANGUAGE="${CLI_LANGUAGE:-en}"
+    cat >> "$ZEROCLAW_CONFIG_PATH" <<VOICE_EOF
+
+[transcription]
+enabled = true
+default_provider = "groq"
+api_key = "$GROQ_API_KEY"
+model = "whisper-large-v3-turbo"
+language = "$VOICE_LANGUAGE"
+max_duration_secs = 120
+VOICE_EOF
+    log "INFO  Voice transcription enabled in config"
+  fi
+
+  # Web search (Brave)
+  _secret_brave="$(read_secret brave_api_key)"
+  BRAVE_API_KEY="${_secret_brave:-${BRAVE_API_KEY:-}}"
+
+  if [ "$WEB_SEARCH_ENABLED" = "true" ] && [ -n "$BRAVE_API_KEY" ]; then
+    cat >> "$ZEROCLAW_CONFIG_PATH" <<WEBSEARCH_EOF
+
+[web_search]
+enabled = true
+provider = "brave"
+brave_api_key = "$BRAVE_API_KEY"
+max_results = 5
+WEBSEARCH_EOF
+    log "INFO  Web search enabled in config"
   fi
 
   log "INFO  ZeroClaw config written to $ZEROCLAW_CONFIG_PATH"
