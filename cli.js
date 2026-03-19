@@ -1828,27 +1828,46 @@ ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 `);
 }
 
+// ─── Exports (for testing) ────────────────────────────────────────────────────
+
+module.exports = {
+  MODEL_CATALOG,
+  normalizeConfig,
+  parseEnvFile,
+  deriveProviderFamily,
+  getModelCatalog,
+  parseCallbackInput,
+  decodeJwtPayload,
+  parseClaudeSetupToken,
+  buildCodexAuthProfile,
+  buildAnthropicAuthProfile,
+  generatePKCE,
+  buildOAuthUrl,
+};
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-const [,, cmd = 'start'] = process.argv;
+if (require.main === module) {
+  const [,, cmd = 'start'] = process.argv;
 
-(async () => {
-  switch (cmd) {
-    case 'start':
-    case 'install': await cmdStart(); break;
-    case 'stop':    cmdStop(); break;
-    case 'logs':    cmdLogs(); break;
-    case 'update':  cmdUpdate(); break;
-    case 'status':  cmdStatus(); break;
-    case 'config':  cmdConfig(); break;
-    case 'help':
-    case '--help':
-    case '-h':      cmdHelp(); break;
-    default:
-      warn(t('en', 'unknownCommand', cmd));
-      cmdHelp();
-      process.exit(1);
-  }
-})().catch((err) => {
-  die(err.message || String(err));
-});
+  (async () => {
+    switch (cmd) {
+      case 'start':
+      case 'install': await cmdStart(); break;
+      case 'stop':    cmdStop(); break;
+      case 'logs':    cmdLogs(); break;
+      case 'update':  cmdUpdate(); break;
+      case 'status':  cmdStatus(); break;
+      case 'config':  cmdConfig(); break;
+      case 'help':
+      case '--help':
+      case '-h':      cmdHelp(); break;
+      default:
+        warn(t('en', 'unknownCommand', cmd));
+        cmdHelp();
+        process.exit(1);
+    }
+  })().catch((err) => {
+    die(err.message || String(err));
+  });
+}
