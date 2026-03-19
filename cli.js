@@ -1067,7 +1067,7 @@ function teardownSetupTunnel(tunnel) {
 function installGlobalAlias() {
   // Create a `limbo` shell wrapper so users don't have to type `npx limbo-ai` every time.
   // Tries /usr/local/bin first (macOS, Linux with sudo), falls back to ~/.local/bin (no sudo).
-  const wrapper = '#!/bin/sh\nexec npx limbo-ai "$@"\n';
+  const wrapper = '#!/bin/sh\nexec npx limbo-ai@latest "$@"\n';
   const candidates = [
     path.join(os.homedir(), '.local', 'bin', 'limbo'),
     '/usr/local/bin/limbo',
@@ -1075,10 +1075,10 @@ function installGlobalAlias() {
 
   for (const target of candidates) {
     try {
-      // Skip if already installed and current
+      // Skip if already installed and current (must include @latest)
       if (fs.existsSync(target)) {
         const existing = fs.readFileSync(target, 'utf8');
-        if (existing.includes('limbo-ai')) return;
+        if (existing.includes('limbo-ai@latest')) return;
       }
       const dir = path.dirname(target);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -1670,8 +1670,31 @@ function cmdLogs() {
   run('docker compose logs -f');
 }
 
+function selfUpdateCli() {
+  const pkg = require('./package.json');
+  try {
+    const latest = execSync('npm view limbo-ai version', { encoding: 'utf8', timeout: 10000 }).trim();
+    if (!latest || latest === pkg.version) return;
+    const cur = pkg.version.split('.').map(Number);
+    const lat = latest.split('.').map(Number);
+    const isNewer = lat[0] > cur[0] || (lat[0] === cur[0] && lat[1] > cur[1]) ||
+      (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
+    if (!isNewer) return;
+
+    log(`Updating CLI: ${pkg.version} → ${latest}...`);
+    execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
+    ok(`CLI updated to ${latest}.`);
+  } catch {
+    warn('Could not self-update CLI. Run: npm install -g limbo-ai@latest');
+  }
+}
+
 function cmdUpdate() {
   if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
+
+  // Self-update the CLI if installed globally
+  const isGlobal = !process.argv[1].includes('npx') && !process.argv[1].includes('node_modules/.cache');
+  if (isGlobal) selfUpdateCli();
 
   // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
   let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
