@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import { buildIndex } from "./vault-index.js";
 import { vaultSearch } from "./tools/search.js";
 import { vaultRead } from "./tools/read.js";
 import { vaultWriteNote } from "./tools/write.js";
@@ -13,7 +14,7 @@ import { vaultUpdateMap } from "./tools/update-map.js";
 const server = new Server(
   {
     name: "limbo-vault",
-    version: "1.1.0",
+    version: "1.2.0",
   },
   {
     capabilities: {
@@ -171,6 +172,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // ── Start ───────────────────────────────────────────────────────────────────
+
+// Build in-memory index before accepting connections
+const noteCount = await buildIndex();
+process.stderr.write(`[limbo-vault] Index built: ${noteCount} notes indexed\n`);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
