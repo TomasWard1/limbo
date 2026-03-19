@@ -1,5 +1,6 @@
 import { writeFile, mkdir } from "fs/promises";
-import { join, resolve } from "path";
+import { join, resolve, relative } from "path";
+import { updateEntry } from "../vault-index.js";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const NOTES_DIR = join(VAULT_PATH, "notes");
@@ -91,5 +92,10 @@ export async function vaultWriteNote(note) {
   }
 
   await writeFile(filePath, fileContent, "utf8");
+
+  // Update in-memory index immediately — no re-scan needed
+  const domain = relative(NOTES_DIR, resolve(targetDir)) || null;
+  updateEntry(safe, filePath, fileContent, domain);
+
   return { id: safe, path: filePath };
 }
