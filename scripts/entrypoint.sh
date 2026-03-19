@@ -178,9 +178,18 @@ else
     log "INFO  Subscription mode: remapped provider openai → openai-codex"
   fi
 
+  # Build the model ID for ZeroClaw config.
+  # OpenRouter model names already include the provider namespace (e.g.
+  # "anthropic/claude-sonnet-4-6"), so we must NOT prepend the provider again.
+  if [ "$MODEL_PROVIDER" = "openrouter" ]; then
+    ZEROCLAW_MODEL="$MODEL_NAME"
+  else
+    ZEROCLAW_MODEL="${MODEL_PROVIDER}/${MODEL_NAME}"
+  fi
+
   log "INFO  Generating ZeroClaw config from template"
-  export MODEL_PROVIDER MODEL_NAME LIMBO_PORT
-  envsubst '$MODEL_PROVIDER $MODEL_NAME $LIMBO_PORT' \
+  export MODEL_PROVIDER ZEROCLAW_MODEL LIMBO_PORT
+  envsubst '$MODEL_PROVIDER $ZEROCLAW_MODEL $LIMBO_PORT' \
     < /app/config.toml.template > "$ZEROCLAW_CONFIG_PATH"
 
   # Telegram: channel is enabled by section presence, not a boolean flag.

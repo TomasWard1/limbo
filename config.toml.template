@@ -3,7 +3,7 @@
 # conditionally — see entrypoint.sh for details.
 
 default_provider = "${MODEL_PROVIDER}"
-default_model = "${MODEL_PROVIDER}/${MODEL_NAME}"
+default_model = "${ZEROCLAW_MODEL}"
 
 [gateway]
 host = "127.0.0.1"
