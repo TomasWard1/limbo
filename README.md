@@ -52,12 +52,12 @@ Headless mode skips Telegram setup. To add Telegram later, run `npx limbo-ai sta
 ### Available commands
 
 ```sh
-npx limbo-ai start        # Install and start (default if no command given)
-npx limbo-ai stop         # Stop the container
-npx limbo-ai update       # Pull latest image and restart
-npx limbo-ai status       # Show container status
-npx limbo-ai logs         # Tail container logs
-npx limbo-ai start --reconfigure   # Change API keys or settings
+npx limbo-ai@latest start        # Install and start (default if no command given)
+npx limbo-ai@latest stop         # Stop the container
+npx limbo-ai@latest update       # Pull latest image and restart
+npx limbo-ai@latest status       # Show container status
+npx limbo-ai@latest logs         # Tail container logs
+npx limbo-ai@latest start --reconfigure   # Change API keys or settings
 ```
 
 ---
@@ -65,7 +65,7 @@ npx limbo-ai start --reconfigure   # Change API keys or settings
 ## Updating
 
 ```sh
-npx limbo-ai update
+npx limbo-ai@latest update
 ```
 
 Pulls the latest Limbo image and restarts the container. Your vault data is persisted in the `limbo-data` Docker volume and is not affected.
