@@ -318,6 +318,18 @@ const TEXT = {
     openRouterKeyHint: 'Get your key at: https://openrouter.ai/keys',
     openRouterModelPrompt: '  Model name (blank = auto-routing): ',
     openRouterModelHint: 'Examples: anthropic/claude-sonnet-4-6, openai/gpt-4o, google/gemini-2.5-pro',
+    optionalFeatures: 'Optional features',
+    voiceQuestion: 'Enable voice transcription? (Requires Groq API key)',
+    groqApiKeyPrompt: '  Groq API key (gsk_...): ',
+    groqApiKeyHint: 'Get your free key at: https://console.groq.com/keys',
+    invalidGroqKey: 'Groq API keys usually start with "gsk_". Proceeding anyway.',
+    webSearchQuestion: 'Enable web search? (Requires Brave Search API key)',
+    braveApiKeyPrompt: '  Brave API key (BSA...): ',
+    braveApiKeyHint: 'Get your key at: https://brave.com/search/api/',
+    invalidBraveKey: 'Brave API keys usually start with "BSA". Proceeding anyway.',
+    reviewHeader: 'Review your configuration',
+    reviewConfirm: 'Proceed with this configuration?',
+    reviewStartOver: 'Start over',
     telegramQuestion: 'Want to speak to Limbo through Telegram?',
     telegramBotFatherSteps: [
       'To create a Telegram bot:',
@@ -434,6 +446,18 @@ const TEXT = {
     openRouterKeyHint: 'Consegui tu key en: https://openrouter.ai/keys',
     openRouterModelPrompt: '  Nombre del modelo (vacio = auto-routing): ',
     openRouterModelHint: 'Ejemplos: anthropic/claude-sonnet-4-6, openai/gpt-4o, google/gemini-2.5-pro',
+    optionalFeatures: 'Funciones opcionales',
+    voiceQuestion: 'Habilitar transcripcion de voz? (Requiere API key de Groq)',
+    groqApiKeyPrompt: '  Groq API key (gsk_...): ',
+    groqApiKeyHint: 'Consegui tu key gratis en: https://console.groq.com/keys',
+    invalidGroqKey: 'Las API keys de Groq normalmente empiezan con "gsk_". Continuando igual.',
+    webSearchQuestion: 'Habilitar busqueda web? (Requiere API key de Brave Search)',
+    braveApiKeyPrompt: '  Brave API key (BSA...): ',
+    braveApiKeyHint: 'Consegui tu key en: https://brave.com/search/api/',
+    invalidBraveKey: 'Las API keys de Brave normalmente empiezan con "BSA". Continuando igual.',
+    reviewHeader: 'Revisa tu configuracion',
+    reviewConfirm: 'Continuar con esta configuracion?',
+    reviewStartOver: 'Empezar de nuevo',
     telegramQuestion: 'Quieres hablar con Limbo por Telegram?',
     telegramBotFatherSteps: [
       'Para crear un bot de Telegram:',
@@ -902,7 +926,6 @@ async function collectConfig(existingEnv = {}) {
   ], language);
 
   let telegramToken = '';
-  let telegramAutoPair = 'false';
   if (telegramChoice.value === 'true') {
     console.log('');
     TEXT[language].telegramBotFatherSteps.forEach((line) => console.log(`  ${c.dim}${line}${c.reset}`));
@@ -912,11 +935,73 @@ async function collectConfig(existingEnv = {}) {
       t(language, 'telegramTokenPrompt'),
       (value) => value ? { ok: true, value } : { ok: false, message: t(language, 'requiredField') },
     );
-    const autoPairChoice = await selectMenu(t(language, 'telegramAutoPairQuestion'), [
-      { label: t(language, 'no'), value: 'false' },
-      { label: t(language, 'yes'), value: 'true' },
-    ], language);
-    telegramAutoPair = autoPairChoice.value;
+  }
+
+  // ── Optional features ────────────────────────────────────────────────────
+  header(t(language, 'optionalFeatures'));
+
+  let voiceEnabled = 'false';
+  let groqApiKey = '';
+  const voiceChoice = await selectMenu(t(language, 'voiceQuestion'), [
+    { label: t(language, 'no'), value: 'false' },
+    { label: t(language, 'yes'), value: 'true' },
+  ], language);
+  if (voiceChoice.value === 'true') {
+    console.log(`  ${c.dim}${t(language, 'groqApiKeyHint')}${c.reset}`);
+    groqApiKey = await promptValidated(
+      t(language, 'groqApiKeyPrompt'),
+      (value) => {
+        if (!value) return { ok: false, message: t(language, 'requiredField') };
+        if (!value.startsWith('gsk_')) warn(t(language, 'invalidGroqKey'));
+        return { ok: true, value };
+      },
+    );
+    voiceEnabled = 'true';
+  }
+
+  let webSearchEnabled = 'false';
+  let braveApiKey = '';
+  const webSearchChoice = await selectMenu(t(language, 'webSearchQuestion'), [
+    { label: t(language, 'no'), value: 'false' },
+    { label: t(language, 'yes'), value: 'true' },
+  ], language);
+  if (webSearchChoice.value === 'true') {
+    console.log(`  ${c.dim}${t(language, 'braveApiKeyHint')}${c.reset}`);
+    braveApiKey = await promptValidated(
+      t(language, 'braveApiKeyPrompt'),
+      (value) => {
+        if (!value) return { ok: false, message: t(language, 'requiredField') };
+        if (!value.startsWith('BSA')) warn(t(language, 'invalidBraveKey'));
+        return { ok: true, value };
+      },
+    );
+    webSearchEnabled = 'true';
+  }
+
+  // ── Review step ──────────────────────────────────────────────────────────
+  const providerLabel = providerFamily === 'openai' ? 'OpenAI'
+    : providerFamily === 'anthropic' ? 'Anthropic' : 'OpenRouter';
+  const authLabel = accessMethod === 'subscription' ? 'Subscription' : 'API key';
+  const enabledLabel = language === 'es' ? 'habilitado' : 'enabled';
+  const disabledLabel = language === 'es' ? 'deshabilitado' : 'disabled';
+
+  header(t(language, 'reviewHeader'));
+  console.log(`
+  ${c.bold}Provider:${c.reset}      ${providerLabel}
+  ${c.bold}Model:${c.reset}         ${modelName}
+  ${c.bold}Auth:${c.reset}          ${authLabel}
+  ${c.bold}Telegram:${c.reset}      ${telegramChoice.value === 'true' ? `${c.green}${enabledLabel}${c.reset}` : `${c.dim}${disabledLabel}${c.reset}`}
+  ${c.bold}Voice:${c.reset}         ${voiceEnabled === 'true' ? `${c.green}${enabledLabel}${c.reset}` : `${c.dim}${disabledLabel}${c.reset}`}
+  ${c.bold}Web search:${c.reset}    ${webSearchEnabled === 'true' ? `${c.green}${enabledLabel}${c.reset}` : `${c.dim}${disabledLabel}${c.reset}`}
+`);
+
+  const confirmChoice = await selectMenu(t(language, 'reviewConfirm'), [
+    { label: t(language, 'yes'), value: 'confirm' },
+    { label: t(language, 'reviewStartOver'), value: 'restart' },
+  ], language);
+
+  if (confirmChoice.value === 'restart') {
+    return collectConfig(existingEnv);
   }
 
   return {
@@ -928,7 +1013,11 @@ async function collectConfig(existingEnv = {}) {
     apiKey,
     telegramEnabled: telegramChoice.value,
     telegramToken,
-    telegramAutoPair,
+    telegramAutoPair: 'true',
+    voiceEnabled,
+    groqApiKey,
+    webSearchEnabled,
+    braveApiKey,
     gatewayToken: existingEnv.GATEWAY_TOKEN || generateGatewayToken(),
   };
 }
