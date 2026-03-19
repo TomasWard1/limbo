@@ -45,6 +45,9 @@ jobs:
         working-directory: mcp-server
         run: node --check index.js
 
+      - name: Check for syntax errors in setup server
+        run: node --check setup-server/server.js
+
   tests:
     name: Tests
     runs-on: ubuntu-latest
@@ -56,5 +59,8 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Verify CLI module exports
+        run: node -e "require('./cli.js')"
+
       - name: Run unit tests
-        run: node --test test/cli-filter.test.js test/zeroclaw-migration.test.js
+        run: node --test test/cli-filter.test.js test/cli-auth.test.js test/zeroclaw-migration.test.js test/setup-server.test.js

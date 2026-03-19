@@ -154,7 +154,10 @@ function ensureSetupToken() {
   return token;
 }
 
-const SETUP_TOKEN = ensureSetupToken();
+let SETUP_TOKEN = null;
+if (require.main === module) {
+  SETUP_TOKEN = ensureSetupToken();
+}
 
 function checkToken(req) {
   const parsed = new URL(req.url, `http://${req.headers.host}`);
@@ -851,17 +854,46 @@ async function handleRequest(req, res) {
   }
 }
 
+// ─── Exports (for testing) ────────────────────────────────────────────────────
+
+module.exports = {
+  MODEL_CATALOG,
+  KEY_PREFIXES,
+  MIME_TYPES,
+  parseJSON,
+  generatePKCE,
+  buildOAuthUrl,
+  decodeJwtPayload,
+  buildCodexAuthProfile,
+  buildAnthropicAuthProfile,
+  handleRequest,
+  _internals: {
+    OPENAI_OAUTH,
+    readBody,
+    sendJSON,
+    sendError,
+    checkToken,
+    writeSecretFile,
+    readSecretFile,
+    ensureGatewayToken,
+    ensureSetupToken,
+    writeAuthProfiles,
+  },
+};
+
 // ─── Server ──────────────────────────────────────────────────────────────────
 
-const server = http.createServer(handleRequest);
+if (require.main === module) {
+  const server = http.createServer(handleRequest);
 
-server.listen(PORT, '0.0.0.0', () => {
-  log(`Limbo Setup Wizard listening on port ${PORT}`);
-  log(`SETUP_URL=http://0.0.0.0:${PORT}/?token=${SETUP_TOKEN}`);
-  log('Share the URL above with the user to complete setup.');
-});
+  server.listen(PORT, '0.0.0.0', () => {
+    log(`Limbo Setup Wizard listening on port ${PORT}`);
+    log(`SETUP_URL=http://0.0.0.0:${PORT}/?token=${SETUP_TOKEN}`);
+    log('Share the URL above with the user to complete setup.');
+  });
 
-server.on('error', (err) => {
-  log(`Server error: ${err.message}`);
-  process.exit(1);
-});
+  server.on('error', (err) => {
+    log(`Server error: ${err.message}`);
+    process.exit(1);
+  });
+}
