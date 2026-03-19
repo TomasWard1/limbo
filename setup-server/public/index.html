@@ -686,6 +686,7 @@
       <div class="progress-dot"></div>
       <div class="progress-dot"></div>
       <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
     </div>
 
     <!-- Nav Header -->
@@ -1160,8 +1161,107 @@
       </div>
     </div>
 
-    <!-- Step 7: Confirm -->
+    <!-- Step 7: Optional Features -->
     <div class="step" data-step="7">
+      <h2 class="step-title">
+        <span data-lang="en">Optional Features</span>
+        <span data-lang="es">Funcionalidades Opcionales</span>
+      </h2>
+      <p class="step-desc">
+        <span data-lang="en">Enable additional capabilities for Limbo. You can always change these later.</span>
+        <span data-lang="es">Habilitá capacidades adicionales para Limbo. Podés cambiar esto después.</span>
+      </p>
+
+      <!-- Voice Messages (Groq) -->
+      <div class="toggle-row" style="margin-bottom:12px">
+        <div>
+          <div class="toggle-label">
+            <span data-lang="en">Voice Messages</span>
+            <span data-lang="es">Mensajes de Voz</span>
+          </div>
+          <div class="toggle-sub">
+            <span data-lang="en">Transcribe voice notes with Groq Whisper</span>
+            <span data-lang="es">Transcribir notas de voz con Groq Whisper</span>
+          </div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="voiceToggle" onchange="toggleFeatureVoice()">
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+
+      <div id="voiceFields" class="tg-fields">
+        <div class="input-group">
+          <label class="input-label" for="groqKeyInput">Groq API Key</label>
+          <input
+            type="password"
+            class="input-field"
+            id="groqKeyInput"
+            placeholder="gsk_..."
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <div class="validation-msg" id="groqKeyValidation"></div>
+          <p class="input-hint">
+            <span data-lang="en">Get your key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></span>
+            <span data-lang="es">Obtené tu key en <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Web Search (Brave) -->
+      <div class="toggle-row" style="margin-bottom:12px">
+        <div>
+          <div class="toggle-label">
+            <span data-lang="en">Web Search</span>
+            <span data-lang="es">Búsqueda Web</span>
+          </div>
+          <div class="toggle-sub">
+            <span data-lang="en">Search the web via Brave Search API</span>
+            <span data-lang="es">Buscar en la web con Brave Search API</span>
+          </div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="webSearchToggle" onchange="toggleFeatureWebSearch()">
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+
+      <div id="webSearchFields" class="tg-fields">
+        <div class="input-group">
+          <label class="input-label" for="braveKeyInput">Brave API Key</label>
+          <input
+            type="password"
+            class="input-field"
+            id="braveKeyInput"
+            placeholder="BSA..."
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <div class="validation-msg" id="braveKeyValidation"></div>
+          <p class="input-hint">
+            <span data-lang="en">Get your key at <a href="https://brave.com/search/api/" target="_blank">brave.com/search/api</a></span>
+            <span data-lang="es">Obtené tu key en <a href="https://brave.com/search/api/" target="_blank">brave.com/search/api</a></span>
+          </p>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="skipFeatures()">
+          <span data-lang="en">Skip</span>
+          <span data-lang="es">Omitir</span>
+        </button>
+        <button class="btn-primary" onclick="submitFeatures()">
+          <span data-lang="en">Continue</span>
+          <span data-lang="es">Continuar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 8: Confirm -->
+    <div class="step" data-step="8">
       <h2 class="step-title">
         <span data-lang="en">Ready to launch</span>
         <span data-lang="es">Listo para arrancar</span>
@@ -1233,11 +1333,15 @@
       apiKey: '',
       model: null,
       telegram: { enabled: true, botToken: '' },
+      features: {
+        voice: { enabled: false, apiKey: '' },
+        webSearch: { enabled: false, apiKey: '' },
+      },
       subscriptionDone: false,
       subscriptionEmail: '',
     };
 
-    const totalSteps = 7;
+    const totalSteps = 8;
 
     // --- Prefix validation rules ---
     const keyPrefixes = {
@@ -1292,7 +1396,8 @@
       if (n === 4) setupApiKeyStep();
       if (n === 5) fetchModels();
       if (n === 6) resetTelegramUI();
-      if (n === 7) buildSummary();
+      if (n === 7) resetFeaturesUI();
+      if (n === 8) buildSummary();
     }
 
     document.getElementById('btnBack').addEventListener('click', () => {
@@ -1843,7 +1948,105 @@
       }
     }
 
-    // --- Step 7: Summary ---
+    // --- Step 7: Features ---
+    function toggleFeatureVoice() {
+      const enabled = document.getElementById('voiceToggle').checked;
+      state.features.voice.enabled = enabled;
+      document.getElementById('voiceFields').classList.toggle('visible', enabled);
+    }
+
+    function toggleFeatureWebSearch() {
+      const enabled = document.getElementById('webSearchToggle').checked;
+      state.features.webSearch.enabled = enabled;
+      document.getElementById('webSearchFields').classList.toggle('visible', enabled);
+    }
+
+    function resetFeaturesUI() {
+      document.getElementById('voiceFields').classList.toggle('visible', state.features.voice.enabled);
+      document.getElementById('webSearchFields').classList.toggle('visible', state.features.webSearch.enabled);
+    }
+
+    document.getElementById('groqKeyInput').addEventListener('input', function () {
+      const val = this.value.trim();
+      const msgEl = document.getElementById('groqKeyValidation');
+      state.features.voice.apiKey = val;
+      if (!val) {
+        this.className = 'input-field';
+        msgEl.innerHTML = '';
+        return;
+      }
+      if (val.startsWith('gsk_') && val.length > 10) {
+        this.className = 'input-field valid';
+        const msg = state.language === 'es' ? 'Formato válido' : 'Valid format';
+        msgEl.innerHTML = `<span class="validation-msg success">${msg}</span>`;
+      } else if (!val.startsWith('gsk_')) {
+        this.className = 'input-field invalid';
+        const msg = state.language === 'es'
+          ? 'La key debe empezar con <code>gsk_</code>'
+          : 'Key should start with <code>gsk_</code>';
+        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+      } else {
+        this.className = 'input-field';
+        msgEl.innerHTML = '';
+      }
+    });
+
+    document.getElementById('braveKeyInput').addEventListener('input', function () {
+      const val = this.value.trim();
+      const msgEl = document.getElementById('braveKeyValidation');
+      state.features.webSearch.apiKey = val;
+      if (!val) {
+        this.className = 'input-field';
+        msgEl.innerHTML = '';
+        return;
+      }
+      if (val.startsWith('BSA') && val.length > 10) {
+        this.className = 'input-field valid';
+        const msg = state.language === 'es' ? 'Formato válido' : 'Valid format';
+        msgEl.innerHTML = `<span class="validation-msg success">${msg}</span>`;
+      } else if (!val.startsWith('BSA')) {
+        this.className = 'input-field invalid';
+        const msg = state.language === 'es'
+          ? 'La key debe empezar con <code>BSA</code>'
+          : 'Key should start with <code>BSA</code>';
+        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+      } else {
+        this.className = 'input-field';
+        msgEl.innerHTML = '';
+      }
+    });
+
+    function skipFeatures() {
+      state.features.voice = { enabled: false, apiKey: '' };
+      state.features.webSearch = { enabled: false, apiKey: '' };
+      goToStep(8);
+    }
+
+    function submitFeatures() {
+      if (state.features.voice.enabled) {
+        const key = document.getElementById('groqKeyInput').value.trim();
+        if (!key) {
+          const msgEl = document.getElementById('groqKeyValidation');
+          const msg = state.language === 'es' ? 'Ingresá tu API key de Groq' : 'Enter your Groq API key';
+          msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+          return;
+        }
+        state.features.voice.apiKey = key;
+      }
+      if (state.features.webSearch.enabled) {
+        const key = document.getElementById('braveKeyInput').value.trim();
+        if (!key) {
+          const msgEl = document.getElementById('braveKeyValidation');
+          const msg = state.language === 'es' ? 'Ingresá tu API key de Brave' : 'Enter your Brave API key';
+          msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+          return;
+        }
+        state.features.webSearch.apiKey = key;
+      }
+      goToStep(8);
+    }
+
+    // --- Step 8: Summary ---
     function buildSummary() {
       const card = document.getElementById('summaryCard');
       const l = state.language;
@@ -1886,6 +2089,20 @@
             : (l === 'es' ? 'Desactivado' : 'Disabled'),
           step: 6,
         },
+        {
+          label: l === 'es' ? 'Voz' : 'Voice',
+          value: state.features.voice.enabled
+            ? (l === 'es' ? 'Activado' : 'Enabled')
+            : (l === 'es' ? 'Desactivado' : 'Disabled'),
+          step: 7,
+        },
+        {
+          label: l === 'es' ? 'Búsqueda Web' : 'Web Search',
+          value: state.features.webSearch.enabled
+            ? (l === 'es' ? 'Activado' : 'Enabled')
+            : (l === 'es' ? 'Desactivado' : 'Disabled'),
+          step: 7,
+        },
       ];
 
       card.innerHTML = items
@@ -1917,8 +2134,11 @@
       state.subscriptionDone = false;
       state.subscriptionEmail = '';
       state.telegram = { enabled: true, botToken: '' };
+      state.features = { voice: { enabled: false, apiKey: '' }, webSearch: { enabled: false, apiKey: '' } };
       pairingActive = false;
       document.getElementById('tgToggle').checked = true;
+      document.getElementById('voiceToggle').checked = false;
+      document.getElementById('webSearchToggle').checked = false;
       resetTelegramUI();
       goToStep(1);
     }
@@ -1942,6 +2162,16 @@
         telegram: {
           enabled: state.telegram.enabled,
           botToken: state.telegram.enabled ? state.telegram.botToken : '',
+        },
+        features: {
+          voice: {
+            enabled: state.features.voice.enabled,
+            apiKey: state.features.voice.enabled ? state.features.voice.apiKey : '',
+          },
+          webSearch: {
+            enabled: state.features.webSearch.enabled,
+            apiKey: state.features.webSearch.enabled ? state.features.webSearch.apiKey : '',
+          },
         },
       };
       if (state.authMode === 'api-key') {
