@@ -6,6 +6,7 @@
 const { execSync, spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
+const https = require('https');
 const os = require('os');
 const path = require('path');
 const readline = require('readline');
@@ -1712,11 +1713,81 @@ ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 `);
 }
 
+// ─── Update Notifier ─────────────────────────────────────────────────────────
+
+const UPDATE_CHECK_FILE = path.join(LIMBO_DIR, '.update-check');
+const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+// Spawn a detached background process to check the npm registry.
+// Writes {latest, checkedAt} to UPDATE_CHECK_FILE and exits.
+function checkForUpdateInBackground() {
+  try {
+    let shouldCheck = true;
+    if (fs.existsSync(UPDATE_CHECK_FILE)) {
+      const cached = JSON.parse(fs.readFileSync(UPDATE_CHECK_FILE, 'utf8'));
+      if (Date.now() - cached.checkedAt < UPDATE_CHECK_INTERVAL) shouldCheck = false;
+    }
+    if (!shouldCheck) return;
+
+    // Spawn detached child that hits the registry and writes cache
+    const child = spawn(process.execPath, ['-e', `
+      const https = require('https');
+      const fs = require('fs');
+      const req = https.get('https://registry.npmjs.org/limbo-ai/latest', { timeout: 5000 }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+          try {
+            const { version } = JSON.parse(data);
+            fs.mkdirSync('${LIMBO_DIR.replace(/\\/g, '\\\\')}', { recursive: true });
+            fs.writeFileSync('${UPDATE_CHECK_FILE.replace(/\\/g, '\\\\')}', JSON.stringify({ latest: version, checkedAt: Date.now() }));
+          } catch {}
+        });
+      });
+      req.on('error', () => {});
+      req.end();
+    `], { detached: true, stdio: 'ignore' });
+    child.unref();
+  } catch {}
+}
+
+// Read cache and print banner if a newer version is available.
+function notifyUpdate() {
+  try {
+    if (!fs.existsSync(UPDATE_CHECK_FILE)) return;
+    const { latest } = JSON.parse(fs.readFileSync(UPDATE_CHECK_FILE, 'utf8'));
+    const pkg = require('./package.json');
+    if (!latest || latest === pkg.version) return;
+
+    // Simple semver compare: split on dots, compare numerically
+    const cur = pkg.version.split('.').map(Number);
+    const lat = latest.split('.').map(Number);
+    const isNewer = lat[0] > cur[0] || (lat[0] === cur[0] && lat[1] > cur[1]) ||
+      (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
+    if (!isNewer) return;
+
+    // Strip ANSI escapes for visible-length padding
+    const strip = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+    const pad = (s, w) => s + ' '.repeat(Math.max(0, w - strip(s).length));
+
+    const line = `  Update available: ${c.dim}${pkg.version}${c.reset} → ${c.green}${latest}${c.reset}  `;
+    const instruction = `  Run ${c.cyan}npx limbo-ai@latest update${c.reset} to update  `;
+    const inner = Math.max(strip(line).length, strip(instruction).length);
+    const border = '─'.repeat(inner);
+    console.error(`\n  ${c.dim}╭${border}╮${c.reset}`);
+    console.error(`  ${c.dim}│${c.reset}${pad(line, inner)}${c.dim}│${c.reset}`);
+    console.error(`  ${c.dim}│${c.reset}${pad(instruction, inner)}${c.dim}│${c.reset}`);
+    console.error(`  ${c.dim}╰${border}╯${c.reset}\n`);
+  } catch {}
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 const [,, cmd = 'start'] = process.argv;
 
 (async () => {
+  checkForUpdateInBackground();
+
   switch (cmd) {
     case 'start':
     case 'install': await cmdStart(); break;
@@ -1732,6 +1803,8 @@ const [,, cmd = 'start'] = process.argv;
       cmdHelp();
       process.exit(1);
   }
+
+  notifyUpdate();
 })().catch((err) => {
   die(err.message || String(err));
 });
