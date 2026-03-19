@@ -1067,7 +1067,7 @@ function teardownSetupTunnel(tunnel) {
 function installGlobalAlias() {
   // Create a `limbo` shell wrapper so users don't have to type `npx limbo-ai` every time.
   // Tries /usr/local/bin first (macOS, Linux with sudo), falls back to ~/.local/bin (no sudo).
-  const wrapper = '#!/bin/sh\nexec npx limbo-ai "$@"\n';
+  const wrapper = '#!/bin/sh\nexec npx limbo-ai@latest "$@"\n';
   const candidates = [
     path.join(os.homedir(), '.local', 'bin', 'limbo'),
     '/usr/local/bin/limbo',
@@ -1075,10 +1075,10 @@ function installGlobalAlias() {
 
   for (const target of candidates) {
     try {
-      // Skip if already installed and current
+      // Skip if already installed and current (must include @latest)
       if (fs.existsSync(target)) {
         const existing = fs.readFileSync(target, 'utf8');
-        if (existing.includes('limbo-ai')) return;
+        if (existing.includes('limbo-ai@latest')) return;
       }
       const dir = path.dirname(target);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
