@@ -58,7 +58,36 @@ npx limbo-ai@latest update       # Pull latest image and restart
 npx limbo-ai@latest status       # Show container status
 npx limbo-ai@latest logs         # Tail container logs
 npx limbo-ai@latest start --reconfigure   # Change API keys or settings
+npx limbo-ai@latest config               # Configure optional features (voice, web-search)
 ```
+
+---
+
+## Optional Features
+
+Limbo supports optional features that can be enabled during the setup wizard (step 7) or anytime via the CLI.
+
+### Voice Messages
+
+Transcribe Telegram voice notes using [Groq](https://groq.com) Whisper. Requires a Groq API key (`gsk_...`).
+
+```sh
+npx limbo-ai@latest config voice --enable --api-key gsk_xxx
+npx limbo-ai@latest config voice --status
+npx limbo-ai@latest config voice --disable
+```
+
+### Web Search
+
+Give Limbo real-time web search via the [Brave Search API](https://brave.com/search/api/). Requires a Brave API key (`BSA...`).
+
+```sh
+npx limbo-ai@latest config web-search --enable --api-key BSAxxx
+npx limbo-ai@latest config web-search --status
+npx limbo-ai@latest config web-search --disable
+```
+
+Both features store API keys as Docker secrets and toggle config sections in the container on restart.
 
 ---
 
@@ -124,6 +153,8 @@ Managed automatically by `npx limbo-ai start`, stored in `~/.limbo/.env`.
 | `MODEL_NAME` | no | `claude-opus-4-6` | Model name (e.g. `claude-opus-4-6`, `claude-sonnet-4-6`, `gpt-5.4`) |
 | `TELEGRAM_ENABLED` | no | `false` | Enable Telegram bot integration |
 | `TELEGRAM_BOT_TOKEN` | no | — | Telegram bot token (required if `TELEGRAM_ENABLED=true`) |
+| `VOICE_ENABLED` | no | `false` | Enable voice transcription (requires Groq API key as Docker secret) |
+| `WEB_SEARCH_ENABLED` | no | `false` | Enable web search (requires Brave API key as Docker secret) |
 
 > \* API keys are required only for `AUTH_MODE=api-key`. Subscription auth uses ZeroClaw auth profiles instead.
 
