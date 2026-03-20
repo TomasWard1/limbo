@@ -25,7 +25,8 @@ ARG ZEROCLAW_FORK_REF=fix/anthropic-oauth-headers
 RUN git clone --depth 1 --branch ${ZEROCLAW_FORK_REF} \
     https://github.com/TomasWard1/zeroclaw.git . \
   && sed -i 's/members = \[".", "crates\/robot-kit"\]/members = ["."]/' Cargo.toml \
-  && cargo build --release --locked \
+  && mkdir -p benches && echo "fn main() {}" > benches/agent_benchmarks.rs \
+  && cargo build --release \
   && cp target/release/zeroclaw /usr/local/bin/zeroclaw
 
 # ──────────────────────────────────────────────
