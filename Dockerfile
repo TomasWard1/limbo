@@ -11,9 +11,22 @@ COPY mcp-server/package.json mcp-server/package-lock.json* ./mcp-server/
 RUN cd mcp-server && npm ci --omit=dev
 
 # ──────────────────────────────────────────────
-# Stage 2: ZeroClaw binary
+# Stage 2: Build ZeroClaw from fork (OAuth fix)
+# Pin to our fork until zeroclaw-labs/zeroclaw#4053 is merged
 # ──────────────────────────────────────────────
-FROM ghcr.io/zeroclaw-labs/zeroclaw:v0.5.0-beta.345 AS zeroclaw
+FROM rust:1.94-slim AS zeroclaw-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+ARG ZEROCLAW_FORK_REF=fix/anthropic-oauth-headers
+RUN git clone --depth 1 --branch ${ZEROCLAW_FORK_REF} \
+    https://github.com/TomasWard1/zeroclaw.git . \
+  && sed -i 's/members = \[".", "crates\/robot-kit"\]/members = ["."]/' Cargo.toml \
+  && cargo build --release --locked \
+  && cp target/release/zeroclaw /usr/local/bin/zeroclaw
 
 # ──────────────────────────────────────────────
 # Stage 3: final runtime image
@@ -25,7 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gettext-base &&
   && groupadd -r limbo && useradd --create-home -r -g limbo limbo
 
 # Copy ZeroClaw binary
-COPY --from=zeroclaw /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw
+COPY --from=zeroclaw-builder /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw
 
 # App directories
 WORKDIR /app

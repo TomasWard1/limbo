@@ -106,11 +106,15 @@ test('entrypoint.sh appends channels_config.telegram conditionally', () => {
 
 // ─── 4. Dockerfile references ZeroClaw, not OpenClaw ────────────────────────
 
-test('Dockerfile pulls ZeroClaw binary from official image', () => {
+test('Dockerfile builds or pulls ZeroClaw binary', () => {
   const df = read('Dockerfile');
-  assert.ok(df.match(/FROM ghcr\.io\/zeroclaw-labs\/zeroclaw:\S+ AS zeroclaw/),
-    'Dockerfile must pull ZeroClaw from ghcr.io/zeroclaw-labs/zeroclaw');
-  assert.ok(df.includes('COPY --from=zeroclaw /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw'));
+  // Accept either: pulling from official image OR building from source (fork)
+  const pullsOfficial = df.match(/FROM ghcr\.io\/zeroclaw-labs\/zeroclaw:\S+ AS zeroclaw/);
+  const buildsFromSource = df.includes('cargo build') && df.includes('zeroclaw');
+  assert.ok(pullsOfficial || buildsFromSource,
+    'Dockerfile must either pull ZeroClaw from ghcr.io or build from source');
+  assert.ok(df.includes('COPY --from=zeroclaw-builder /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw')
+    || df.includes('COPY --from=zeroclaw /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw'));
 });
 
 test('Dockerfile does not reference openclaw or mcporter', () => {
