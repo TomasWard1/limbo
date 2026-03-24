@@ -263,8 +263,8 @@ else
   done
 
   if [[ -n "$SETUP_TOKEN" ]]; then
-    # Replace 0.0.0.0 with the actual server IP
-    SETUP_URL="${SETUP_TOKEN/0.0.0.0/$SERVER_IP}"
+    # Replace 127.0.0.1 with the actual server IP for remote access display
+    SETUP_URL="${SETUP_TOKEN/127.0.0.1/$SERVER_IP}"
     echo -e "  ${BOLD}Open this URL to complete setup:${NC}"
     echo ""
     echo -e "  ${CYAN}${SETUP_URL}${NC}"
