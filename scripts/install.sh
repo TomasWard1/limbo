@@ -8,8 +8,8 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 set -euo pipefail
 
-INSTALLER_URL="https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh"
-COMPOSE_URL="https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/docker-compose.yml"
+INSTALLER_URL="https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh"
+COMPOSE_URL="https://raw.githubusercontent.com/TomasWard1/limbo/main/docker-compose.yml"
 
 # ─── Headless flags (optional — skip wizard for technical users) ─────────────
 HEADLESS_PROVIDER=""
