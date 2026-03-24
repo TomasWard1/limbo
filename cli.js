@@ -154,7 +154,7 @@ function composeContent() {
       - /tmp:size=100M,noexec,nosuid,nodev
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
     ports:
-      - "${isServerEnvironment() ? '0.0.0.0' : '127.0.0.1'}:${PORT}:${PORT}"
+      - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
@@ -216,7 +216,7 @@ function composeContentHardened() {
       - /tmp:size=100M,noexec,nosuid,nodev
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
     ports:
-      - "${isServerEnvironment() ? '0.0.0.0' : '127.0.0.1'}:${PORT}:${PORT}"
+      - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
@@ -1504,7 +1504,7 @@ function printWizardUrl(url, tunnel) {
   // Extract token from the original URL
   const tokenMatch = url.match(/[?&]token=([^&\s]+)/);
   const token = tokenMatch ? tokenMatch[1] : '';
-  const localUrl = url.replace('0.0.0.0', '127.0.0.1');
+  const localUrl = url;
   const isSSH = !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT);
 
   console.log(`

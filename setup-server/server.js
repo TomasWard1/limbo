@@ -886,9 +886,9 @@ module.exports = {
 if (require.main === module) {
   const server = http.createServer(handleRequest);
 
-  server.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '127.0.0.1', () => {
     log(`Limbo Setup Wizard listening on port ${PORT}`);
-    log(`SETUP_URL=http://0.0.0.0:${PORT}/?token=${SETUP_TOKEN}`);
+    log(`SETUP_URL=http://127.0.0.1:${PORT}/?token=${SETUP_TOKEN}`);
     log('Share the URL above with the user to complete setup.');
   });
 
