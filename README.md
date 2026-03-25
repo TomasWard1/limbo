@@ -26,16 +26,27 @@ Limbo runs as a single Docker container (~35 MB RAM at idle). The main resource 
 
 ## Quick Start
 
-Requires [Docker Desktop](https://docs.docker.com/get-docker/) and Node.js 18+.
+### Server (Ubuntu/Debian)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh | bash
+```
+
+This installs Docker, Node.js, and the Limbo CLI. Then SSH in and run:
+
+```bash
+limbo start
+```
+
+The setup wizard will guide you through provider, API key, and model selection.
+
+### Local (macOS/Linux with Docker Desktop)
 
 ```sh
 npx limbo-ai start
 ```
 
-This will:
-1. Prompt for your API key (Anthropic or OpenAI)
-2. Write `~/.limbo/.env` and `~/.limbo/docker-compose.yml`
-3. Pull the latest Limbo image and start the container
+Requires [Docker Desktop](https://docs.docker.com/get-docker/) and Node.js 18+.
 
 Limbo binds to `127.0.0.1:18789`.
 
