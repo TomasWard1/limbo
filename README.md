@@ -10,6 +10,20 @@ Limbo is a second brain with a conversational interface. It stores atomic notes 
 
 ---
 
+## Hardware Requirements
+
+Limbo runs as a single Docker container (~35 MB RAM at idle). The main resource cost is Docker and the host OS, not Limbo itself.
+
+| Tier | RAM | vCPU | Disk | Notes |
+|------|-----|------|------|-------|
+| Minimum | 512 MB | 1 | 1 GB | Needs swap configured |
+| Recommended | 1 GB | 1 | 5 GB | Comfortable for Limbo alone |
+| With other services | 2 GB | 1 | 10 GB | Room for reverse proxy, monitoring, etc. |
+
+> Limbo's container uses ~35 MB at rest and peaks around ~70 MB during cold starts. CPU usage is negligible — short bursts of 5-7% when processing messages.
+
+---
+
 ## Quick Start
 
 Requires [Docker Desktop](https://docs.docker.com/get-docker/) and Node.js 18+.
