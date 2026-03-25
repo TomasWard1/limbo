@@ -61,9 +61,16 @@ fi
 # CLI sets FORCE_SETUP_MODE=true via env_file when --reconfigure is used.
 # This is more reliable than running `docker compose run` to delete files,
 # which can fail silently due to volume permissions or Docker state.
-if [ "${FORCE_SETUP_MODE:-}" = "true" ]; then
+# FORCE_SETUP_MODE is baked into container env vars at creation time (docker
+# compose env_file). It persists across restarts even after the CLI removes it
+# from the host .env, because Docker doesn't re-read env_file on restart.
+# Use a marker file so we only clear config on the FIRST boot, not on the
+# automatic restart after the wizard writes new config.
+FORCE_DONE_MARKER="/data/.force-setup-done"
+if [ "${FORCE_SETUP_MODE:-}" = "true" ] && [ ! -f "$FORCE_DONE_MARKER" ]; then
   log "INFO  FORCE_SETUP_MODE requested — clearing config for reconfiguration"
   rm -f /data/config/.env "$ZEROCLAW_CONFIG_PATH"
+  touch "$FORCE_DONE_MARKER"
 fi
 
 # ── Detect setup mode (no config yet → wizard will handle everything) ────────
@@ -261,6 +268,11 @@ if [ "$SETUP_MODE" = "true" ]; then
   log "INFO  No configuration found — starting setup wizard on port $LIMBO_PORT"
   exec node /app/setup-server/server.js
 fi
+
+# ── Clean up force-setup marker ──────────────────────────────────────────────
+# If we reach here, config exists and ZeroClaw is about to start normally.
+# Remove the marker so that the NEXT --reconfigure will work.
+rm -f "$FORCE_DONE_MARKER"
 
 # ── Start ZeroClaw daemon ────────────────────────────────────────────────────
 log "INFO  Starting ZeroClaw daemon"
