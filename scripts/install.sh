@@ -1,31 +1,16 @@
 #!/usr/bin/env bash
 # install.sh — Limbo one-line installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh | bash
-# NOTE: This script requires bash, not sh. Always pipe to `bash`, not `sh`.
+#
+# Installs Docker, Node.js, and the Limbo CLI. Pre-pulls the Docker image.
+# After running, SSH in and run `limbo start` to enter the setup wizard.
+#
+# NOTE: Requires bash, not sh.
 if [ -z "${BASH_VERSION:-}" ]; then
   echo "ERROR: This script requires bash. Run with: curl -fsSL ... | bash" >&2
   exit 1
 fi
 set -euo pipefail
-
-INSTALLER_URL="https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh"
-COMPOSE_URL="https://raw.githubusercontent.com/TomasWard1/limbo/main/docker-compose.yml"
-
-# ─── Headless flags (optional — skip wizard for technical users) ─────────────
-HEADLESS_PROVIDER=""
-HEADLESS_API_KEY=""
-HEADLESS_MODEL=""
-HEADLESS_LANGUAGE=""
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --provider)  HEADLESS_PROVIDER="$2"; shift 2 ;;
-    --api-key)   HEADLESS_API_KEY="$2"; shift 2 ;;
-    --model)     HEADLESS_MODEL="$2"; shift 2 ;;
-    --language)  HEADLESS_LANGUAGE="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
 
 # ─── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -33,6 +18,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
 
 log()    { echo -e "${CYAN}[limbo]${NC} $*"; }
@@ -41,15 +27,13 @@ warn()   { echo -e "${YELLOW}[limbo]${NC} $*"; }
 die()    { echo -e "${RED}[limbo] ERROR:${NC} $*" >&2; exit 1; }
 header() { echo -e "\n${BOLD}$*${NC}"; }
 
-# ─── Pre-flight checks ────────────────────────────────────────────────────────
+# ─── Pre-flight checks ──────────────────────────────────────────────────────
 header "=== Limbo Installer ==="
 
-# Root check
 if [[ $EUID -ne 0 ]]; then
-  die "This script must be run as root. Try: sudo bash <(curl -fsSL ${INSTALLER_URL})"
+  die "Run as root. Try: sudo bash <(curl -fsSL https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh)"
 fi
 
-# OS detection — Ubuntu / Debian only
 if [[ -f /etc/os-release ]]; then
   . /etc/os-release
   OS_ID="${ID:-}"
@@ -63,227 +47,82 @@ case "$OS_ID" in
   *) die "Unsupported OS: $OS_ID. Only Ubuntu and Debian are supported." ;;
 esac
 
-log "Detected OS: $OS_ID $OS_VERSION_ID"
+log "Detected: $OS_ID $OS_VERSION_ID"
 
 # Disk space (10 GB minimum)
 AVAILABLE_KB=$(df -k / | awk 'NR==2 {print $4}')
-REQUIRED_KB=$((10 * 1024 * 1024))
-if [[ $AVAILABLE_KB -lt $REQUIRED_KB ]]; then
-  AVAILABLE_GB=$(( AVAILABLE_KB / 1024 / 1024 ))
-  die "Insufficient disk space. Need 10 GB, have ~${AVAILABLE_GB} GB free."
+if [[ $AVAILABLE_KB -lt $((10 * 1024 * 1024)) ]]; then
+  die "Need 10 GB free disk space, have ~$(( AVAILABLE_KB / 1024 / 1024 )) GB."
 fi
 
-# RAM (512 MB minimum)
+# RAM (512 MB minimum, 1 GB recommended)
 TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-REQUIRED_MEM_KB=$((512 * 1024))
-if [[ $TOTAL_MEM_KB -lt $REQUIRED_MEM_KB ]]; then
-  TOTAL_MEM_GB=$(echo "scale=1; $TOTAL_MEM_KB / 1024 / 1024" | bc)
-  die "Insufficient memory. Need 512 MB, have ${TOTAL_MEM_GB} GB."
+if [[ $TOTAL_MEM_KB -lt $((512 * 1024)) ]]; then
+  die "Need 512 MB RAM, have $(( TOTAL_MEM_KB / 1024 )) MB."
 fi
-RECOMMENDED_MEM_KB=$((1024 * 1024))
-if [[ $TOTAL_MEM_KB -lt $RECOMMENDED_MEM_KB ]]; then
-  TOTAL_MEM_MB=$(( TOTAL_MEM_KB / 1024 ))
-  warn "Low memory (${TOTAL_MEM_MB} MB). Recommended: 1 GB+. Limbo will run but consider adding swap."
+if [[ $TOTAL_MEM_KB -lt $((1024 * 1024)) ]]; then
+  warn "Low memory ($(( TOTAL_MEM_KB / 1024 )) MB). Recommended: 1 GB+."
 fi
 
 ok "Pre-flight checks passed."
 
-# ─── Install Docker ───────────────────────────────────────────────────────────
-header "Checking Docker..."
+# ─── Install Docker ──────────────────────────────────────────────────────────
+header "Docker"
 
 if command -v docker &>/dev/null && docker compose version &>/dev/null; then
-  ok "Docker already installed: $(docker --version)"
+  ok "Already installed: $(docker --version | head -1)"
 else
   log "Installing Docker..."
-  apt-get update -qq
-  apt-get install -y -qq ca-certificates curl gnupg lsb-release
-
-  install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL "https://download.docker.com/linux/${OS_ID}/gpg" \
-    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-  chmod a+r /etc/apt/keyrings/docker.gpg
-
-  echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-    https://download.docker.com/linux/${OS_ID} $(lsb_release -cs) stable" \
-    > /etc/apt/sources.list.d/docker.list
-
-  apt-get update -qq
-  apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
+  curl -fsSL https://get.docker.com | sh
   systemctl enable --now docker
-  ok "Docker installed: $(docker --version)"
+  ok "Installed: $(docker --version | head -1)"
 fi
 
-# ─── Install Node.js (for npx limbo-ai commands) ────────────────────────────
-header "Checking Node.js..."
+# ─── Install Node.js ─────────────────────────────────────────────────────────
+header "Node.js"
 
 if command -v node &>/dev/null && node -v | grep -qE '^v(1[89]|2[0-9])'; then
-  ok "Node.js already installed: $(node -v)"
+  ok "Already installed: $(node -v)"
 else
   log "Installing Node.js 22 LTS..."
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y -qq nodejs
-  ok "Node.js installed: $(node -v)"
+  ok "Installed: $(node -v)"
 fi
 
-# ─── Detect port conflicts ───────────────────────────────────────────────────
-header "Checking for port conflicts..."
+# ─── Install Limbo CLI ───────────────────────────────────────────────────────
+header "Limbo CLI"
 
-DEFAULT_PORT=18789
-COEXIST_PORT=18900
-LIMBO_PORT=$DEFAULT_PORT
+npm install -g limbo-ai@latest --loglevel=error 2>&1
+ok "Installed: limbo v$(limbo -v 2>/dev/null || echo 'unknown')"
 
-if ss -tlnp 2>/dev/null | grep -q ":${DEFAULT_PORT} " || \
-   netstat -tlnp 2>/dev/null | grep -q ":${DEFAULT_PORT} "; then
-  warn "Port ${DEFAULT_PORT} is already in use (likely an existing ZeroClaw/Limbo instance)."
-  log "Limbo will run on port ${COEXIST_PORT} to coexist safely."
-  LIMBO_PORT=$COEXIST_PORT
+# ─── Pre-pull Docker image ───────────────────────────────────────────────────
+header "Docker image"
+
+log "Pulling ghcr.io/tomasward1/limbo:latest..."
+if docker pull ghcr.io/tomasward1/limbo:latest; then
+  ok "Image ready."
 else
-  ok "Port ${DEFAULT_PORT} is available. Limbo will use it."
+  warn "Could not pull image. It will be pulled on first 'limbo start'."
 fi
 
-# ─── Create /opt/limbo ───────────────────────────────────────────────────────
-header "Setting up /opt/limbo..."
-mkdir -p /opt/limbo
-log "Directory /opt/limbo ready."
-
-# ─── Write .env (headless mode or minimal for wizard) ────────────────────────
-LIMBO_IMAGE_TAG="${LIMBO_IMAGE_TAG:-1.0.0}"
-
-if [[ -n "$HEADLESS_API_KEY" ]]; then
-  header "Writing /opt/limbo/.env (headless mode)..."
-  HEADLESS_PROVIDER="${HEADLESS_PROVIDER:-anthropic}"
-  HEADLESS_MODEL="${HEADLESS_MODEL:-claude-sonnet-4-6}"
-  HEADLESS_LANGUAGE="${HEADLESS_LANGUAGE:-en}"
-  cat > /opt/limbo/.env <<EOF
-LLM_API_KEY=${HEADLESS_API_KEY}
-MODEL_PROVIDER=${HEADLESS_PROVIDER}
-MODEL_NAME=${HEADLESS_MODEL}
-USER_LANGUAGE=${HEADLESS_LANGUAGE}
-LIMBO_IMAGE_TAG=${LIMBO_IMAGE_TAG}
-LIMBO_PORT=${LIMBO_PORT}
-EOF
-  chmod 600 /opt/limbo/.env
-  ok ".env written (headless — wizard will be skipped)."
-else
-  header "Writing /opt/limbo/.env..."
-  cat > /opt/limbo/.env <<EOF
-LIMBO_IMAGE_TAG=${LIMBO_IMAGE_TAG}
-LIMBO_PORT=${LIMBO_PORT}
-EOF
-  chmod 600 /opt/limbo/.env
-  ok ".env written (setup wizard will handle configuration)."
-fi
-
-# ─── Download docker-compose.yml ──────────────────────────────────────────────
-header "Downloading docker-compose.yml..."
-curl -fsSL "$COMPOSE_URL" -o /opt/limbo/docker-compose.yml
-ok "docker-compose.yml downloaded."
-
-# Patch compose port if coexisting with existing instance
-if [ "$LIMBO_PORT" != "$DEFAULT_PORT" ]; then
-  sed -i "s/18789/${LIMBO_PORT}/g" /opt/limbo/docker-compose.yml
-  ok "Patched docker-compose.yml for port ${LIMBO_PORT}."
-fi
-
-# ─── Start Limbo ─────────────────────────────────────────────────────────────
-header "Starting Limbo..."
-cd /opt/limbo
-log "Pulling Limbo image from GHCR (this may take a minute or two)..."
-if docker compose pull; then
-  ok "Pulled image from GHCR."
-else
-  warn "Could not pull ghcr.io image (likely private or unavailable). Falling back to source build."
-  SRC_DIR="/opt/limbo/src"
-  rm -rf "$SRC_DIR"
-  if ! command -v git &>/dev/null; then
-    log "Installing git for source fallback..."
-    apt-get update -qq
-    apt-get install -y -qq git
-  fi
-  log "Cloning source from GitHub..."
-  git clone --depth 1 https://github.com/tomasward1/limbo.git "$SRC_DIR"
-  log "Building image from source (this may take several minutes)..."
-  docker build -t "ghcr.io/tomasward1/limbo:${LIMBO_IMAGE_TAG}" "$SRC_DIR"
-  ok "Built image locally: ghcr.io/tomasward1/limbo:${LIMBO_IMAGE_TAG}"
-fi
-docker compose up -d
-ok "Container started."
-
-# ─── Install update cron ──────────────────────────────────────────────────────
-header "Installing update cron job..."
-CRON_CMD="cd /opt/limbo && docker compose pull -q && docker compose up -d --remove-orphans >> /var/log/limbo-update.log 2>&1"
-CRON_ENTRY="0 4 * * * $CRON_CMD"
-
-# Add only if not already present
-if crontab -l 2>/dev/null | grep -qF "limbo"; then
-  warn "Cron job already exists — skipping."
-else
-  (crontab -l 2>/dev/null; echo "$CRON_ENTRY") | crontab -
-  ok "Cron job installed (daily at 04:00)."
-fi
-
-# ─── Health check ─────────────────────────────────────────────────────────────
-header "Verifying health..."
-HEALTH_ATTEMPTS=12
-HEALTH_OK=false
-for i in $(seq 1 $HEALTH_ATTEMPTS); do
-  HEALTH=$(docker compose -f /opt/limbo/docker-compose.yml ps --format json 2>/dev/null \
-    | grep -o '"Health":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
-  if [[ "$HEALTH" == "healthy" ]]; then
-    HEALTH_OK=true
-    break
-  fi
-  log "Waiting for container to be healthy... ($i/$HEALTH_ATTEMPTS)"
-  sleep 5
-done
-
-if [[ "$HEALTH_OK" == "false" ]]; then
-  warn "Container did not report healthy within timeout."
-  warn "Check logs with: docker compose -f /opt/limbo/docker-compose.yml logs"
-else
-  ok "Container is healthy."
-fi
-
-# ─── Detect server IP for setup URL ──────────────────────────────────────────
+# ─── Done ────────────────────────────────────────────────────────────────────
 SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_IP")
 [[ -z "$SERVER_IP" ]] && SERVER_IP="YOUR_IP"
 
-# ─── Success message ──────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}${BOLD}║         Limbo installed successfully!        ║${NC}"
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════╝${NC}"
 echo ""
-if [[ -n "$HEADLESS_API_KEY" ]]; then
-  echo -e "  ${BOLD}ZeroClaw gateway:${NC} ws://127.0.0.1:${LIMBO_PORT}"
-else
-  # Extract setup token from container logs
-  SETUP_TOKEN=""
-  for i in $(seq 1 15); do
-    SETUP_TOKEN=$(docker compose -f /opt/limbo/docker-compose.yml logs --no-log-prefix 2>/dev/null | grep -oP 'SETUP_URL=\K.*' | tail -1 || true)
-    [[ -n "$SETUP_TOKEN" ]] && break
-    sleep 2
-  done
-
-  if [[ -n "$SETUP_TOKEN" ]]; then
-    # Replace 127.0.0.1 with the actual server IP for remote access display
-    SETUP_URL="${SETUP_TOKEN/127.0.0.1/$SERVER_IP}"
-    echo -e "  ${BOLD}Open this URL to complete setup:${NC}"
-    echo ""
-    echo -e "  ${CYAN}${SETUP_URL}${NC}"
-  else
-    echo -e "  ${BOLD}Open http://${SERVER_IP}:${LIMBO_PORT} to complete setup${NC}"
-    echo -e "  ${YELLOW}(Check logs for setup token: docker compose -f /opt/limbo/docker-compose.yml logs)${NC}"
-  fi
-  echo ""
-  echo -e "  The setup wizard will guide you through configuration."
-  echo -e "  Once complete, Limbo will restart and be ready to use."
-fi
+echo -e "  ${BOLD}Next steps:${NC}"
 echo ""
-echo -e "  ${BOLD}Data directory:${NC}   /opt/limbo/"
-echo -e "  ${BOLD}Logs:${NC}             docker compose -f /opt/limbo/docker-compose.yml logs -f"
-echo -e "  ${BOLD}Update:${NC}           Automatic (daily at 04:00) or run:"
-echo -e "                    cd /opt/limbo && docker compose pull && docker compose up -d"
+echo -e "  ${DIM}1.${NC} SSH into this server:"
+echo -e "     ${CYAN}ssh root@${SERVER_IP}${NC}"
+echo ""
+echo -e "  ${DIM}2.${NC} Start Limbo and complete the setup wizard:"
+echo -e "     ${CYAN}limbo start${NC}"
+echo ""
+echo -e "  ${DIM}3.${NC} To update later:"
+echo -e "     ${CYAN}limbo update${NC}"
 echo ""

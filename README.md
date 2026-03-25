@@ -1,143 +1,104 @@
 # Limbo
 
-A personal memory agent. Captures ideas, remembers things, and connects knowledge across time — running quietly in a Docker container, accessible via Telegram or the ZeroClaw gateway.
+[![npm](https://img.shields.io/npm/v/limbo-ai?color=blue&label=release)](https://www.npmjs.com/package/limbo-ai)
+[![build](https://img.shields.io/github/actions/workflow/status/TomasWard1/limbo/ci.yml?branch=staging&label=build)](https://github.com/TomasWard1/limbo/actions)
+[![license](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[![platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS-lightgrey)](.)
+[![docker](https://img.shields.io/badge/docker-%E2%9C%93-blue)](https://github.com/TomasWard1/limbo/pkgs/container/limbo)
 
-## What it is
+A personal memory agent. Captures ideas, remembers things, and connects knowledge across time — running in a Docker container, accessible via Telegram or the ZeroClaw gateway.
 
-Limbo is a second brain with a conversational interface. It stores atomic notes in a local vault, searches them semantically, and maintains Maps of Content (MOCs) to keep knowledge navigable. It is not a general-purpose assistant — it is a memory system.
-
-**Agent personality:** defined in `workspace/IDENTITY.md` and `workspace/SOUL.md`, baked into the image at build time.
-
----
-
-## Hardware Requirements
-
-Limbo runs as a single Docker container (~35 MB RAM at idle). The main resource cost is Docker and the host OS, not Limbo itself.
-
-| Tier | RAM | vCPU | Disk | Notes |
-|------|-----|------|------|-------|
-| Minimum | 512 MB | 1 | 1 GB | Needs swap configured |
-| Recommended | 1 GB | 1 | 5 GB | Comfortable for Limbo alone |
-| With other services | 2 GB | 1 | 10 GB | Room for reverse proxy, monitoring, etc. |
-
-> Limbo's container uses ~35 MB at rest and peaks around ~70 MB during cold starts. CPU usage is negligible — short bursts of 5-7% when processing messages.
+Limbo is a second brain with a conversational interface. It stores atomic notes in a local vault, searches them semantically, and maintains Maps of Content (MOCs) to keep knowledge navigable.
 
 ---
 
-## Quick Start
+## Install
 
-Requires [Docker Desktop](https://docs.docker.com/get-docker/) and Node.js 18+.
+> Limbo is designed to run on a VPS (always-on, accessible from anywhere). A $5/month Ubuntu server is all you need.
 
-```sh
+### 1. Provision a server
+
+Any Ubuntu/Debian VPS with 1 GB+ RAM. Recommended providers: Hetzner, DigitalOcean, Vultr, ReliedCloud.
+
+### 2. Run the installer
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh | bash
+```
+
+This installs Docker, Node.js, and the Limbo CLI.
+
+### 3. Start Limbo
+
+```bash
+limbo start
+```
+
+The setup wizard walks you through:
+- [ ] Choose a language (English / Español)
+- [ ] Select a provider (Anthropic, OpenAI, OpenRouter)
+- [ ] Authenticate (API key or Claude/ChatGPT subscription)
+- [ ] Pick a model
+- [ ] Connect Telegram (optional but recommended)
+- [ ] Enable voice messages and web search (optional)
+- [ ] Review and confirm
+
+Once complete, Limbo restarts and is ready to use.
+
+### 4. Update
+
+```bash
+limbo update
+```
+
+Pulls the latest image and restarts. Vault data is persisted and not affected.
+
+---
+
+## Local Install (macOS/Linux)
+
+If you prefer running locally instead of a VPS:
+
+```bash
 npx limbo-ai start
 ```
 
-This will:
-1. Prompt for your API key (Anthropic or OpenAI)
-2. Write `~/.limbo/.env` and `~/.limbo/docker-compose.yml`
-3. Pull the latest Limbo image and start the container
-
-Limbo binds to `127.0.0.1:18789`.
-
-### Agent Installation
-
-AI agents can install Limbo non-interactively using CLI flags:
-
-```bash
-npx limbo-ai start --provider openrouter --api-key sk-or-v1-xxx --model auto
-```
-
-**Required flags:**
-| Flag | Description |
-|------|-------------|
-| `--provider` | `openai`, `anthropic`, or `openrouter` |
-| `--api-key` | Your provider API key |
-
-**Optional flags:**
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--model` | Provider default | Model name (e.g. `anthropic/claude-sonnet-4-6`) |
-| `--language` | `en` | CLI language (`en` or `es`) |
-
-Headless mode skips Telegram setup. To add Telegram later, run `npx limbo-ai start --reconfigure`.
-
-> **Note:** Subscription-based auth (ChatGPT/Codex, Claude Code) requires interactive setup because it involves browser-based OAuth or token pasting. Use `npx limbo-ai start` without flags for subscription auth.
-
-### Available commands
-
-```sh
-npx limbo-ai@latest start        # Install and start (default if no command given)
-npx limbo-ai@latest stop         # Stop the container
-npx limbo-ai@latest update       # Pull latest image and restart
-npx limbo-ai@latest status       # Show container status
-npx limbo-ai@latest logs         # Tail container logs
-npx limbo-ai@latest start --reconfigure   # Change API keys or settings
-npx limbo-ai@latest config               # Configure optional features (voice, web-search)
-```
+Requires [Docker Desktop](https://docs.docker.com/get-docker/) and Node.js 18+. Binds to `127.0.0.1:18789`.
 
 ---
 
-## Optional Features
-
-Limbo supports optional features that can be enabled during the setup wizard (step 7) or anytime via the CLI.
-
-### Voice Messages
-
-Transcribe Telegram voice notes using [Groq](https://groq.com) Whisper. Requires a Groq API key (`gsk_...`).
+## Commands
 
 ```sh
-npx limbo-ai@latest config voice --enable --api-key gsk_xxx
-npx limbo-ai@latest config voice --status
-npx limbo-ai@latest config voice --disable
+limbo start                  # Install and start (enters wizard on first run)
+limbo stop                   # Stop the container
+limbo update                 # Pull latest image and restart
+limbo status                 # Show container status
+limbo logs                   # Tail container logs
+limbo start --reconfigure    # Re-run the setup wizard
+limbo config voice --enable --api-key gsk_xxx   # Enable voice transcription
+limbo config web-search --enable --api-key BSA_xxx  # Enable web search
 ```
-
-### Web Search
-
-Give Limbo real-time web search via the [Brave Search API](https://brave.com/search/api/). Requires a Brave API key (`BSA...`).
-
-```sh
-npx limbo-ai@latest config web-search --enable --api-key BSAxxx
-npx limbo-ai@latest config web-search --status
-npx limbo-ai@latest config web-search --disable
-```
-
-Both features store API keys as Docker secrets and toggle config sections in the container on restart.
-
----
-
-## Updating
-
-```sh
-npx limbo-ai@latest update
-```
-
-Pulls the latest Limbo image and restarts the container. Your vault data is persisted in the `limbo-data` Docker volume and is not affected.
 
 ---
 
 ## Connecting
 
-There are two ways to connect: **talk to Limbo** (conversational, with its personality and memory logic) or **use the vault directly** (raw tool access from another agent).
+### Telegram (recommended)
 
-### Talk to Limbo
+The setup wizard walks you through creating a Telegram bot and pairing it. Message your bot and Limbo responds — full agent with personality, memory logic, and vault tools.
 
-#### Telegram (recommended)
+### ZeroClaw gateway
 
-During setup (`npx limbo-ai start`), the wizard will walk you through creating a Telegram bot via BotFather and pairing it. Message your bot and Limbo will respond — full agent with personality, memory logic, and vault tools.
-
-#### ZeroClaw gateway
-
-Any [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw)-compatible chat client can connect to:
+Any [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw)-compatible client can connect via WebSocket:
 
 ```
 ws://localhost:18789
 ```
 
-This gives you a conversational session with Limbo, same as Telegram but over WebSocket.
+### MCP (for other AI agents)
 
-### Use the vault from another agent
-
-If you want another AI agent (like Claude Code) to read and write to Limbo's vault directly — without going through Limbo's personality or reasoning — add it as an MCP server:
+Add Limbo as an MCP server to give another agent direct vault access:
 
 ```json
 {
@@ -149,43 +110,43 @@ If you want another AI agent (like Claude Code) to read and write to Limbo's vau
 }
 ```
 
-This exposes the 4 vault tools (`vault_search`, `vault_read`, `vault_write_note`, `vault_update_map`) as MCP tools in the connecting agent. The agent operates on the vault directly — Limbo's LLM is not involved.
+This exposes 4 vault tools (`vault_search`, `vault_read`, `vault_write_note`, `vault_update_map`). The connecting agent operates on the vault directly — Limbo's LLM is not involved.
 
 ---
 
-## Environment Variables
+## Optional Features
 
-Managed automatically by `npx limbo-ai start`, stored in `~/.limbo/.env`.
+Enable during the setup wizard or anytime via CLI.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `AUTH_MODE` | no | `api-key` | `api-key` or `subscription` |
-| `OPENAI_API_KEY` | no* | — | OpenAI API key for `MODEL_PROVIDER=openai` |
-| `ANTHROPIC_API_KEY` | no* | — | Anthropic API key for `MODEL_PROVIDER=anthropic` |
-| `LLM_API_KEY` | no | — | Legacy generic key path for older installs |
-| `MODEL_PROVIDER` | no | `anthropic` | Model provider: `anthropic`, `openai`, or `openai-codex` |
-| `MODEL_NAME` | no | `claude-opus-4-6` | Model name (e.g. `claude-opus-4-6`, `claude-sonnet-4-6`, `gpt-5.4`) |
-| `TELEGRAM_ENABLED` | no | `false` | Enable Telegram bot integration |
-| `TELEGRAM_BOT_TOKEN` | no | — | Telegram bot token (required if `TELEGRAM_ENABLED=true`) |
-| `VOICE_ENABLED` | no | `false` | Enable voice transcription (requires Groq API key as Docker secret) |
-| `WEB_SEARCH_ENABLED` | no | `false` | Enable web search (requires Brave API key as Docker secret) |
+### Voice Messages
 
-> \* API keys are required only for `AUTH_MODE=api-key`. Subscription auth uses ZeroClaw auth profiles instead.
+Transcribe Telegram voice notes using [Groq](https://groq.com) Whisper.
+
+```sh
+limbo config voice --enable --api-key gsk_xxx
+limbo config voice --disable
+```
+
+### Web Search
+
+Real-time web search via [Brave Search API](https://brave.com/search/api/).
+
+```sh
+limbo config web-search --enable --api-key BSAxxx
+limbo config web-search --disable
+```
 
 ---
 
-## MCP Tools
+## Hardware Requirements
 
-Limbo exposes 4 tools via the `limbo-vault` MCP server:
+| Tier | RAM | vCPU | Disk |
+|------|-----|------|------|
+| Minimum | 512 MB | 1 | 1 GB |
+| Recommended | 1 GB | 1 | 5 GB |
+| With other services | 2 GB | 1 | 10 GB |
 
-| Tool | Description |
-|------|-------------|
-| `vault_search` | Search notes by regex or keyword |
-| `vault_read` | Read a note by ID (returns raw markdown + frontmatter) |
-| `vault_write_note` | Create or overwrite a note with structured frontmatter |
-| `vault_update_map` | Append entries to a Map of Content (MOC) |
-
-Full tool specs in `workspace/TOOLS.md`.
+Limbo uses ~35 MB at rest, peaks ~70 MB during cold starts. CPU usage is negligible.
 
 ---
 
@@ -211,54 +172,59 @@ Full tool specs in `workspace/TOOLS.md`.
 └─────────────────────────────────────────┘
 ```
 
-- **ZeroClaw** — lightweight Rust runtime (~5MB RAM) that handles client connections, routes to the LLM, manages Telegram, and integrates MCP tools natively
-- **MCP server** — Node.js server providing vault read/write tools (spawned by ZeroClaw, no mcporter needed)
-- **Vault** — plain markdown files with YAML frontmatter, persisted in a named Docker volume
-- **Migrations** — lightweight Node.js migration runner for vault schema changes
-
-**Data directory layout** (in `/data` volume):
-
-```
-/data/
-  vault/      # markdown notes
-  db/         # sqlite (future use)
-  logs/       # startup and runtime logs
-  backups/    # snapshots
-  memory/     # agent memory
-  config/
-    USER.md   # per-user persona file (generated at runtime)
-```
+- **ZeroClaw** — Rust runtime (~5 MB RAM) handling connections, LLM routing, Telegram, and MCP tools
+- **MCP server** — Node.js vault read/write tools, spawned by ZeroClaw
+- **Vault** — plain markdown with YAML frontmatter, persisted in a Docker volume
 
 ---
 
-## Development Setup
+## Agent Installation (headless)
 
-### Prerequisites
+For CI/CD or automated provisioning:
 
-- Docker + Docker Compose
-- Node.js 22+ (for local MCP server dev)
-
-### Run MCP server locally
-
-```sh
-cd mcp-server
-npm install
-VAULT_PATH=./dev-vault node index.js
+```bash
+npx limbo-ai start --provider anthropic --api-key sk-ant-xxx --model claude-sonnet-4-6
 ```
 
-### Build image locally
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--provider` | yes | — | `anthropic`, `openai`, or `openrouter` |
+| `--api-key` | yes | — | Provider API key |
+| `--model` | no | Provider default | Model name |
+| `--language` | no | `en` | `en` or `es` |
 
-```sh
-docker build -t limbo:dev .
-docker compose up -d
-```
+Headless mode skips Telegram. Add it later with `limbo start --reconfigure`.
 
-### Run migrations standalone
-
-```sh
-node migrations/index.js
-```
+> Subscription auth (Claude Code, ChatGPT Plus) requires the interactive wizard.
 
 ---
+
+## Environment Variables
+
+Managed by `limbo start`, stored in `~/.limbo/.env`.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTH_MODE` | `api-key` | `api-key` or `subscription` |
+| `MODEL_PROVIDER` | `anthropic` | `anthropic`, `openai`, `openai-codex`, or `openrouter` |
+| `MODEL_NAME` | `claude-sonnet-4-6` | Model to use |
+| `TELEGRAM_ENABLED` | `false` | Enable Telegram integration |
+| `VOICE_ENABLED` | `false` | Enable Groq voice transcription |
+| `WEB_SEARCH_ENABLED` | `false` | Enable Brave web search |
+
+---
+
+## Development
+
+```sh
+# Run MCP server locally
+cd mcp-server && npm install && VAULT_PATH=./dev-vault node index.js
+
+# Build image locally
+docker build -t limbo:dev . && docker compose up -d
+
+# Run tests
+npm test
+```
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for release and deployment process.
