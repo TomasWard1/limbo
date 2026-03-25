@@ -177,13 +177,12 @@ describe('buildCodexAuthProfile', () => {
     };
     const result = buildCodexAuthProfile(profile);
     assert.strictEqual(result.version, 1);
-    const pid = 'openai-codex:default';
+    const pid = 'openai-codex:test@example.com';
     assert.ok(result.profiles[pid], 'profile entry exists');
     assert.strictEqual(result.profiles[pid].provider, 'openai-codex');
-    assert.strictEqual(result.profiles[pid].kind, 'oauth');
-    assert.strictEqual(result.profiles[pid].access_token, 'access-tok');
-    assert.strictEqual(result.profiles[pid].refresh_token, 'refresh-tok');
-    assert.deepStrictEqual(result.order, { 'openai-codex': [pid] });
+    assert.strictEqual(result.profiles[pid].type, 'oauth');
+    assert.strictEqual(result.profiles[pid].access, 'access-tok');
+    assert.strictEqual(result.profiles[pid].refresh, 'refresh-tok');
   });
 
   it('builds correct structure without email (accountId empty)', () => {
@@ -194,7 +193,7 @@ describe('buildCodexAuthProfile', () => {
     };
     const result = buildCodexAuthProfile(profile);
     const pid = 'openai-codex:default';
-    assert.strictEqual(result.profiles[pid].account_id, '');
+    assert.strictEqual(result.profiles[pid].accountId, '');
   });
 });
 
@@ -202,17 +201,17 @@ describe('buildAnthropicAuthProfile', () => {
   it('builds correct structure', () => {
     const result = buildAnthropicAuthProfile('sk-ant-test123');
     assert.strictEqual(result.version, 1);
-    const pid = 'anthropic:default';
+    const pid = 'anthropic:token';
     assert.ok(result.profiles[pid], 'profile entry exists');
     assert.strictEqual(result.profiles[pid].provider, 'anthropic');
-    assert.strictEqual(result.profiles[pid].kind, 'token');
-    assert.strictEqual(result.profiles[pid].access_token, 'sk-ant-test123');
+    assert.strictEqual(result.profiles[pid].type, 'token');
+    assert.strictEqual(result.profiles[pid].token, 'sk-ant-test123');
   });
 
   it('order includes anthropic key', () => {
     const result = buildAnthropicAuthProfile('sk-ant-xyz');
     assert.ok(result.order.anthropic, 'order has anthropic key');
-    assert.deepStrictEqual(result.order.anthropic, ['anthropic:default']);
+    assert.deepStrictEqual(result.order.anthropic, ['anthropic:token']);
   });
 });
 

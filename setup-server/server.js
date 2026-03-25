@@ -229,52 +229,48 @@ function decodeJwtPayload(token) {
   return JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 }
 
-// ZeroClaw auth-profiles.json format:
-//   path: ~/.zeroclaw/auth-profiles.json
-//   fields: profile_name, kind, provider, access_token, refresh_token, expires_at (RFC3339)
-//   After writing, `zeroclaw auth use --provider X --profile Y` activates it.
+// ZeroClaw auth-profiles.json — must match the structure used by the CLI
+// (cli.js buildAnthropicAuthProfile / buildCodexAuthProfile).
+// Path: ~/.zeroclaw/agents/main/agent/auth-profiles.json
 
 function buildCodexAuthProfile(profile) {
-  const profileName = 'default';
-  const profileId = `openai-codex:${profileName}`;
+  const profileId = profile.email ? `openai-codex:${profile.email}` : 'openai-codex:default';
   return {
     version: 1,
     profiles: {
       [profileId]: {
-        profile_name: profileName,
-        kind: 'oauth',
+        type: 'oauth',
         provider: 'openai-codex',
-        access_token: profile.access,
-        refresh_token: profile.refresh,
-        expires_at: new Date(profile.expires).toISOString(),
-        account_id: profile.accountId || '',
+        access: profile.access,
+        refresh: profile.refresh,
+        expires: profile.expires,
+        accountId: profile.accountId || '',
       },
     },
-    order: { 'openai-codex': [profileId] },
-    lastGood: { 'openai-codex': profileId },
+    order: {},
+    lastGood: {},
     usageStats: {},
   };
 }
 
 function buildAnthropicAuthProfile(token) {
-  const profileName = 'default';
-  const profileId = `anthropic:${profileName}`;
   return {
     version: 1,
     profiles: {
-      [profileId]: {
-        profile_name: profileName,
-        kind: 'token',
+      'anthropic:token': {
+        type: 'token',
         provider: 'anthropic',
-        access_token: token,
+        token,
       },
     },
-    order: { anthropic: [profileId] },
-    lastGood: { anthropic: profileId },
+    order: { anthropic: ['anthropic:token'] },
+    lastGood: {},
     usageStats: {},
   };
 }
 
+// ZeroClaw resolves auth profiles from the state dir root: ~/.zeroclaw/auth-profiles.json
+// See: ZeroClaw src/auth/profiles.rs — state_dir.join("auth-profiles.json")
 const AUTH_PROFILES_FILE = path.join(ZEROCLAW_STATE, 'auth-profiles.json');
 
 function writeAuthProfiles(store) {
