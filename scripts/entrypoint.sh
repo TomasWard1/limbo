@@ -93,10 +93,28 @@ AUTH_MODE="${AUTH_MODE:-api-key}"
 if [ "$SETUP_MODE" = "true" ]; then
   log "INFO  Setup mode — skipping API key validation"
 elif [ "$AUTH_MODE" = "subscription" ]; then
-  log "INFO  Subscription mode — using ZeroClaw auth profiles (no API key required)"
-  # Export any API keys that happen to exist, but don't require them
-  [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
-  [ -n "$LLM_API_KEY" ] && export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$LLM_API_KEY}"
+  log "INFO  Subscription mode — resolving credentials from auth profiles"
+  # ZeroClaw resolves provider credentials from env vars, not auth-profiles.json.
+  # Read the token from the profile file and export it as the provider env var.
+  AUTH_PROFILES_FILE="$ZEROCLAW_STATE_DIR/auth-profiles.json"
+  if [ -f "$AUTH_PROFILES_FILE" ]; then
+    case "$MODEL_PROVIDER" in
+      anthropic)
+        _token=$(node -e "try{const p=JSON.parse(require('fs').readFileSync('$AUTH_PROFILES_FILE','utf8'));const k=Object.keys(p.profiles||{}).find(k=>k.startsWith('anthropic:'));if(k){console.log(p.profiles[k].token||p.profiles[k].access_token||'')}}catch{}" 2>/dev/null)
+        if [ -n "$_token" ]; then
+          export ANTHROPIC_API_KEY="$_token"
+          log "INFO  Exported Anthropic token from auth profile"
+        fi
+        ;;
+      openai|openai-codex)
+        _token=$(node -e "try{const p=JSON.parse(require('fs').readFileSync('$AUTH_PROFILES_FILE','utf8'));const k=Object.keys(p.profiles||{}).find(k=>k.startsWith('openai'));if(k){console.log(p.profiles[k].access||p.profiles[k].access_token||'')}}catch{}" 2>/dev/null)
+        if [ -n "$_token" ]; then
+          export OPENAI_API_KEY="$_token"
+          log "INFO  Exported OpenAI token from auth profile"
+        fi
+        ;;
+    esac
+  fi
 else
   # API-key mode: require LLM_API_KEY or provider-specific key
   case "$MODEL_PROVIDER" in
