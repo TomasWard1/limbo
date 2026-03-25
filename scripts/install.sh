@@ -4,7 +4,7 @@
 set -euo pipefail
 
 INSTALLER_URL="https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/install.sh"
-COMPOSE_URL="https://gist.githubusercontent.com/TomasWard1/d130b8d34cc8eeb0527d045d06985396/raw/docker-compose.yml"
+COMPOSE_URL="https://raw.githubusercontent.com/tomasward1/limbo/main/docker-compose.yml"
 
 # ─── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -44,20 +44,23 @@ esac
 
 log "Detected OS: $OS_ID $OS_VERSION_ID"
 
-# Disk space (10 GB minimum)
+# Disk space (5 GB minimum)
 AVAILABLE_KB=$(df -k / | awk 'NR==2 {print $4}')
-REQUIRED_KB=$((10 * 1024 * 1024))
+REQUIRED_KB=$((5 * 1024 * 1024))
 if [[ $AVAILABLE_KB -lt $REQUIRED_KB ]]; then
   AVAILABLE_GB=$(( AVAILABLE_KB / 1024 / 1024 ))
-  die "Insufficient disk space. Need 10 GB, have ~${AVAILABLE_GB} GB free."
+  die "Insufficient disk space. Need 5 GB, have ~${AVAILABLE_GB} GB free."
 fi
 
-# RAM (2 GB minimum)
+# RAM (512 MB minimum, 1 GB recommended)
 TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-REQUIRED_MEM_KB=$((2 * 1024 * 1024))
-if [[ $TOTAL_MEM_KB -lt $REQUIRED_MEM_KB ]]; then
-  TOTAL_MEM_GB=$(echo "scale=1; $TOTAL_MEM_KB / 1024 / 1024" | bc)
-  die "Insufficient memory. Need 2 GB, have ${TOTAL_MEM_GB} GB."
+MIN_MEM_KB=$((512 * 1024))
+REC_MEM_KB=$((1024 * 1024))
+TOTAL_MEM_MB=$(( TOTAL_MEM_KB / 1024 ))
+if [[ $TOTAL_MEM_KB -lt $MIN_MEM_KB ]]; then
+  die "Insufficient memory. Need at least 512 MB, have ${TOTAL_MEM_MB} MB."
+elif [[ $TOTAL_MEM_KB -lt $REC_MEM_KB ]]; then
+  warn "Low memory (${TOTAL_MEM_MB} MB). Recommended: 1 GB+. Swap space is advised."
 fi
 
 ok "Pre-flight checks passed."
