@@ -1481,7 +1481,7 @@ function installDocker() {
   }
 }
 
-function extractWizardUrl(maxWaitSecs = 15) {
+function extractWizardUrl(maxWaitSecs = 30) {
   const deadline = Date.now() + maxWaitSecs * 1000;
   while (Date.now() < deadline) {
     try {
@@ -1670,21 +1670,20 @@ async function cmdStart() {
   // ── Route: Wizard reconfigure (--reconfigure, no --cli) ───────────────────
   if (reconfig && hasProviderConfig) {
     log('Resetting configuration for setup wizard...');
-    // Remove provider config from .env so container enters setup mode
-    const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\n`;
+    // Write minimal .env with FORCE_SETUP_MODE — the entrypoint will handle
+    // clearing internal config files. This is more reliable than running
+    // `docker compose run` to delete files inside the volume, which can fail
+    // silently due to permissions or Docker state issues.
+    const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\nFORCE_SETUP_MODE=true\n`;
     fs.writeFileSync(ENV_FILE, minimalContent, { mode: 0o600 });
     // Keep gateway token secret intact
     ensureGatewayToken(existingEnv);
-    // Clean config inside the Docker volume so entrypoint re-enters setup mode
-    try {
-      runDockerCompose(['run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
-        '-c', 'rm -f /data/config/.env /home/limbo/.zeroclaw/config.toml'], { stdio: 'pipe' });
-    } catch {}
   }
 
   // ── Route: Wizard (default for fresh install or wizard reconfigure) ───────
   log('Starting Limbo with setup wizard...');
-  if (!alreadyHasEnv || (reconfig && hasProviderConfig)) {
+  if (!alreadyHasEnv && !reconfig) {
+    // Fresh install only — reconfigure already wrote its own .env above
     writeMinimalEnv();
   }
 
@@ -1711,7 +1710,20 @@ async function cmdStart() {
   // Always show the wizard URL with tunnel/SSH info, even if we couldn't
   // extract the token-authenticated URL from logs.
   const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
+  if (!wizardUrl) {
+    warn('Could not extract setup token from container logs. The wizard may need a moment to start.');
+    warn(`If the URL below doesn't work, try: ${c.cyan}limbo logs${c.reset} to check container status.`);
+  }
   printWizardUrl(displayUrl, tunnel);
+
+  // Remove FORCE_SETUP_MODE from .env so the container doesn't re-enter setup
+  // mode on restart after the wizard completes. The entrypoint uses a marker
+  // file as a safety net, but cleaning the env is the primary mechanism.
+  try {
+    const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+    const cleaned = envContent.replace(/^FORCE_SETUP_MODE=.*\n?/m, '');
+    if (cleaned !== envContent) fs.writeFileSync(ENV_FILE, cleaned, { mode: 0o600 });
+  } catch {}
 }
 
 // Shared path for headless, CLI-prompt, and existing-config routes
