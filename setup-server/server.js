@@ -229,6 +229,37 @@ function decodeJwtPayload(token) {
   return JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 }
 
+// ─── OpenAI Codex auth profiles ──────────────────────────────────────────────
+// OpenAI OAuth tokens expire and need refresh. ZeroClaw reads auth-profiles.json
+// for the refresh token and handles renewal automatically. This is ONLY needed
+// for OpenAI Codex — Anthropic tokens are static and stored as secrets instead.
+const AUTH_PROFILES_FILE = path.join(ZEROCLAW_STATE, 'auth-profiles.json');
+
+function buildCodexAuthProfile(profile) {
+  const profileId = profile.email ? `openai-codex:${profile.email}` : 'openai-codex:default';
+  return {
+    version: 1,
+    profiles: {
+      [profileId]: {
+        type: 'oauth',
+        provider: 'openai-codex',
+        access: profile.access,
+        refresh: profile.refresh,
+        expires: profile.expires,
+        accountId: profile.accountId || '',
+      },
+    },
+    order: {},
+    lastGood: {},
+    usageStats: {},
+  };
+}
+
+function writeAuthProfiles(store) {
+  fs.mkdirSync(ZEROCLAW_STATE, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(AUTH_PROFILES_FILE, JSON.stringify(store, null, 2), { mode: 0o600 });
+  log('Auth profile written to ' + AUTH_PROFILES_FILE);
+}
 
 // ─── Telegram API Helpers ────────────────────────────────────────────────────
 
@@ -508,8 +539,17 @@ async function exchangeOAuthCode(code, verifier, redirectUri) {
 function processOAuthTokens(tokenRes) {
   const jwt = decodeJwtPayload(tokenRes.access_token);
   const authClaim = jwt['https://api.openai.com/auth'] || {};
+  // Write auth profile for ZeroClaw's OAuth refresh flow
+  const store = buildCodexAuthProfile({
+    access: tokenRes.access_token,
+    refresh: tokenRes.refresh_token,
+    expires: Date.now() + (tokenRes.expires_in * 1000),
+    accountId: authClaim.chatgpt_account_id || '',
+    email: jwt.email || '',
+  });
+  writeAuthProfiles(store);
+  // Also write access token as secret for entrypoint to export
   writeSecretFile('llm_api_key', tokenRes.access_token);
-  log('Auth token written to secrets/llm_api_key');
   return { email: jwt.email || '' };
 }
 
@@ -805,6 +845,7 @@ module.exports = {
   generatePKCE,
   buildOAuthUrl,
   decodeJwtPayload,
+  buildCodexAuthProfile,
   handleRequest,
   _internals: {
     OPENAI_OAUTH,
