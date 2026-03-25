@@ -1667,23 +1667,20 @@ async function cmdStart() {
     return startContainerWithConfig(cfg, existingEnv, alreadyHasEnv);
   }
 
-  // ── Route: Wizard reconfigure (--reconfigure, no --cli) ───────────────────
-  if (reconfig && hasProviderConfig) {
+  // ── Route: Wizard reconfigure or fresh install ─────────────────────────────
+  // For --reconfigure: always write FORCE_SETUP_MODE so the entrypoint clears
+  // internal config. The host .env may not have MODEL_PROVIDER (wizard-configured
+  // users store config only inside the Docker volume), so we can't gate on
+  // hasProviderConfig — the user explicitly asked to reconfigure.
+  if (reconfig) {
     log('Resetting configuration for setup wizard...');
-    // Write minimal .env with FORCE_SETUP_MODE — the entrypoint will handle
-    // clearing internal config files. This is more reliable than running
-    // `docker compose run` to delete files inside the volume, which can fail
-    // silently due to permissions or Docker state issues.
     const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\nFORCE_SETUP_MODE=true\n`;
     fs.writeFileSync(ENV_FILE, minimalContent, { mode: 0o600 });
-    // Keep gateway token secret intact
     ensureGatewayToken(existingEnv);
   }
 
-  // ── Route: Wizard (default for fresh install or wizard reconfigure) ───────
   log('Starting Limbo with setup wizard...');
   if (!alreadyHasEnv && !reconfig) {
-    // Fresh install only — reconfigure already wrote its own .env above
     writeMinimalEnv();
   }
 
