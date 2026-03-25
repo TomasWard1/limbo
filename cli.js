@@ -1481,7 +1481,7 @@ function installDocker() {
   }
 }
 
-function extractWizardUrl(maxWaitSecs = 15) {
+function extractWizardUrl(maxWaitSecs = 30) {
   const deadline = Date.now() + maxWaitSecs * 1000;
   while (Date.now() < deadline) {
     try {
@@ -1514,7 +1514,7 @@ ${c.green}${c.bold}╚═══════════════════�
 `);
 
   if (tunnel) {
-    const tunnelUrl = `${tunnel.url}/?token=${token}`;
+    const tunnelUrl = token ? `${tunnel.url}/?token=${token}` : tunnel.url;
     console.log(`  ${c.green}Public URL (works from any browser):${c.reset}
   ${c.cyan}${c.bold}${tunnelUrl}${c.reset}
 `);
@@ -1670,21 +1670,20 @@ async function cmdStart() {
   // ── Route: Wizard reconfigure (--reconfigure, no --cli) ───────────────────
   if (reconfig && hasProviderConfig) {
     log('Resetting configuration for setup wizard...');
-    // Remove provider config from .env so container enters setup mode
-    const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\n`;
+    // Write minimal .env with FORCE_SETUP_MODE — the entrypoint will handle
+    // clearing internal config files. This is more reliable than running
+    // `docker compose run` to delete files inside the volume, which can fail
+    // silently due to permissions or Docker state issues.
+    const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\nFORCE_SETUP_MODE=true\n`;
     fs.writeFileSync(ENV_FILE, minimalContent, { mode: 0o600 });
     // Keep gateway token secret intact
     ensureGatewayToken(existingEnv);
-    // Clean config inside the Docker volume so entrypoint re-enters setup mode
-    try {
-      runDockerCompose(['run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
-        '-c', 'rm -f /data/config/.env /home/limbo/.zeroclaw/config.toml'], { stdio: 'pipe' });
-    } catch {}
   }
 
   // ── Route: Wizard (default for fresh install or wizard reconfigure) ───────
   log('Starting Limbo with setup wizard...');
-  if (!alreadyHasEnv || (reconfig && hasProviderConfig)) {
+  if (!alreadyHasEnv && !reconfig) {
+    // Fresh install only — reconfigure already wrote its own .env above
     writeMinimalEnv();
   }
 
@@ -1711,7 +1710,20 @@ async function cmdStart() {
   // Always show the wizard URL with tunnel/SSH info, even if we couldn't
   // extract the token-authenticated URL from logs.
   const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
+  if (!wizardUrl) {
+    warn('Could not extract setup token from container logs. The wizard may need a moment to start.');
+    warn(`If the URL below doesn't work, try: ${c.cyan}limbo logs${c.reset} to check container status.`);
+  }
   printWizardUrl(displayUrl, tunnel);
+
+  // Remove FORCE_SETUP_MODE from .env so the container doesn't re-enter setup
+  // mode on restart after the wizard completes. The entrypoint uses a marker
+  // file as a safety net, but cleaning the env is the primary mechanism.
+  try {
+    const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+    const cleaned = envContent.replace(/^FORCE_SETUP_MODE=.*\n?/m, '');
+    if (cleaned !== envContent) fs.writeFileSync(ENV_FILE, cleaned, { mode: 0o600 });
+  } catch {}
 }
 
 // Shared path for headless, CLI-prompt, and existing-config routes
@@ -1770,20 +1782,40 @@ function selfUpdateCli() {
       (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
     if (!isNewer) return;
 
-    log(`Updating CLI: ${pkg.version} → ${latest}...`);
-    execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
-    ok(`CLI updated to ${latest}.`);
+    const isGlobal = !process.argv[1].includes('npx') && !process.argv[1].includes('node_modules/.cache');
+
+    if (isGlobal) {
+      log(`Updating CLI: ${pkg.version} → ${latest}...`);
+      execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
+      ok(`CLI updated to ${latest}.`);
+    } else {
+      // npx served a stale cached version — clear it
+      warn(`CLI is outdated (${pkg.version} → ${latest}). npx served a cached version.`);
+      try {
+        const npxCacheBase = path.join(os.homedir(), '.npm', '_npx');
+        if (fs.existsSync(npxCacheBase)) {
+          for (const entry of fs.readdirSync(npxCacheBase)) {
+            const pkgPath = path.join(npxCacheBase, entry, 'node_modules', 'limbo-ai');
+            if (fs.existsSync(pkgPath)) {
+              fs.rmSync(path.join(npxCacheBase, entry), { recursive: true, force: true });
+              log('Cleared stale npx cache.');
+              break;
+            }
+          }
+        }
+      } catch {}
+      log(`Re-run: ${c.cyan}npx limbo-ai@latest update${c.reset}`);
+    }
   } catch {
-    warn('Could not self-update CLI. Run: npm install -g limbo-ai@latest');
+    warn('Could not check for CLI updates. Run: npm install -g limbo-ai@latest');
   }
 }
 
 function cmdUpdate() {
   if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
 
-  // Self-update the CLI if installed globally
-  const isGlobal = !process.argv[1].includes('npx') && !process.argv[1].includes('node_modules/.cache');
-  if (isGlobal) selfUpdateCli();
+  // Always attempt CLI self-update, regardless of install method
+  selfUpdateCli();
 
   // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
   let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
@@ -1801,6 +1833,10 @@ function cmdUpdate() {
   run(`docker compose -f "${COMPOSE_FILE}" pull -q`);
   log('Restarting...');
   run(`docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans`);
+
+  // Clear update-check cache so the banner doesn't persist after a successful update
+  try { fs.unlinkSync(UPDATE_CHECK_FILE); } catch {}
+
   ok('Updated and restarted.');
 }
 
