@@ -86,17 +86,24 @@ else
 fi
 
 # ── Validate and resolve API key ─────────────────────────────────────────────
-# Subscription mode uses OAuth tokens stored in ZeroClaw auth-profiles — no API key needed.
 # Setup mode skips validation entirely — the wizard will configure keys.
 AUTH_MODE="${AUTH_MODE:-api-key}"
 
 if [ "$SETUP_MODE" = "true" ]; then
   log "INFO  Setup mode — skipping API key validation"
 elif [ "$AUTH_MODE" = "subscription" ]; then
-  log "INFO  Subscription mode — using ZeroClaw auth profiles (no API key required)"
-  # Export any API keys that happen to exist, but don't require them
-  [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
-  [ -n "$LLM_API_KEY" ] && export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$LLM_API_KEY}"
+  log "INFO  Subscription mode — credentials resolved from secrets"
+  # Subscription tokens are stored as secrets (same path as api-key mode).
+  # The wizard writes the token to secrets/llm_api_key during setup.
+  # read_secret already loaded it into LLM_API_KEY above.
+  case "$MODEL_PROVIDER" in
+    anthropic)
+      [ -n "$LLM_API_KEY" ] && export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$LLM_API_KEY}"
+      ;;
+    openai|openai-codex)
+      [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
+      ;;
+  esac
 else
   # API-key mode: require LLM_API_KEY or provider-specific key
   case "$MODEL_PROVIDER" in

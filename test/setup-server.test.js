@@ -15,7 +15,6 @@ const {
   buildOAuthUrl,
   decodeJwtPayload,
   buildCodexAuthProfile,
-  buildAnthropicAuthProfile,
   handleRequest,
   _internals: { OPENAI_OAUTH },
 } = require('../setup-server/server.js');
@@ -194,24 +193,6 @@ describe('buildCodexAuthProfile', () => {
     const result = buildCodexAuthProfile(profile);
     const pid = 'openai-codex:default';
     assert.strictEqual(result.profiles[pid].accountId, '');
-  });
-});
-
-describe('buildAnthropicAuthProfile', () => {
-  it('builds correct structure', () => {
-    const result = buildAnthropicAuthProfile('sk-ant-test123');
-    assert.strictEqual(result.version, 1);
-    const pid = 'anthropic:token';
-    assert.ok(result.profiles[pid], 'profile entry exists');
-    assert.strictEqual(result.profiles[pid].provider, 'anthropic');
-    assert.strictEqual(result.profiles[pid].type, 'token');
-    assert.strictEqual(result.profiles[pid].token, 'sk-ant-test123');
-  });
-
-  it('order includes anthropic key', () => {
-    const result = buildAnthropicAuthProfile('sk-ant-xyz');
-    assert.ok(result.order.anthropic, 'order has anthropic key');
-    assert.deepStrictEqual(result.order.anthropic, ['anthropic:token']);
   });
 });
 
