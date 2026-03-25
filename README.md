@@ -1,5 +1,11 @@
 # Limbo
 
+[![npm](https://img.shields.io/npm/v/limbo-ai?color=blue&label=release)](https://www.npmjs.com/package/limbo-ai)
+[![build](https://img.shields.io/github/actions/workflow/status/TomasWard1/limbo/ci.yml?branch=staging&label=build)](https://github.com/TomasWard1/limbo/actions)
+[![license](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[![platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS-lightgrey)](.)
+[![docker](https://img.shields.io/badge/docker-%E2%9C%93-blue)](https://github.com/TomasWard1/limbo/pkgs/container/limbo)
+
 A personal memory agent. Captures ideas, remembers things, and connects knowledge across time — running in a Docker container, accessible via Telegram or the ZeroClaw gateway.
 
 Limbo is a second brain with a conversational interface. It stores atomic notes in a local vault, searches them semantically, and maintains Maps of Content (MOCs) to keep knowledge navigable.
