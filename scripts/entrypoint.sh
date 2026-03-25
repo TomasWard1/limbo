@@ -98,7 +98,19 @@ elif [ "$AUTH_MODE" = "subscription" ]; then
   # read_secret already loaded it into LLM_API_KEY above.
   case "$MODEL_PROVIDER" in
     anthropic)
-      [ -n "$LLM_API_KEY" ] && export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$LLM_API_KEY}"
+      if [ -n "$LLM_API_KEY" ]; then
+        # OAuth tokens (sk-ant-oat*) need ANTHROPIC_OAUTH_TOKEN so ZeroClaw
+        # routes them through its OAuth adapter instead of the API key path.
+        case "$LLM_API_KEY" in
+          sk-ant-oat*)
+            export ANTHROPIC_OAUTH_TOKEN="${ANTHROPIC_OAUTH_TOKEN:-$LLM_API_KEY}"
+            log "INFO  Exported Anthropic OAuth token"
+            ;;
+          *)
+            export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$LLM_API_KEY}"
+            ;;
+        esac
+      fi
       ;;
     openai|openai-codex)
       [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
