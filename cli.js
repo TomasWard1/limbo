@@ -1283,7 +1283,7 @@ function decodeJwtPayload(token) {
 
 function writeAuthProfilesToDocker(store) {
   const json = JSON.stringify(store, null, 2);
-  const destDir = '/home/limbo/.zeroclaw/agents/main/agent';
+  const destDir = '/home/limbo/.zeroclaw';
   const destFile = `${destDir}/auth-profiles.json`;
   spawnSync('docker', [
     'compose', 'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
