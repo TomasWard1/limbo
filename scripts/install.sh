@@ -73,12 +73,17 @@ if [[ $AVAILABLE_KB -lt $REQUIRED_KB ]]; then
   die "Insufficient disk space. Need 10 GB, have ~${AVAILABLE_GB} GB free."
 fi
 
-# RAM (2 GB minimum)
+# RAM (512 MB minimum)
 TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-REQUIRED_MEM_KB=$((2 * 1024 * 1024))
+REQUIRED_MEM_KB=$((512 * 1024))
 if [[ $TOTAL_MEM_KB -lt $REQUIRED_MEM_KB ]]; then
   TOTAL_MEM_GB=$(echo "scale=1; $TOTAL_MEM_KB / 1024 / 1024" | bc)
-  die "Insufficient memory. Need 2 GB, have ${TOTAL_MEM_GB} GB."
+  die "Insufficient memory. Need 512 MB, have ${TOTAL_MEM_GB} GB."
+fi
+RECOMMENDED_MEM_KB=$((1024 * 1024))
+if [[ $TOTAL_MEM_KB -lt $RECOMMENDED_MEM_KB ]]; then
+  TOTAL_MEM_MB=$(( TOTAL_MEM_KB / 1024 ))
+  warn "Low memory (${TOTAL_MEM_MB} MB). Recommended: 1 GB+. Limbo will run but consider adding swap."
 fi
 
 ok "Pre-flight checks passed."
