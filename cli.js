@@ -1770,20 +1770,40 @@ function selfUpdateCli() {
       (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
     if (!isNewer) return;
 
-    log(`Updating CLI: ${pkg.version} → ${latest}...`);
-    execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
-    ok(`CLI updated to ${latest}.`);
+    const isGlobal = !process.argv[1].includes('npx') && !process.argv[1].includes('node_modules/.cache');
+
+    if (isGlobal) {
+      log(`Updating CLI: ${pkg.version} → ${latest}...`);
+      execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
+      ok(`CLI updated to ${latest}.`);
+    } else {
+      // npx served a stale cached version — clear it
+      warn(`CLI is outdated (${pkg.version} → ${latest}). npx served a cached version.`);
+      try {
+        const npxCacheBase = path.join(os.homedir(), '.npm', '_npx');
+        if (fs.existsSync(npxCacheBase)) {
+          for (const entry of fs.readdirSync(npxCacheBase)) {
+            const pkgPath = path.join(npxCacheBase, entry, 'node_modules', 'limbo-ai');
+            if (fs.existsSync(pkgPath)) {
+              fs.rmSync(path.join(npxCacheBase, entry), { recursive: true, force: true });
+              log('Cleared stale npx cache.');
+              break;
+            }
+          }
+        }
+      } catch {}
+      log(`Re-run: ${c.cyan}npx limbo-ai@latest update${c.reset}`);
+    }
   } catch {
-    warn('Could not self-update CLI. Run: npm install -g limbo-ai@latest');
+    warn('Could not check for CLI updates. Run: npm install -g limbo-ai@latest');
   }
 }
 
 function cmdUpdate() {
   if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
 
-  // Self-update the CLI if installed globally
-  const isGlobal = !process.argv[1].includes('npx') && !process.argv[1].includes('node_modules/.cache');
-  if (isGlobal) selfUpdateCli();
+  // Always attempt CLI self-update, regardless of install method
+  selfUpdateCli();
 
   // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
   let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
@@ -1801,6 +1821,10 @@ function cmdUpdate() {
   run(`docker compose -f "${COMPOSE_FILE}" pull -q`);
   log('Restarting...');
   run(`docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans`);
+
+  // Clear update-check cache so the banner doesn't persist after a successful update
+  try { fs.unlinkSync(UPDATE_CHECK_FILE); } catch {}
+
   ok('Updated and restarted.');
 }
 
