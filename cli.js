@@ -2078,6 +2078,9 @@ if (require.main === module) {
       case 'update':  cmdUpdate(); break;
       case 'status':  cmdStatus(); break;
       case 'config':  cmdConfig(); break;
+      case 'version':
+      case '--version':
+      case '-v':      console.log(require('./package.json').version); break;
       case 'help':
       case '--help':
       case '-h':      cmdHelp(); break;
