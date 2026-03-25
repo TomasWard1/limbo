@@ -30,7 +30,6 @@ read_secret() {
   fi
 }
 
-# API key auth is optional now because ZeroClaw can also use persisted auth profiles.
 # Prefer Docker secrets, fall back to env vars for backwards compatibility.
 _secret_llm="$(read_secret llm_api_key)"
 _secret_telegram="$(read_secret telegram_bot_token)"
@@ -86,35 +85,24 @@ else
 fi
 
 # ── Validate and resolve API key ─────────────────────────────────────────────
-# Subscription mode uses OAuth tokens stored in ZeroClaw auth-profiles — no API key needed.
 # Setup mode skips validation entirely — the wizard will configure keys.
 AUTH_MODE="${AUTH_MODE:-api-key}"
 
 if [ "$SETUP_MODE" = "true" ]; then
   log "INFO  Setup mode — skipping API key validation"
 elif [ "$AUTH_MODE" = "subscription" ]; then
-  log "INFO  Subscription mode — resolving credentials from auth profiles"
-  # ZeroClaw resolves provider credentials from env vars, not auth-profiles.json.
-  # Read the token from the profile file and export it as the provider env var.
-  AUTH_PROFILES_FILE="$ZEROCLAW_STATE_DIR/auth-profiles.json"
-  if [ -f "$AUTH_PROFILES_FILE" ]; then
-    case "$MODEL_PROVIDER" in
-      anthropic)
-        _token=$(node -e "try{const p=JSON.parse(require('fs').readFileSync('$AUTH_PROFILES_FILE','utf8'));const k=Object.keys(p.profiles||{}).find(k=>k.startsWith('anthropic:'));if(k){console.log(p.profiles[k].token||p.profiles[k].access_token||'')}}catch{}" 2>/dev/null)
-        if [ -n "$_token" ]; then
-          export ANTHROPIC_API_KEY="$_token"
-          log "INFO  Exported Anthropic token from auth profile"
-        fi
-        ;;
-      openai|openai-codex)
-        _token=$(node -e "try{const p=JSON.parse(require('fs').readFileSync('$AUTH_PROFILES_FILE','utf8'));const k=Object.keys(p.profiles||{}).find(k=>k.startsWith('openai'));if(k){console.log(p.profiles[k].access||p.profiles[k].access_token||'')}}catch{}" 2>/dev/null)
-        if [ -n "$_token" ]; then
-          export OPENAI_API_KEY="$_token"
-          log "INFO  Exported OpenAI token from auth profile"
-        fi
-        ;;
-    esac
-  fi
+  log "INFO  Subscription mode — credentials resolved from secrets"
+  # Subscription tokens are stored as secrets (same as api-key mode).
+  # The wizard writes the token to secrets/llm_api_key during setup.
+  # read_secret already loaded it into LLM_API_KEY above.
+  case "$MODEL_PROVIDER" in
+    anthropic)
+      [ -n "$LLM_API_KEY" ] && export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$LLM_API_KEY}"
+      ;;
+    openai|openai-codex)
+      [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
+      ;;
+  esac
 else
   # API-key mode: require LLM_API_KEY or provider-specific key
   case "$MODEL_PROVIDER" in

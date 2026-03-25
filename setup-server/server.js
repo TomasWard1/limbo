@@ -229,55 +229,6 @@ function decodeJwtPayload(token) {
   return JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 }
 
-// ZeroClaw auth-profiles.json — must match the structure used by the CLI
-// (cli.js buildAnthropicAuthProfile / buildCodexAuthProfile).
-// Path: ~/.zeroclaw/agents/main/agent/auth-profiles.json
-
-function buildCodexAuthProfile(profile) {
-  const profileId = profile.email ? `openai-codex:${profile.email}` : 'openai-codex:default';
-  return {
-    version: 1,
-    profiles: {
-      [profileId]: {
-        type: 'oauth',
-        provider: 'openai-codex',
-        access: profile.access,
-        refresh: profile.refresh,
-        expires: profile.expires,
-        accountId: profile.accountId || '',
-      },
-    },
-    order: {},
-    lastGood: {},
-    usageStats: {},
-  };
-}
-
-function buildAnthropicAuthProfile(token) {
-  return {
-    version: 1,
-    profiles: {
-      'anthropic:token': {
-        type: 'token',
-        provider: 'anthropic',
-        token,
-      },
-    },
-    order: { anthropic: ['anthropic:token'] },
-    lastGood: {},
-    usageStats: {},
-  };
-}
-
-// ZeroClaw resolves auth profiles from the state dir root: ~/.zeroclaw/auth-profiles.json
-// See: ZeroClaw src/auth/profiles.rs — state_dir.join("auth-profiles.json")
-const AUTH_PROFILES_FILE = path.join(ZEROCLAW_STATE, 'auth-profiles.json');
-
-function writeAuthProfiles(store) {
-  fs.mkdirSync(ZEROCLAW_STATE, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(AUTH_PROFILES_FILE, JSON.stringify(store, null, 2), { mode: 0o600 });
-  log('Auth profile written to ' + AUTH_PROFILES_FILE);
-}
 
 // ─── Telegram API Helpers ────────────────────────────────────────────────────
 
@@ -557,14 +508,8 @@ async function exchangeOAuthCode(code, verifier, redirectUri) {
 function processOAuthTokens(tokenRes) {
   const jwt = decodeJwtPayload(tokenRes.access_token);
   const authClaim = jwt['https://api.openai.com/auth'] || {};
-  const store = buildCodexAuthProfile({
-    access: tokenRes.access_token,
-    refresh: tokenRes.refresh_token,
-    expires: Date.now() + (tokenRes.expires_in * 1000),
-    accountId: authClaim.chatgpt_account_id || '',
-    email: jwt.email || '',
-  });
-  writeAuthProfiles(store);
+  writeSecretFile('llm_api_key', tokenRes.access_token);
+  log('Auth token written to secrets/llm_api_key');
   return { email: jwt.email || '' };
 }
 
@@ -676,8 +621,8 @@ async function handleAnthropicToken(req, res) {
     return;
   }
 
-  const store = buildAnthropicAuthProfile(token);
-  writeAuthProfiles(store);
+  writeSecretFile('llm_api_key', token);
+  log('Auth token written to secrets/llm_api_key');
   sendJSON(res, 200, { success: true });
 }
 
@@ -860,8 +805,6 @@ module.exports = {
   generatePKCE,
   buildOAuthUrl,
   decodeJwtPayload,
-  buildCodexAuthProfile,
-  buildAnthropicAuthProfile,
   handleRequest,
   _internals: {
     OPENAI_OAUTH,
@@ -873,7 +816,6 @@ module.exports = {
     readSecretFile,
     ensureGatewayToken,
     ensureSetupToken,
-    writeAuthProfiles,
   },
 };
 

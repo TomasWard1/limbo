@@ -14,8 +14,6 @@ const {
   generatePKCE,
   buildOAuthUrl,
   decodeJwtPayload,
-  buildCodexAuthProfile,
-  buildAnthropicAuthProfile,
   handleRequest,
   _internals: { OPENAI_OAUTH },
 } = require('../setup-server/server.js');
@@ -163,55 +161,6 @@ describe('decodeJwtPayload', () => {
     const token = `h.${b64}.s`;
     const decoded = decodeJwtPayload(token);
     assert.strictEqual(decoded['https://api.openai.com/auth'].chatgpt_account_id, 'acct-abc');
-  });
-});
-
-describe('buildCodexAuthProfile', () => {
-  it('builds correct structure with email', () => {
-    const profile = {
-      access: 'access-tok',
-      refresh: 'refresh-tok',
-      expires: Date.now() + 3600000,
-      accountId: 'acct-1',
-      email: 'test@example.com',
-    };
-    const result = buildCodexAuthProfile(profile);
-    assert.strictEqual(result.version, 1);
-    const pid = 'openai-codex:test@example.com';
-    assert.ok(result.profiles[pid], 'profile entry exists');
-    assert.strictEqual(result.profiles[pid].provider, 'openai-codex');
-    assert.strictEqual(result.profiles[pid].type, 'oauth');
-    assert.strictEqual(result.profiles[pid].access, 'access-tok');
-    assert.strictEqual(result.profiles[pid].refresh, 'refresh-tok');
-  });
-
-  it('builds correct structure without email (accountId empty)', () => {
-    const profile = {
-      access: 'a',
-      refresh: 'r',
-      expires: Date.now() + 1000,
-    };
-    const result = buildCodexAuthProfile(profile);
-    const pid = 'openai-codex:default';
-    assert.strictEqual(result.profiles[pid].accountId, '');
-  });
-});
-
-describe('buildAnthropicAuthProfile', () => {
-  it('builds correct structure', () => {
-    const result = buildAnthropicAuthProfile('sk-ant-test123');
-    assert.strictEqual(result.version, 1);
-    const pid = 'anthropic:token';
-    assert.ok(result.profiles[pid], 'profile entry exists');
-    assert.strictEqual(result.profiles[pid].provider, 'anthropic');
-    assert.strictEqual(result.profiles[pid].type, 'token');
-    assert.strictEqual(result.profiles[pid].token, 'sk-ant-test123');
-  });
-
-  it('order includes anthropic key', () => {
-    const result = buildAnthropicAuthProfile('sk-ant-xyz');
-    assert.ok(result.order.anthropic, 'order has anthropic key');
-    assert.deepStrictEqual(result.order.anthropic, ['anthropic:token']);
   });
 });
 
