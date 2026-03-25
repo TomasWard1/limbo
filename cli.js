@@ -1514,7 +1514,7 @@ ${c.green}${c.bold}╚═══════════════════�
 `);
 
   if (tunnel) {
-    const tunnelUrl = `${tunnel.url}/?token=${token}`;
+    const tunnelUrl = token ? `${tunnel.url}/?token=${token}` : tunnel.url;
     console.log(`  ${c.green}Public URL (works from any browser):${c.reset}
   ${c.cyan}${c.bold}${tunnelUrl}${c.reset}
 `);
