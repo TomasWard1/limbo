@@ -1788,6 +1788,8 @@ function selfUpdateCli() {
       log(`Updating CLI: ${pkg.version} → ${latest}...`);
       execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
       ok(`CLI updated to ${latest}.`);
+      // Clear update-check cache so notifyUpdate() won't show a stale banner
+      try { fs.unlinkSync(UPDATE_CHECK_FILE); } catch {}
     } else {
       // npx served a stale cached version — clear it
       warn(`CLI is outdated (${pkg.version} → ${latest}). npx served a cached version.`);
@@ -2068,7 +2070,7 @@ if (require.main === module) {
   const [,, cmd = 'start'] = process.argv;
 
   (async () => {
-    checkForUpdateInBackground();
+    if (cmd !== 'update') checkForUpdateInBackground();
 
     switch (cmd) {
       case 'start':
