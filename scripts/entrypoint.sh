@@ -57,6 +57,23 @@ if [ "$MODEL_PROVIDER" = "anthropic" ] && [ -n "$LLM_API_KEY" ] && [ -z "$ANTHRO
   ANTHROPIC_API_KEY="$LLM_API_KEY"
 fi
 
+# ── Handle forced reconfiguration ────────────────────────────────────────────
+# CLI sets FORCE_SETUP_MODE=true via env_file when --reconfigure is used.
+# This is more reliable than running `docker compose run` to delete files,
+# which can fail silently due to volume permissions or Docker state.
+FORCE_DONE_MARKER="/data/.force-setup-done"
+
+if [ "${FORCE_SETUP_MODE:-}" = "true" ]; then
+  if [ ! -f "$FORCE_DONE_MARKER" ]; then
+    log "INFO  FORCE_SETUP_MODE requested — clearing config for reconfiguration"
+    rm -f /data/config/.env "$ZEROCLAW_CONFIG_PATH"
+    touch "$FORCE_DONE_MARKER"
+  fi
+else
+  # Normal start — clean up marker from previous reconfigure cycle
+  rm -f "$FORCE_DONE_MARKER"
+fi
+
 # ── Detect setup mode (no config yet → wizard will handle everything) ────────
 SETUP_MODE=false
 if [ ! -f /data/config/.env ]; then
