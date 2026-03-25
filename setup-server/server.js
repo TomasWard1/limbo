@@ -229,9 +229,11 @@ function decodeJwtPayload(token) {
   return JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 }
 
-// ZeroClaw auth-profiles.json — must match the structure used by the CLI
-// (cli.js buildAnthropicAuthProfile / buildCodexAuthProfile).
-// Path: ~/.zeroclaw/agents/main/agent/auth-profiles.json
+// ─── OpenAI Codex auth profiles ──────────────────────────────────────────────
+// OpenAI OAuth tokens expire and need refresh. ZeroClaw reads auth-profiles.json
+// for the refresh token and handles renewal automatically. This is ONLY needed
+// for OpenAI Codex — Anthropic tokens are static and stored as secrets instead.
+const AUTH_PROFILES_FILE = path.join(ZEROCLAW_STATE, 'auth-profiles.json');
 
 function buildCodexAuthProfile(profile) {
   const profileId = profile.email ? `openai-codex:${profile.email}` : 'openai-codex:default';
@@ -252,26 +254,6 @@ function buildCodexAuthProfile(profile) {
     usageStats: {},
   };
 }
-
-function buildAnthropicAuthProfile(token) {
-  return {
-    version: 1,
-    profiles: {
-      'anthropic:token': {
-        type: 'token',
-        provider: 'anthropic',
-        token,
-      },
-    },
-    order: { anthropic: ['anthropic:token'] },
-    lastGood: {},
-    usageStats: {},
-  };
-}
-
-// ZeroClaw resolves auth profiles from the state dir root: ~/.zeroclaw/auth-profiles.json
-// See: ZeroClaw src/auth/profiles.rs — state_dir.join("auth-profiles.json")
-const AUTH_PROFILES_FILE = path.join(ZEROCLAW_STATE, 'auth-profiles.json');
 
 function writeAuthProfiles(store) {
   fs.mkdirSync(ZEROCLAW_STATE, { recursive: true, mode: 0o700 });
@@ -557,6 +539,7 @@ async function exchangeOAuthCode(code, verifier, redirectUri) {
 function processOAuthTokens(tokenRes) {
   const jwt = decodeJwtPayload(tokenRes.access_token);
   const authClaim = jwt['https://api.openai.com/auth'] || {};
+  // Write auth profile for ZeroClaw's OAuth refresh flow
   const store = buildCodexAuthProfile({
     access: tokenRes.access_token,
     refresh: tokenRes.refresh_token,
@@ -565,6 +548,8 @@ function processOAuthTokens(tokenRes) {
     email: jwt.email || '',
   });
   writeAuthProfiles(store);
+  // Also write access token as secret for entrypoint to export
+  writeSecretFile('llm_api_key', tokenRes.access_token);
   return { email: jwt.email || '' };
 }
 
@@ -676,8 +661,9 @@ async function handleAnthropicToken(req, res) {
     return;
   }
 
-  const store = buildAnthropicAuthProfile(token);
-  writeAuthProfiles(store);
+  // Anthropic tokens are static (no refresh needed) — store as secret
+  writeSecretFile('llm_api_key', token);
+  log('Anthropic token written to secrets/llm_api_key');
   sendJSON(res, 200, { success: true });
 }
 
@@ -861,7 +847,6 @@ module.exports = {
   buildOAuthUrl,
   decodeJwtPayload,
   buildCodexAuthProfile,
-  buildAnthropicAuthProfile,
   handleRequest,
   _internals: {
     OPENAI_OAUTH,
