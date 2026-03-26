@@ -105,21 +105,25 @@ function startServer(env) {
 
 describe("eval logging", () => {
   let vaultDir;
+  let dbDir;
 
   before(async () => {
     vaultDir = await mkdtemp(join(tmpdir(), "limbo-eval-test-"));
+    dbDir = await mkdtemp(join(tmpdir(), "limbo-eval-db-"));
     await mkdir(join(vaultDir, "notes"), { recursive: true });
     await mkdir(join(vaultDir, "maps"), { recursive: true });
   });
 
   after(async () => {
     await rm(vaultDir, { recursive: true, force: true });
+    await rm(dbDir, { recursive: true, force: true });
   });
 
   it("logs tool_call and tool_result to stderr when LIMBO_EVAL=true", async () => {
     const { proc, getStderrLines, send, waitForResponse, close } =
       await startServer({
         VAULT_PATH: vaultDir,
+        DB_PATH: dbDir,
         LIMBO_EVAL: "true",
       });
 
@@ -197,6 +201,7 @@ describe("eval logging", () => {
     const { proc, getStderrLines, send, waitForResponse, close } =
       await startServer({
         VAULT_PATH: vaultDir,
+        DB_PATH: dbDir,
         LIMBO_EVAL: undefined,
       });
 
