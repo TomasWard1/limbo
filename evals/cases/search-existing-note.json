@@ -3,11 +3,25 @@
   "description": "User searches for a pre-seeded note about birthday",
   "input": "Que sabes sobre el cumpleaños de Tomas?",
   "assertions": [
-    { "type": "tool_called", "tool": "vault_search" },
-    { "type": "response_matches", "pattern": "(?i)(march 15|15 de marzo|marzo)" },
-    { "type": "response_matches", "pattern": "(?i)(born|birthday|cumpleaños|naci)" }
+    {
+      "type": "tool_called",
+      "tool": "vault_search"
+    },
+    {
+      "type": "response_matches",
+      "pattern": "(?i)(march 15|15 de marzo|marzo)"
+    },
+    {
+      "type": "response_matches",
+      "pattern": "(?i)(born|birthday|cumpleaños|naci)"
+    }
   ],
   "runs": 1,
   "pass_threshold": 1.0,
-  "tags": ["tool-calling", "vault_search", "retrieval"]
+  "tags": [
+    "tool-calling",
+    "vault_search",
+    "retrieval"
+  ],
+  "difficulty": "easy"
 }

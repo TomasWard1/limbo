@@ -19,5 +19,6 @@
   ],
   "runs": 1,
   "pass_threshold": 1.0,
-  "tags": ["multi-step", "vault_write_note", "vault_search"]
+  "tags": ["multi-step", "vault_write_note", "vault_search"],
+  "difficulty": "easy"
 }

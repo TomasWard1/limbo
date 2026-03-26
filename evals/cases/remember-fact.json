@@ -10,5 +10,6 @@
   ],
   "runs": 1,
   "pass_threshold": 1.0,
-  "tags": ["tool-calling", "vault_write_note"]
+  "tags": ["tool-calling", "vault_write_note"],
+  "difficulty": "easy"
 }

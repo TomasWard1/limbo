@@ -157,6 +157,10 @@ async function cmdRun(args) {
   if (tag) {
     cases = cases.filter(c => (c.tags || []).includes(tag));
   }
+  const difficulty = args['--difficulty'] || null;
+  if (difficulty) {
+    cases = cases.filter(c => c.difficulty === difficulty);
+  }
 
   if (cases.length === 0) {
     console.error('No cases found.');
@@ -425,9 +429,10 @@ Commands:
   report    Show pass rates for the last 10 runs
 
 Options for 'run':
-  --case <name>   Run only a specific case by name
-  --tag <tag>     Run only cases with a given tag
-  --judge         Enable LLM-as-judge evaluation
+  --case <name>       Run only a specific case by name
+  --tag <tag>         Run only cases with a given tag
+  --difficulty <tier> Run only cases of a given difficulty (easy|medium|hard)
+  --judge             Enable LLM-as-judge evaluation
 
 Options for 'compare':
   --strict        Exit with error code if regressions found
@@ -435,6 +440,7 @@ Options for 'compare':
 Examples:
   limbo-eval run
   limbo-eval run --case create-reminder
+  limbo-eval run --difficulty medium
   limbo-eval run --tag vault_write_note --judge
   limbo-eval compare --strict
   limbo-eval promote
