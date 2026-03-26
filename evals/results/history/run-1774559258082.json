@@ -1,0 +1,662 @@
+{
+  "id": "run-1774559258082",
+  "timestamp": "2026-03-26T21:11:25.214Z",
+  "results": [
+    {
+      "case": "create-reminder",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "banco|bank"
+          },
+          "pass": true,
+          "reason": "Cron job matched /banco|bank/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(reminder|recordatorio|avisarte|cron|programado|mañana)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(reminder|recordatorio|avisarte|cron|programado|mañana)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Listo. Te recuerdo mañana a las 9:00 AM que tienes que llamar al banco.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "timestamp": "2026-03-26T21:07:44.827Z"
+    },
+    {
+      "case": "hard-ambiguous-request",
+      "run": 1,
+      "passRate": 1,
+      "passed": 1,
+      "total": 1,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Parece que el mensaje llegó sin contenido adjunto — solo el texto \"Guardate esto para después\". ¿Qué querés que guarde? Puede ser un texto, un link, una idea, lo que sea.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "timestamp": "2026-03-26T21:07:48.955Z"
+    },
+    {
+      "case": "hard-complex-note",
+      "run": 1,
+      "passRate": 0.3333333333333333,
+      "passed": 2,
+      "total": 6,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "decision|insight|meeting|project"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /decision|insight|meeting|project/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)laura"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)laura/i: Invalid group"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)kubernetes|k8s"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)kubernetes|k8s/i: Invalid group"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)(no vale la pena|not worth|scale)"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)(no vale la pena|not worth|scale)/i: Invalid group"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)(revisar|review|números|numbers|semana)"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)(revisar|review|números|numbers|semana)/i: Invalid group"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado. Dos notas creadas:\n\n- **Laura** — contacto, con su postura sobre Kubernetes.\n- **Decisión: migración a Kubernetes** — estado abierto, revisión de números pendiente para la semana del 30/03.\n\n¿Querés que te recuerde revisar los números con Laura a principios de esa semana?",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 8,
+      "timestamp": "2026-03-26T21:08:13.688Z"
+    },
+    {
+      "case": "hard-synthesize-knowledge",
+      "run": 1,
+      "passRate": 0.625,
+      "passed": 5,
+      "total": 8,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)mart[ií]n"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)mart[ií]n/i: Invalid group"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)sof[ií]a"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)sof[ií]a/i: Invalid group"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)mart[ií]n"
+          },
+          "pass": false,
+          "reason": "Response did NOT match /(?i)mart[ií]n/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)sof[ií]a"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)sof[ií]a/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(mercado libre|globant)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(mercado libre|globant)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Solo tengo una persona guardada:\n\n**Sofía** — Data scientist en Globant, la conocés del secundario.\n\n¿Querés que agregue más gente o que vea el detalle completo de Sofía?",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 12,
+      "timestamp": "2026-03-26T21:08:59.143Z"
+    },
+    {
+      "case": "medium-note-type-inference",
+      "run": 1,
+      "passRate": 0.6,
+      "passed": 3,
+      "total": 5,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "decision"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /decision/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)postgresql|postgres"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)postgresql|postgres/i: Invalid group"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)mongodb|mongo"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)mongodb|mongo/i: Invalid group"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardé|guardado|anotado|decisión|decision)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardé|guardado|anotado|decisión|decision)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado. `decision-postgresql-vs-mongodb-2026-03-26` — PostgreSQL elegido sobre MongoDB para el proyecto nuevo.\n\n¿Hay más contexto que quieras agregar, como el motivo de la decisión?",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "timestamp": "2026-03-26T21:09:14.456Z"
+    },
+    {
+      "case": "medium-person-multiple-facts",
+      "run": 1,
+      "passRate": 0.4,
+      "passed": 2,
+      "total": 5,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "person"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)carlos"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)carlos/i: Invalid group"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)ingeniero|engineer"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)ingeniero|engineer/i: Invalid group"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)c[oó]rdoba"
+          },
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)c[oó]rdoba/i: Invalid group"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado. Carlos — tu viejo, ingeniero, Córdoba.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "timestamp": "2026-03-26T21:09:35.094Z"
+    },
+    {
+      "case": "medium-search-implicit",
+      "run": 1,
+      "passRate": 0.5,
+      "passed": 1,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(no encontr|no tengo|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños)"
+          },
+          "pass": false,
+          "reason": "Response did NOT match /(?i)(no encontr|no tengo|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "El vault no tiene notas guardadas sobre personas que trabajen en tech. Lo que mencionás sobre Martín (diseñador UX en Mercado Libre) llegó en este mismo hilo pero no estaba guardado aún.\n\n¿Quiero guardarlo ahora?",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "timestamp": "2026-03-26T21:09:44.154Z"
+    },
+    {
+      "case": "multi-step-remember-and-search",
+      "run": 1,
+      "passRate": 1,
+      "passed": 4,
+      "total": 4,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "person"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(google|ML|machine learning)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(google|ML|machine learning)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Alice trabaja en **Google** como **ML Engineer**. Es todo lo que tengo guardado sobre ella por ahora.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 8,
+      "timestamp": "2026-03-26T21:10:10.032Z"
+    },
+    {
+      "case": "read-note-by-id",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_read"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_read\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(march 15|tomas|birthday)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(march 15|tomas|birthday)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "**Tomas birthday**\n\n- **ID:** eval-seed-birthday\n- **Tipo:** fact\n- **Descripción:** Tomas was born on March 15\n\n**Contenido:**\nTomas was born on March 15. He celebrates every year with asado.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "timestamp": "2026-03-26T21:10:18.101Z"
+    },
+    {
+      "case": "remember-fact",
+      "run": 1,
+      "passRate": 0.75,
+      "passed": 3,
+      "total": 4,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "fact|preference"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /fact|preference/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "alerg|mani|peanut"
+          },
+          "pass": false,
+          "reason": "No created vault note matched /alerg|mani|peanut/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardé|guardado|saved|anotado|alérgico|maní)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado. Sos alérgico al maní — lo voy a tener en cuenta.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "timestamp": "2026-03-26T21:10:38.042Z"
+    },
+    {
+      "case": "reminder-timezone",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "pastilla|pill|medicamento"
+          },
+          "pass": true,
+          "reason": "Cron job matched /pastilla|pill|medicamento/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Listo. Te aviso a las 23:00 que tenés que tomar la pastilla.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "timestamp": "2026-03-26T21:10:48.340Z"
+    },
+    {
+      "case": "search-existing-note",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(march 15|15 de marzo|marzo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(march 15|15 de marzo|marzo)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(born|birthday|cumpleaños|naci)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(born|birthday|cumpleaños|naci)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "El cumpleaños de Tomas es el **15 de marzo**. Celebra ese día cada año.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "timestamp": "2026-03-26T21:11:00.722Z"
+    },
+    {
+      "case": "update-map",
+      "run": 1,
+      "passRate": 0.6666666666666666,
+      "passed": 2,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_update_map"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_update_map\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_update_map",
+            "key": "map",
+            "pattern": "personal-map"
+          },
+          "pass": true,
+          "reason": "Param \"map\" on \"vault_update_map\" matched /personal-map/"
+        },
+        {
+          "assertion": {
+            "type": "vault_file_exists",
+            "path": "maps/personal-map.md"
+          },
+          "pass": false,
+          "reason": "No vault file matched /maps/personal-map.md/i"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Listo. La nota **Tomas birthday** (`eval-seed-birthday`) fue agregada al mapa `personal-map` en la sección **Datos Personales**.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "timestamp": "2026-03-26T21:11:13.171Z"
+    },
+    {
+      "case": "web-search",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(node|nodejs|version|versión|v\\d+)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(node|nodejs|version|versión|v\\d+)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "\\d+\\.\\d+"
+          },
+          "pass": true,
+          "reason": "Response matched /\\d+\\.\\d+/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "La última versión de Node.js es **v25.8.1** (Current), lanzada el 11 de marzo de 2026.\n\nLas líneas activas actualmente son:\n- **25.x** — Current (última: 25.8.1)\n- **24.x** — LTS activo\n- **22.x** — LTS activo\n- **20.x** — Mantenimiento",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "timestamp": "2026-03-26T21:11:25.214Z"
+    }
+  ]
+}
