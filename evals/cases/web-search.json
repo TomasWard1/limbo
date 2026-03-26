@@ -3,10 +3,20 @@
   "description": "User asks a question requiring web search for current information",
   "input": "Buscá en internet cuál es la última versión de Node.js",
   "assertions": [
-    { "type": "response_matches", "pattern": "(?i)(node|nodejs|version|versión|v\\d+)" },
-    { "type": "response_matches", "pattern": "\\d+\\.\\d+" }
+    {
+      "type": "response_matches",
+      "pattern": "(?i)(node|nodejs|version|versión|v\\d+)"
+    },
+    {
+      "type": "response_matches",
+      "pattern": "\\d+\\.\\d+"
+    }
   ],
   "runs": 1,
   "pass_threshold": 1.0,
-  "tags": ["web-search", "brave"]
+  "tags": [
+    "web-search",
+    "brave"
+  ],
+  "difficulty": "easy"
 }

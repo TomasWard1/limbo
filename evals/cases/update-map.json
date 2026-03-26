@@ -3,11 +3,26 @@
   "description": "User asks Limbo to add a note to a map of content",
   "input": "Agrega la nota eval-seed-birthday al mapa personal-map en la seccion Datos Personales",
   "assertions": [
-    { "type": "tool_called", "tool": "vault_update_map" },
-    { "type": "param_match", "tool": "vault_update_map", "key": "map", "pattern": "personal-map" },
-    { "type": "vault_file_exists", "path": "maps/personal-map.md" }
+    {
+      "type": "tool_called",
+      "tool": "vault_update_map"
+    },
+    {
+      "type": "param_match",
+      "tool": "vault_update_map",
+      "key": "map",
+      "pattern": "personal-map"
+    },
+    {
+      "type": "vault_file_exists",
+      "path": "maps/personal-map.md"
+    }
   ],
   "runs": 1,
   "pass_threshold": 1.0,
-  "tags": ["tool-calling", "vault_update_map"]
+  "tags": [
+    "tool-calling",
+    "vault_update_map"
+  ],
+  "difficulty": "easy"
 }

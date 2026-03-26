@@ -3,10 +3,20 @@
   "description": "User asks Limbo to set a reminder — should create a cron job, not a vault note",
   "input": "Recordame mañana a las 9am que tengo que llamar al banco",
   "assertions": [
-    { "type": "cron_created", "pattern": "banco|bank" },
-    { "type": "response_matches", "pattern": "(?i)(reminder|recordatorio|avisarte|cron|programado|mañana)" }
+    {
+      "type": "cron_created",
+      "pattern": "banco|bank"
+    },
+    {
+      "type": "response_matches",
+      "pattern": "(?i)(reminder|recordatorio|avisarte|cron|programado|mañana)"
+    }
   ],
   "runs": 1,
   "pass_threshold": 1.0,
-  "tags": ["cron", "reminder"]
+  "tags": [
+    "cron",
+    "reminder"
+  ],
+  "difficulty": "easy"
 }
