@@ -2,7 +2,7 @@
 # Usage: docker compose -f evals/docker-compose.eval.yml up -d
 services:
   limbo-eval:
-    image: ghcr.io/tomasward1/limbo:1.0.0
+    image: ${LIMBO_IMAGE:-ghcr.io/tomasward1/limbo:latest}
     container_name: limbo-eval
     restart: "no"
     read_only: true
