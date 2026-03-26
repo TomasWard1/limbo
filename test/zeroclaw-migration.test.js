@@ -106,10 +106,10 @@ test('entrypoint.sh appends channels_config.telegram conditionally', () => {
 
 // ─── 4. Dockerfile references ZeroClaw, not OpenClaw ────────────────────────
 
-test('Dockerfile pulls ZeroClaw binary from official image', () => {
+test('Dockerfile pulls ZeroClaw binary from official or custom image', () => {
   const df = read('Dockerfile');
-  assert.ok(df.match(/FROM ghcr\.io\/zeroclaw-labs\/zeroclaw:\S+ AS zeroclaw/),
-    'Dockerfile must pull ZeroClaw from ghcr.io/zeroclaw-labs/zeroclaw');
+  assert.ok(df.match(/FROM ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+ AS zeroclaw/),
+    'Dockerfile must pull ZeroClaw from ghcr.io/zeroclaw-labs/zeroclaw or ghcr.io/tomasward1/zeroclaw');
   assert.ok(df.includes('COPY --from=zeroclaw /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw'));
 });
 

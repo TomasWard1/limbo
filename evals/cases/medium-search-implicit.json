@@ -1,0 +1,13 @@
+{
+  "name": "medium-search-implicit",
+  "description": "User asks a broad question about people in tech — should search the vault and return relevant results",
+  "input": "Qué sabes sobre la gente que trabaja en tech?",
+  "assertions": [
+    { "type": "tool_called", "tool": "vault_search" },
+    { "type": "response_matches", "pattern": "(?i)(no encontr|no tengo|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños)" }
+  ],
+  "runs": 1,
+  "pass_threshold": 1.0,
+  "tags": ["tool-calling", "vault_search", "retrieval"],
+  "difficulty": "medium"
+}

@@ -11,6 +11,13 @@ import { vaultRead } from "./tools/read.js";
 import { vaultWriteNote } from "./tools/write.js";
 import { vaultUpdateMap } from "./tools/update-map.js";
 
+const EVAL_MODE = process.env.LIMBO_EVAL === "true";
+
+function evalLog(event) {
+  if (!EVAL_MODE) return;
+  process.stderr.write(JSON.stringify({ ...event, timestamp: new Date().toISOString() }) + "\n");
+}
+
 const server = new Server(
   {
     name: "limbo-vault",
@@ -118,52 +125,65 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  evalLog({ type: "tool_call", tool: name, params: args });
+
   try {
+    let result;
+
     switch (name) {
       case "vault_search": {
         const results = await vaultSearch(args.query);
-        return {
+        result = {
           content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
         };
+        break;
       }
 
       case "vault_read": {
         const content = await vaultRead(args.noteId);
         if (content === null) {
-          return {
+          result = {
             content: [{ type: "text", text: `Note not found: ${args.noteId}` }],
             isError: true,
           };
+          break;
         }
-        return { content: [{ type: "text", text: content }] };
+        result = { content: [{ type: "text", text: content }] };
+        break;
       }
 
       case "vault_write_note": {
-        const result = await vaultWriteNote(args);
-        return {
-          content: [{ type: "text", text: `Note written: ${result.id} → ${result.path}` }],
+        const writeResult = await vaultWriteNote(args);
+        result = {
+          content: [{ type: "text", text: `Note written: ${writeResult.id} → ${writeResult.path}` }],
         };
+        break;
       }
 
       case "vault_update_map": {
-        const result = await vaultUpdateMap(args.map, args.section, args.entries);
-        return {
+        const mapResult = await vaultUpdateMap(args.map, args.section, args.entries);
+        result = {
           content: [
             {
               type: "text",
-              text: `Map updated: ${result.map} — added ${result.added} entries to "${result.section}"`,
+              text: `Map updated: ${mapResult.map} — added ${mapResult.added} entries to "${mapResult.section}"`,
             },
           ],
         };
+        break;
       }
 
       default:
-        return {
+        result = {
           content: [{ type: "text", text: `Unknown tool: ${name}` }],
           isError: true,
         };
     }
+
+    evalLog({ type: "tool_result", tool: name, success: !result.isError });
+    return result;
   } catch (err) {
+    evalLog({ type: "tool_result", tool: name, success: false, error: err.message });
     return {
       content: [{ type: "text", text: `Error: ${err.message}` }],
       isError: true,

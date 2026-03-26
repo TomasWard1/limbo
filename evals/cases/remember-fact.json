@@ -1,0 +1,15 @@
+{
+  "name": "remember-fact",
+  "description": "User asks Limbo to remember a personal fact (tests vault_write_note)",
+  "input": "Acordate que soy alérgico al maní",
+  "assertions": [
+    { "type": "tool_called", "tool": "vault_write_note" },
+    { "type": "param_match", "tool": "vault_write_note", "key": "type", "pattern": "fact|preference" },
+    { "type": "vault_note_created", "pattern": "alerg|mani|peanut" },
+    { "type": "response_matches", "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)" }
+  ],
+  "runs": 1,
+  "pass_threshold": 1.0,
+  "tags": ["tool-calling", "vault_write_note"],
+  "difficulty": "easy"
+}

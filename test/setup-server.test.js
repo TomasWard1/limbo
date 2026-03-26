@@ -166,7 +166,7 @@ describe('decodeJwtPayload', () => {
 });
 
 describe('buildCodexAuthProfile', () => {
-  it('builds correct structure with email', () => {
+  it('builds correct ZeroClaw schema with email', () => {
     const profile = {
       access: 'access-tok',
       refresh: 'refresh-tok',
@@ -175,16 +175,21 @@ describe('buildCodexAuthProfile', () => {
       email: 'test@example.com',
     };
     const result = buildCodexAuthProfile(profile);
-    assert.strictEqual(result.version, 1);
+    assert.strictEqual(result.schema_version, 1);
+    assert.ok(result.updated_at, 'has updated_at timestamp');
     const pid = 'openai-codex:test@example.com';
+    assert.deepStrictEqual(result.active_profiles, { 'openai-codex': pid });
     assert.ok(result.profiles[pid], 'profile entry exists');
     assert.strictEqual(result.profiles[pid].provider, 'openai-codex');
-    assert.strictEqual(result.profiles[pid].type, 'oauth');
-    assert.strictEqual(result.profiles[pid].access, 'access-tok');
-    assert.strictEqual(result.profiles[pid].refresh, 'refresh-tok');
+    assert.strictEqual(result.profiles[pid].profile_name, 'test@example.com');
+    assert.strictEqual(result.profiles[pid].kind, 'oauth');
+    assert.strictEqual(result.profiles[pid].access_token, 'access-tok');
+    assert.strictEqual(result.profiles[pid].refresh_token, 'refresh-tok');
+    assert.ok(result.profiles[pid].expires_at, 'has expires_at ISO string');
+    assert.strictEqual(result.profiles[pid].account_id, 'acct-1');
   });
 
-  it('builds correct structure without email (accountId empty)', () => {
+  it('builds correct structure without email (default profile)', () => {
     const profile = {
       access: 'a',
       refresh: 'r',
@@ -192,7 +197,9 @@ describe('buildCodexAuthProfile', () => {
     };
     const result = buildCodexAuthProfile(profile);
     const pid = 'openai-codex:default';
-    assert.strictEqual(result.profiles[pid].accountId, '');
+    assert.ok(result.profiles[pid], 'profile entry exists');
+    assert.strictEqual(result.profiles[pid].profile_name, 'default');
+    assert.strictEqual(result.profiles[pid].account_id, null);
   });
 });
 

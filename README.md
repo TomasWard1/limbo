@@ -18,7 +18,7 @@ Limbo is a second brain with a conversational interface. It stores atomic notes 
 
 ### 1. Provision a server
 
-Any Ubuntu/Debian VPS with 1 GB+ RAM. Recommended providers: Hetzner, DigitalOcean, Vultr, ReliedCloud.
+Any Ubuntu/Debian VPS with 1 GB+ RAM.
 
 ### 2. Run the installer
 
