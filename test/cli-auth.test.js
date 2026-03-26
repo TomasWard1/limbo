@@ -264,7 +264,7 @@ test('parseClaudeSetupToken: special chars return null', () => {
 
 // ─── buildCodexAuthProfile ────────────────────────────────────────────────────
 
-test('buildCodexAuthProfile: correct structure with email', () => {
+test('buildCodexAuthProfile: correct ZeroClaw schema with email', () => {
   const profile = {
     email: 'user@example.com',
     access: 'access-token',
@@ -273,37 +273,43 @@ test('buildCodexAuthProfile: correct structure with email', () => {
     accountId: 'acct-123',
   };
   const result = buildCodexAuthProfile(profile);
-  assert.equal(result.version, 1);
+  assert.equal(result.schema_version, 1);
+  assert.ok(result.updated_at);
   const profileId = 'openai-codex:user@example.com';
+  assert.deepEqual(result.active_profiles, { 'openai-codex': profileId });
   assert.ok(result.profiles[profileId]);
-  assert.equal(result.profiles[profileId].type, 'oauth');
+  assert.equal(result.profiles[profileId].kind, 'oauth');
   assert.equal(result.profiles[profileId].provider, 'openai-codex');
-  assert.equal(result.profiles[profileId].access, 'access-token');
-  assert.equal(result.profiles[profileId].refresh, 'refresh-token');
-  assert.equal(result.profiles[profileId].expires, 1234567890);
-  assert.equal(result.profiles[profileId].accountId, 'acct-123');
+  assert.equal(result.profiles[profileId].profile_name, 'user@example.com');
+  assert.equal(result.profiles[profileId].access_token, 'access-token');
+  assert.equal(result.profiles[profileId].refresh_token, 'refresh-token');
+  assert.ok(result.profiles[profileId].expires_at);
+  assert.equal(result.profiles[profileId].account_id, 'acct-123');
 });
 
 test('buildCodexAuthProfile: default profileId without email', () => {
   const profile = { access: 'tok', refresh: 'ref', expires: 0 };
   const result = buildCodexAuthProfile(profile);
   assert.ok(result.profiles['openai-codex:default']);
+  assert.equal(result.profiles['openai-codex:default'].profile_name, 'default');
 });
 
 // ─── buildAnthropicAuthProfile ────────────────────────────────────────────────
 
-test('buildAnthropicAuthProfile: correct structure', () => {
+test('buildAnthropicAuthProfile: correct ZeroClaw schema', () => {
   const result = buildAnthropicAuthProfile('sk-ant-test-token');
-  assert.equal(result.version, 1);
-  assert.ok(result.profiles['anthropic:token']);
-  assert.equal(result.profiles['anthropic:token'].type, 'token');
-  assert.equal(result.profiles['anthropic:token'].provider, 'anthropic');
-  assert.equal(result.profiles['anthropic:token'].token, 'sk-ant-test-token');
+  assert.equal(result.schema_version, 1);
+  assert.ok(result.updated_at);
+  assert.ok(result.profiles['anthropic:default']);
+  assert.equal(result.profiles['anthropic:default'].kind, 'token');
+  assert.equal(result.profiles['anthropic:default'].provider, 'anthropic');
+  assert.equal(result.profiles['anthropic:default'].profile_name, 'default');
+  assert.equal(result.profiles['anthropic:default'].token, 'sk-ant-test-token');
 });
 
-test('buildAnthropicAuthProfile: order has anthropic key', () => {
+test('buildAnthropicAuthProfile: active_profiles has anthropic key', () => {
   const result = buildAnthropicAuthProfile('sk-ant-test');
-  assert.deepEqual(result.order, { anthropic: ['anthropic:token'] });
+  assert.deepEqual(result.active_profiles, { anthropic: 'anthropic:default' });
 });
 
 // ─── generatePKCE ─────────────────────────────────────────────────────────────
