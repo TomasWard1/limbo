@@ -1,0 +1,22 @@
+# Local testing — setup persists across restarts.
+# Start:  docker compose -f docker-compose.test.yml up -d
+# Logs:   docker compose -f docker-compose.test.yml logs -f
+# Stop:   docker compose -f docker-compose.test.yml down
+# Reset:  docker compose -f docker-compose.test.yml down -v  (wipes setup)
+services:
+  limbo:
+    image: limbo:rag-pdf-test
+    restart: "no"
+    ports:
+      - "127.0.0.1:18789:18789"
+    volumes:
+      - limbo-test-data:/data
+      - limbo-test-state:/home/limbo/.zeroclaw
+    tmpfs:
+      - /tmp:size=100M
+
+volumes:
+  limbo-test-data:
+    name: limbo-test-data
+  limbo-test-state:
+    name: limbo-test-state
