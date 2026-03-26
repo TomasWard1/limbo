@@ -70,6 +70,28 @@ function sendMessage(message, container) {
   return { text: stripAnsi(responseLines.join('\n').trim()), mcpLogs };
 }
 
+function listCronJobs(container) {
+  try {
+    const result = spawnSync('docker', [
+      'exec', container, 'zeroclaw', 'cron', 'list',
+    ], { encoding: 'utf8', timeout: 10000 });
+    const output = stripAnsi((result.stdout || '') + '\n' + (result.stderr || ''));
+    // Parse cron list output: "- <id> | <schedule> | next=... | last=...\n    prompt: ..."
+    const jobs = [];
+    const lines = output.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const match = lines[i].match(/^- ([a-f0-9-]+) \| (.+)/);
+      if (match) {
+        const prompt = (lines[i + 1] || '').replace(/^\s*prompt:\s*/, '').trim();
+        jobs.push({ id: match[1], schedule: match[2].trim(), prompt, raw: lines[i] + '\n' + (lines[i + 1] || '') });
+      }
+    }
+    return jobs;
+  } catch {
+    return [];
+  }
+}
+
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
 }
@@ -168,7 +190,7 @@ async function cmdRun(args) {
 
           // Snapshot before
           const before = snapshot(VAULT_SEED);
-          const tsBeforeSend = new Date().toISOString();
+          const cronsBefore = listCronJobs(CONTAINER);
 
           // Send message
           console.log(`  Sending${stepLabel}: "${step.input}"`);
@@ -181,10 +203,15 @@ async function cmdRun(args) {
           const vaultDiff = diff(before, after);
           lastVaultDiff = vaultDiff;
 
+          // Cron diff — new jobs created during this step
+          const cronsAfter = listCronJobs(CONTAINER);
+          const beforeIds = new Set(cronsBefore.map(j => j.id));
+          const cronJobs = cronsAfter.filter(j => !beforeIds.has(j.id));
+
           totalMcpLogs += mcpLogs.length;
 
           // Score assertions for this step
-          const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff });
+          const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs });
           allScoreResults = allScoreResults.concat(stepScores);
 
           const passed = stepScores.filter(r => r.pass).length;

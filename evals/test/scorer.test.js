@@ -138,6 +138,36 @@ describe('vault_file_exists', () => {
 
 // ── unknown type ────────────────────────────────────────────────────────────
 
+describe('cron_created', () => {
+  const cronJobs = [
+    { id: 'abc-123', prompt: 'Recordatorio: llamar al banco', raw: 'abc-123 | At 2026-03-27T12:00:00Z' },
+  ];
+
+  it('passes when cron matches pattern', () => {
+    const results = score(
+      [{ type: 'cron_created', pattern: 'banco' }],
+      { response: '', mcpLogs: [], vaultDiff: baseDiff, cronJobs }
+    );
+    assert.equal(results[0].pass, true);
+  });
+
+  it('fails when no cron matches', () => {
+    const results = score(
+      [{ type: 'cron_created', pattern: 'dentista' }],
+      { response: '', mcpLogs: [], vaultDiff: baseDiff, cronJobs }
+    );
+    assert.equal(results[0].pass, false);
+  });
+
+  it('fails when cronJobs is empty', () => {
+    const results = score(
+      [{ type: 'cron_created', pattern: 'banco' }],
+      { response: '', mcpLogs: [], vaultDiff: baseDiff, cronJobs: [] }
+    );
+    assert.equal(results[0].pass, false);
+  });
+});
+
 describe('unknown assertion type', () => {
   it('fails with reason', () => {
     const results = score(
