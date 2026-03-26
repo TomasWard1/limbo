@@ -1,14 +1,12 @@
 {
   "name": "create-reminder",
-  "description": "User asks Limbo to remember a dentist appointment",
-  "input": "Recordame que el jueves tengo dentista a las 10",
+  "description": "User asks Limbo to set a reminder — should create a cron job, not a vault note",
+  "input": "Recordame mañana a las 9am que tengo que llamar al banco",
   "assertions": [
-    { "type": "tool_called", "tool": "vault_write_note" },
-    { "type": "param_match", "tool": "vault_write_note", "key": "type", "pattern": "event" },
-    { "type": "vault_note_created", "pattern": "dentist" },
-    { "type": "response_matches", "pattern": "(?i)(dentista|guardado|guardé|saved|nota)" }
+    { "type": "cron_created", "pattern": "banco|bank" },
+    { "type": "response_matches", "pattern": "(?i)(reminder|recordatorio|avisarte|cron|programado|mañana)" }
   ],
   "runs": 1,
   "pass_threshold": 1.0,
-  "tags": ["tool-calling", "vault_write_note"]
+  "tags": ["cron", "reminder"]
 }

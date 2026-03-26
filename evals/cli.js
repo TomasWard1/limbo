@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 'use strict';
 
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs/promises');
 const fsSync = require('fs');
 
 const { snapshot, diff } = require('./lib/vault-diff');
-const { logsSince } = require('./lib/mcp-log');
+// mcp-log.js is no longer used — MCP logs are parsed from sendMessage output
 const { score } = require('./lib/scorer');
 const { judge } = require('./lib/judge');
 
@@ -25,35 +25,84 @@ const VAULT_SEED = path.join(EVALS_DIR, 'vault-seed');
 // ── Message sending ─────────────────────────────────────────────────────────
 
 function sendMessage(message, container) {
-  const sessionId = `eval-${Date.now()}`;
-  const result = execFileSync('docker', [
-    'exec', container, 'zeroclaw', 'agent',
+  // zeroclaw agent needs credentials in env — docker exec doesn't inherit
+  // the entrypoint's exports, so we read the secret and pass it explicitly.
+  const proc = spawnSync('docker', [
+    'exec',
+    '-e', 'ANTHROPIC_OAUTH_TOKEN=' + readContainerSecret(container, 'llm_api_key'),
+    container, 'zeroclaw', 'agent',
     '--message', message,
-    '--json',
-    '--timeout', '120',
-    '--session-id', sessionId,
   ], { encoding: 'utf8', timeout: 130000 });
 
+  if (proc.error) throw proc.error;
+  if (proc.status !== 0) {
+    throw new Error(`Command failed: ${(proc.stderr || proc.stdout || '').trim()}`);
+  }
+
+  // MCP eval logs may appear in stdout or stderr — check both
+  const allOutput = (proc.stdout || '') + '\n' + (proc.stderr || '');
+  const mcpLogs = [];
+  const responseLines = [];
+
+  for (const line of allOutput.split('\n')) {
+    const stripped = stripAnsi(line);
+
+    // Extract MCP eval log lines (JSON objects with type field)
+    if (stripped.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(stripped);
+        if (parsed.type === 'tool_call' || parsed.type === 'tool_result') {
+          mcpLogs.push(parsed);
+          continue;
+        }
+      } catch {}
+    }
+
+    // Skip zeroclaw log lines
+    if (/^\d{4}-\d{2}-\d{2}T/.test(stripped)) continue;
+    if (/^zeroclaw::/.test(stripped)) continue;
+    if (/^\s*(WARN|INFO|ERROR)\s/.test(stripped)) continue;
+    if (/^\[limbo-vault\]/.test(stripped)) continue;
+
+    responseLines.push(line);
+  }
+
+  return { text: stripAnsi(responseLines.join('\n').trim()), mcpLogs };
+}
+
+function listCronJobs(container) {
   try {
-    const parsed = JSON.parse(result);
-    return { text: extractResponseText(parsed), raw: parsed, sessionId };
+    const result = spawnSync('docker', [
+      'exec', container, 'zeroclaw', 'cron', 'list',
+    ], { encoding: 'utf8', timeout: 10000 });
+    const output = stripAnsi((result.stdout || '') + '\n' + (result.stderr || ''));
+    // Parse cron list output: "- <id> | <schedule> | next=... | last=...\n    prompt: ..."
+    const jobs = [];
+    const lines = output.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const match = lines[i].match(/^- ([a-f0-9-]+) \| (.+)/);
+      if (match) {
+        const prompt = (lines[i + 1] || '').replace(/^\s*prompt:\s*/, '').trim();
+        jobs.push({ id: match[1], schedule: match[2].trim(), prompt, raw: lines[i] + '\n' + (lines[i + 1] || '') });
+      }
+    }
+    return jobs;
   } catch {
-    return { text: result.trim(), raw: null, sessionId };
+    return [];
   }
 }
 
-function extractResponseText(parsed) {
-  if (typeof parsed === 'string') return parsed;
-  if (parsed.message) return typeof parsed.message === 'string' ? parsed.message : JSON.stringify(parsed.message);
-  if (parsed.response) return parsed.response;
-  if (parsed.payload?.message?.content) {
-    const content = parsed.payload.message.content;
-    if (typeof content === 'string') return content;
-    if (Array.isArray(content)) {
-      return content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-    }
-  }
-  return JSON.stringify(parsed);
+function stripAnsi(str) {
+  return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
+}
+
+let _cachedSecret = null;
+function readContainerSecret(container, name) {
+  if (_cachedSecret) return _cachedSecret;
+  _cachedSecret = execFileSync('docker', [
+    'exec', container, 'cat', `/run/secrets/${name}`,
+  ], { encoding: 'utf8' }).trim();
+  return _cachedSecret;
 }
 
 // ── Vault reset ─────────────────────────────────────────────────────────────
@@ -128,40 +177,60 @@ async function cmdRun(args) {
         // Reset vault
         await resetVault();
 
-        // Snapshot before
-        const before = snapshot(VAULT_SEED);
-        const tsBeforeSend = new Date().toISOString();
+        // Resolve steps: multi-step cases have steps[], single-step have input+assertions
+        const steps = evalCase.steps || [{ input: evalCase.input, assertions: evalCase.assertions }];
+        let allScoreResults = [];
+        let lastResponse = '';
+        let lastVaultDiff = { created: [], modified: [], deleted: [] };
+        let totalMcpLogs = 0;
 
-        // Send message
-        console.log(`  Sending: "${evalCase.input}"`);
-        const { text: response, raw, sessionId } = sendMessage(evalCase.input, CONTAINER);
-        console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
+        for (let s = 0; s < steps.length; s++) {
+          const step = steps[s];
+          const stepLabel = steps.length > 1 ? ` [step ${s + 1}/${steps.length}]` : '';
 
-        // Snapshot after
-        const after = snapshot(VAULT_SEED);
-        const vaultDiff = diff(before, after);
+          // Snapshot before
+          const before = snapshot(VAULT_SEED);
+          const cronsBefore = listCronJobs(CONTAINER);
 
-        // Get MCP logs
-        const mcpLogs = logsSince(tsBeforeSend, CONTAINER);
+          // Send message
+          console.log(`  Sending${stepLabel}: "${step.input}"`);
+          const { text: response, mcpLogs } = sendMessage(step.input, CONTAINER);
+          lastResponse = response;
+          console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
 
-        // Score assertions
-        const scoreResults = score(evalCase.assertions, { response, mcpLogs, vaultDiff });
-        const passed = scoreResults.filter(r => r.pass).length;
-        const total = scoreResults.length;
+          // Snapshot after
+          const after = snapshot(VAULT_SEED);
+          const vaultDiff = diff(before, after);
+          lastVaultDiff = vaultDiff;
+
+          // Cron diff — new jobs created during this step
+          const cronsAfter = listCronJobs(CONTAINER);
+          const beforeIds = new Set(cronsBefore.map(j => j.id));
+          const cronJobs = cronsAfter.filter(j => !beforeIds.has(j.id));
+
+          totalMcpLogs += mcpLogs.length;
+
+          // Score assertions for this step
+          const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs });
+          allScoreResults = allScoreResults.concat(stepScores);
+
+          const passed = stepScores.filter(r => r.pass).length;
+          console.log(`  Score${stepLabel}: ${passed}/${stepScores.length} assertions passed`);
+        }
+
+        const passed = allScoreResults.filter(r => r.pass).length;
+        const total = allScoreResults.length;
         const passRate = total > 0 ? passed / total : 0;
 
-        console.log(`  Score: ${passed}/${total} assertions passed (${(passRate * 100).toFixed(0)}%)`);
-
-        // Optional judge
+        // Optional judge (runs on final response)
         let judgeResults = null;
         if (useJudge) {
           judgeResults = {};
-          const createdNote = (vaultDiff.created[0] || {}).content || '';
+          const createdNote = (lastVaultDiff.created[0] || {}).content || '';
+          const judgeInput = evalCase.input || (evalCase.steps && evalCase.steps[0].input) || '';
           try {
             judgeResults.note_quality = judge('note_quality', {
-              input: evalCase.input,
-              response,
-              note_content: createdNote,
+              input: judgeInput, response: lastResponse, note_content: createdNote,
             });
             console.log(`  Judge (note_quality): ${judgeResults.note_quality.pass ? 'PASS' : 'FAIL'} — ${judgeResults.note_quality.reason}`);
           } catch (err) {
@@ -169,9 +238,7 @@ async function cmdRun(args) {
           }
           try {
             judgeResults.response_quality = judge('response_quality', {
-              input: evalCase.input,
-              response,
-              note_content: createdNote,
+              input: judgeInput, response: lastResponse, note_content: createdNote,
             });
             console.log(`  Judge (response_quality): ${judgeResults.response_quality.pass ? 'PASS' : 'FAIL'} — ${judgeResults.response_quality.reason}`);
           } catch (err) {
@@ -185,25 +252,28 @@ async function cmdRun(args) {
           passRate,
           passed,
           total,
-          scoreResults,
+          scoreResults: allScoreResults,
           judgeResults,
-          response: response.slice(0, 500),
+          response: lastResponse.slice(0, 500),
           vaultDiff: {
-            created: vaultDiff.created.length,
-            modified: vaultDiff.modified.length,
-            deleted: vaultDiff.deleted.length,
+            created: lastVaultDiff.created.length,
+            modified: lastVaultDiff.modified.length,
+            deleted: lastVaultDiff.deleted.length,
           },
-          mcpLogCount: mcpLogs.length,
+          mcpLogCount: totalMcpLogs,
           timestamp: new Date().toISOString(),
         });
       } catch (err) {
         console.error(`  ERROR: ${err.message}`);
+        const totalAssertions = evalCase.assertions
+          ? evalCase.assertions.length
+          : (evalCase.steps || []).reduce((n, s) => n + s.assertions.length, 0);
         results.push({
           case: evalCase.name,
           run: i + 1,
           passRate: 0,
           passed: 0,
-          total: evalCase.assertions.length,
+          total: totalAssertions,
           scoreResults: [],
           judgeResults: null,
           error: err.message,

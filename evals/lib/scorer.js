@@ -7,7 +7,7 @@
  * @param {{ response: string, mcpLogs: Array, vaultDiff: object }} data
  * @returns {Array<{ assertion: object, pass: boolean, reason: string }>}
  */
-function score(assertions, { response, mcpLogs, vaultDiff }) {
+function score(assertions, { response, mcpLogs, vaultDiff, cronJobs }) {
   return assertions.map((assertion) => {
     try {
       switch (assertion.type) {
@@ -21,6 +21,8 @@ function score(assertions, { response, mcpLogs, vaultDiff }) {
           return checkVaultNoteCreated(assertion, vaultDiff);
         case 'vault_file_exists':
           return checkVaultFileExists(assertion, vaultDiff);
+        case 'cron_created':
+          return checkCronCreated(assertion, cronJobs || []);
         default:
           return { assertion, pass: false, reason: `Unknown assertion type: ${assertion.type}` };
       }
@@ -101,7 +103,11 @@ function checkVaultNoteCreated(assertion, vaultDiff) {
 }
 
 function checkVaultFileExists(assertion, vaultDiff) {
-  const regex = new RegExp(assertion.pattern, 'i');
+  const pattern = assertion.pattern || assertion.path;
+  if (!pattern) {
+    return { assertion, pass: false, reason: 'vault_file_exists requires "pattern" or "path"' };
+  }
+  const regex = new RegExp(pattern, 'i');
   // Check both created and modified files
   const allFiles = [...(vaultDiff.created || []), ...(vaultDiff.modified || [])];
   const found = allFiles.some((f) => regex.test(f.path));
@@ -109,8 +115,38 @@ function checkVaultFileExists(assertion, vaultDiff) {
     assertion,
     pass: found,
     reason: found
-      ? `Vault file matched /${assertion.pattern}/i`
-      : `No vault file matched /${assertion.pattern}/i`,
+      ? `Vault file matched /${pattern}/i`
+      : `No vault file matched /${pattern}/i`,
+  };
+}
+
+function checkCronCreated(assertion, cronJobs) {
+  const pattern = assertion.pattern;
+  if (!pattern) {
+    return { assertion, pass: false, reason: 'cron_created requires "pattern"' };
+  }
+  const regex = new RegExp(pattern, 'i');
+  const found = cronJobs.some((job) => regex.test(job.prompt || '') || regex.test(job.raw || ''));
+
+  // Optional timezone check
+  if (found && assertion.timezone) {
+    const tzRegex = new RegExp(assertion.timezone, 'i');
+    const tzMatch = cronJobs.some((job) => tzRegex.test(job.raw || ''));
+    if (!tzMatch) {
+      return {
+        assertion,
+        pass: false,
+        reason: `Cron matched "${pattern}" but timezone "${assertion.timezone}" not found`,
+      };
+    }
+  }
+
+  return {
+    assertion,
+    pass: found,
+    reason: found
+      ? `Cron job matched /${pattern}/i`
+      : `No cron job matched /${pattern}/i`,
   };
 }
 
