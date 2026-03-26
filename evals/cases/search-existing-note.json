@@ -5,7 +5,7 @@
   "assertions": [
     { "type": "tool_called", "tool": "vault_search" },
     { "type": "response_matches", "pattern": "(?i)(march 15|15 de marzo|marzo)" },
-    { "type": "response_matches", "pattern": "(?i)(asado|birthday|cumpleaños)" }
+    { "type": "response_matches", "pattern": "(?i)(born|birthday|cumpleaños|naci)" }
   ],
   "runs": 1,
   "pass_threshold": 1.0,

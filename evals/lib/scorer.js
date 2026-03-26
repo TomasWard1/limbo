@@ -101,7 +101,11 @@ function checkVaultNoteCreated(assertion, vaultDiff) {
 }
 
 function checkVaultFileExists(assertion, vaultDiff) {
-  const regex = new RegExp(assertion.pattern, 'i');
+  const pattern = assertion.pattern || assertion.path;
+  if (!pattern) {
+    return { assertion, pass: false, reason: 'vault_file_exists requires "pattern" or "path"' };
+  }
+  const regex = new RegExp(pattern, 'i');
   // Check both created and modified files
   const allFiles = [...(vaultDiff.created || []), ...(vaultDiff.modified || [])];
   const found = allFiles.some((f) => regex.test(f.path));
@@ -109,8 +113,8 @@ function checkVaultFileExists(assertion, vaultDiff) {
     assertion,
     pass: found,
     reason: found
-      ? `Vault file matched /${assertion.pattern}/i`
-      : `No vault file matched /${assertion.pattern}/i`,
+      ? `Vault file matched /${pattern}/i`
+      : `No vault file matched /${pattern}/i`,
   };
 }
 
