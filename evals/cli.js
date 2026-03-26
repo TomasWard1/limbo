@@ -1,0 +1,401 @@
+#!/usr/bin/env node
+'use strict';
+
+const { execFileSync } = require('child_process');
+const path = require('path');
+const fs = require('fs/promises');
+const fsSync = require('fs');
+
+const { snapshot, diff } = require('./lib/vault-diff');
+const { logsSince } = require('./lib/mcp-log');
+const { score } = require('./lib/scorer');
+const { judge } = require('./lib/judge');
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const CONTAINER = 'limbo-eval';
+const EVAL_PORT = 18790;
+const EVALS_DIR = __dirname;
+const CASES_DIR = path.join(EVALS_DIR, 'cases');
+const RESULTS_DIR = path.join(EVALS_DIR, 'results');
+const HISTORY_DIR = path.join(RESULTS_DIR, 'history');
+const BASELINE_PATH = path.join(RESULTS_DIR, 'baseline.json');
+const VAULT_SEED = path.join(EVALS_DIR, 'vault-seed');
+
+// ── Message sending ─────────────────────────────────────────────────────────
+
+function sendMessage(message, container) {
+  const sessionId = `eval-${Date.now()}`;
+  const result = execFileSync('docker', [
+    'exec', container, 'zeroclaw', 'agent',
+    '--message', message,
+    '--json',
+    '--timeout', '120',
+    '--session-id', sessionId,
+  ], { encoding: 'utf8', timeout: 130000 });
+
+  try {
+    const parsed = JSON.parse(result);
+    return { text: extractResponseText(parsed), raw: parsed, sessionId };
+  } catch {
+    return { text: result.trim(), raw: null, sessionId };
+  }
+}
+
+function extractResponseText(parsed) {
+  if (typeof parsed === 'string') return parsed;
+  if (parsed.message) return typeof parsed.message === 'string' ? parsed.message : JSON.stringify(parsed.message);
+  if (parsed.response) return parsed.response;
+  if (parsed.payload?.message?.content) {
+    const content = parsed.payload.message.content;
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+    }
+  }
+  return JSON.stringify(parsed);
+}
+
+// ── Vault reset ─────────────────────────────────────────────────────────────
+
+async function resetVault() {
+  const pristineDir = path.join(EVALS_DIR, '.vault-pristine');
+  const notesDir = path.join(VAULT_SEED, 'notes');
+  const mapsDir = path.join(VAULT_SEED, 'maps');
+
+  // First run: save pristine copy
+  try { await fs.access(pristineDir); } catch {
+    await fs.cp(VAULT_SEED, pristineDir, { recursive: true });
+  }
+
+  // Restore from pristine
+  await fs.rm(notesDir, { recursive: true, force: true });
+  await fs.rm(mapsDir, { recursive: true, force: true });
+  try {
+    await fs.cp(path.join(pristineDir, 'notes'), notesDir, { recursive: true });
+  } catch {
+    await fs.mkdir(notesDir, { recursive: true });
+  }
+  try {
+    await fs.cp(path.join(pristineDir, 'maps'), mapsDir, { recursive: true });
+  } catch {
+    await fs.mkdir(mapsDir, { recursive: true });
+  }
+}
+
+// ── Case loading ────────────────────────────────────────────────────────────
+
+function loadCases(filterName) {
+  const files = fsSync.readdirSync(CASES_DIR).filter(f => f.endsWith('.json'));
+  const cases = files.map(f => {
+    const content = fsSync.readFileSync(path.join(CASES_DIR, f), 'utf8');
+    return JSON.parse(content);
+  });
+  if (filterName) {
+    return cases.filter(c => c.name === filterName);
+  }
+  return cases;
+}
+
+// ── Commands ────────────────────────────────────────────────────────────────
+
+async function cmdRun(args) {
+  const caseName = args['--case'] || null;
+  const tag = args['--tag'] || null;
+  const useJudge = args['--judge'] || false;
+
+  let cases = loadCases(caseName);
+  if (tag) {
+    cases = cases.filter(c => (c.tags || []).includes(tag));
+  }
+
+  if (cases.length === 0) {
+    console.error('No cases found.');
+    process.exit(1);
+  }
+
+  console.log(`Running ${cases.length} eval case(s)...\n`);
+
+  const runId = `run-${Date.now()}`;
+  const results = [];
+
+  for (const evalCase of cases) {
+    const runs = evalCase.runs || 1;
+    for (let i = 0; i < runs; i++) {
+      console.log(`── ${evalCase.name} (run ${i + 1}/${runs}) ──`);
+
+      try {
+        // Reset vault
+        await resetVault();
+
+        // Snapshot before
+        const before = snapshot(VAULT_SEED);
+        const tsBeforeSend = new Date().toISOString();
+
+        // Send message
+        console.log(`  Sending: "${evalCase.input}"`);
+        const { text: response, raw, sessionId } = sendMessage(evalCase.input, CONTAINER);
+        console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
+
+        // Snapshot after
+        const after = snapshot(VAULT_SEED);
+        const vaultDiff = diff(before, after);
+
+        // Get MCP logs
+        const mcpLogs = logsSince(tsBeforeSend, CONTAINER);
+
+        // Score assertions
+        const scoreResults = score(evalCase.assertions, { response, mcpLogs, vaultDiff });
+        const passed = scoreResults.filter(r => r.pass).length;
+        const total = scoreResults.length;
+        const passRate = total > 0 ? passed / total : 0;
+
+        console.log(`  Score: ${passed}/${total} assertions passed (${(passRate * 100).toFixed(0)}%)`);
+
+        // Optional judge
+        let judgeResults = null;
+        if (useJudge) {
+          judgeResults = {};
+          const createdNote = (vaultDiff.created[0] || {}).content || '';
+          try {
+            judgeResults.note_quality = judge('note_quality', {
+              input: evalCase.input,
+              response,
+              note_content: createdNote,
+            });
+            console.log(`  Judge (note_quality): ${judgeResults.note_quality.pass ? 'PASS' : 'FAIL'} — ${judgeResults.note_quality.reason}`);
+          } catch (err) {
+            judgeResults.note_quality = { pass: false, reason: err.message, raw: '' };
+          }
+          try {
+            judgeResults.response_quality = judge('response_quality', {
+              input: evalCase.input,
+              response,
+              note_content: createdNote,
+            });
+            console.log(`  Judge (response_quality): ${judgeResults.response_quality.pass ? 'PASS' : 'FAIL'} — ${judgeResults.response_quality.reason}`);
+          } catch (err) {
+            judgeResults.response_quality = { pass: false, reason: err.message, raw: '' };
+          }
+        }
+
+        results.push({
+          case: evalCase.name,
+          run: i + 1,
+          passRate,
+          passed,
+          total,
+          scoreResults,
+          judgeResults,
+          response: response.slice(0, 500),
+          vaultDiff: {
+            created: vaultDiff.created.length,
+            modified: vaultDiff.modified.length,
+            deleted: vaultDiff.deleted.length,
+          },
+          mcpLogCount: mcpLogs.length,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error(`  ERROR: ${err.message}`);
+        results.push({
+          case: evalCase.name,
+          run: i + 1,
+          passRate: 0,
+          passed: 0,
+          total: evalCase.assertions.length,
+          scoreResults: [],
+          judgeResults: null,
+          error: err.message,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      console.log('');
+    }
+  }
+
+  // Save results
+  const resultFile = path.join(HISTORY_DIR, `${runId}.json`);
+  await fs.mkdir(HISTORY_DIR, { recursive: true });
+  const runData = { id: runId, timestamp: new Date().toISOString(), results };
+  await fs.writeFile(resultFile, JSON.stringify(runData, null, 2));
+  await fs.writeFile(path.join(RESULTS_DIR, 'latest.json'), JSON.stringify(runData, null, 2));
+
+  // Summary
+  const totalPassed = results.reduce((s, r) => s + r.passed, 0);
+  const totalAssertions = results.reduce((s, r) => s + r.total, 0);
+  const overallRate = totalAssertions > 0 ? ((totalPassed / totalAssertions) * 100).toFixed(1) : 0;
+  console.log(`═══ Summary: ${totalPassed}/${totalAssertions} assertions passed (${overallRate}%) ═══`);
+  console.log(`Results saved: ${resultFile}`);
+}
+
+async function cmdCompare(args) {
+  const strict = args['--strict'] || false;
+
+  let latest;
+  try {
+    latest = JSON.parse(await fs.readFile(path.join(RESULTS_DIR, 'latest.json'), 'utf8'));
+  } catch {
+    console.error('No latest results found. Run `limbo-eval run` first.');
+    process.exit(1);
+  }
+
+  let baseline;
+  try {
+    baseline = JSON.parse(await fs.readFile(BASELINE_PATH, 'utf8'));
+  } catch {
+    console.error('No baseline found. Run `limbo-eval promote` to create one.');
+    process.exit(1);
+  }
+
+  console.log(`Comparing latest run (${latest.id}) vs baseline (${baseline.id}):\n`);
+
+  const baseMap = new Map(baseline.results.map(r => [`${r.case}:${r.run}`, r]));
+  let regressions = 0;
+  let improvements = 0;
+
+  for (const result of latest.results) {
+    const key = `${result.case}:${result.run}`;
+    const base = baseMap.get(key);
+    if (!base) {
+      console.log(`  [NEW]  ${result.case} — ${(result.passRate * 100).toFixed(0)}%`);
+      continue;
+    }
+    const diff = result.passRate - base.passRate;
+    if (diff > 0) {
+      console.log(`  [UP]   ${result.case} — ${(base.passRate * 100).toFixed(0)}% → ${(result.passRate * 100).toFixed(0)}%`);
+      improvements++;
+    } else if (diff < 0) {
+      console.log(`  [DOWN] ${result.case} — ${(base.passRate * 100).toFixed(0)}% → ${(result.passRate * 100).toFixed(0)}%`);
+      regressions++;
+    } else {
+      console.log(`  [=]    ${result.case} — ${(result.passRate * 100).toFixed(0)}%`);
+    }
+  }
+
+  console.log(`\n${improvements} improvement(s), ${regressions} regression(s)`);
+
+  if (strict && regressions > 0) {
+    console.error('Strict mode: regressions detected.');
+    process.exit(1);
+  }
+}
+
+async function cmdPromote() {
+  let latest;
+  try {
+    latest = await fs.readFile(path.join(RESULTS_DIR, 'latest.json'), 'utf8');
+  } catch {
+    console.error('No latest results found. Run `limbo-eval run` first.');
+    process.exit(1);
+  }
+
+  await fs.writeFile(BASELINE_PATH, latest);
+  const parsed = JSON.parse(latest);
+  console.log(`Promoted run ${parsed.id} as new baseline.`);
+}
+
+async function cmdReport() {
+  await fs.mkdir(HISTORY_DIR, { recursive: true });
+  const files = (await fs.readdir(HISTORY_DIR))
+    .filter(f => f.endsWith('.json'))
+    .sort()
+    .slice(-10);
+
+  if (files.length === 0) {
+    console.log('No run history found.');
+    return;
+  }
+
+  console.log('Last 10 runs:\n');
+  console.log('  Run ID                    Cases   Pass Rate');
+  console.log('  ─────────────────────────────────────────────');
+
+  for (const file of files) {
+    const data = JSON.parse(await fs.readFile(path.join(HISTORY_DIR, file), 'utf8'));
+    const totalPassed = data.results.reduce((s, r) => s + r.passed, 0);
+    const totalAssertions = data.results.reduce((s, r) => s + r.total, 0);
+    const rate = totalAssertions > 0 ? ((totalPassed / totalAssertions) * 100).toFixed(1) : '0.0';
+    console.log(`  ${data.id.padEnd(28)} ${String(data.results.length).padEnd(8)} ${rate}%`);
+  }
+}
+
+// ── Argument parsing ────────────────────────────────────────────────────────
+
+function parseArgs(argv) {
+  const args = {};
+  const positional = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i].startsWith('--')) {
+      const key = argv[i];
+      if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
+        args[key] = argv[i + 1];
+        i++;
+      } else {
+        args[key] = true;
+      }
+    } else {
+      positional.push(argv[i]);
+    }
+  }
+  return { command: positional[0], args };
+}
+
+function showHelp() {
+  console.log(`limbo-eval — End-to-end evaluation runner for Limbo
+
+Usage:
+  limbo-eval <command> [options]
+
+Commands:
+  run       Run eval cases against a live Limbo container
+  compare   Compare latest results against baseline
+  promote   Promote latest results as the new baseline
+  report    Show pass rates for the last 10 runs
+
+Options for 'run':
+  --case <name>   Run only a specific case by name
+  --tag <tag>     Run only cases with a given tag
+  --judge         Enable LLM-as-judge evaluation
+
+Options for 'compare':
+  --strict        Exit with error code if regressions found
+
+Examples:
+  limbo-eval run
+  limbo-eval run --case create-reminder
+  limbo-eval run --tag vault_write_note --judge
+  limbo-eval compare --strict
+  limbo-eval promote
+  limbo-eval report`);
+}
+
+// ── Main ────────────────────────────────────────────────────────────────────
+
+async function main() {
+  const { command, args } = parseArgs(process.argv.slice(2));
+
+  switch (command) {
+    case 'run':
+      await cmdRun(args);
+      break;
+    case 'compare':
+      await cmdCompare(args);
+      break;
+    case 'promote':
+      await cmdPromote();
+      break;
+    case 'report':
+      await cmdReport();
+      break;
+    default:
+      showHelp();
+      break;
+  }
+}
+
+main().catch(err => {
+  console.error(`Fatal error: ${err.message}`);
+  process.exit(1);
+});
