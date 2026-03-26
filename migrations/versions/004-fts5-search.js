@@ -118,7 +118,7 @@ export async function up({ dataDir, dbDir, log }) {
     const content = readFileSync(filePath, "utf8");
     const { title, body } = parseFrontmatter(content);
     const rel = filePath.slice(notesDir.length + 1);
-    const noteId = rel.replace(/\.md$/, "");
+    const noteId = rel.split("/").pop().replace(/\.md$/, "");
     const domain = getDomain(filePath, notesDir);
 
     notes.push({
