@@ -12,10 +12,10 @@ RUN cd mcp-server && npm ci --omit=dev
 
 # ──────────────────────────────────────────────
 # Stage 2: ZeroClaw binary
-# Custom build with rag-pdf feature enabled.
-# Build with: ./scripts/build-zeroclaw.sh
+# Custom build: v0.6.3 + rag-pdf feature enabled.
+# Build with: ./scripts/build-zeroclaw.sh v0.6.3
 # ──────────────────────────────────────────────
-FROM ghcr.io/tomasward1/zeroclaw:v0.5.3-custom AS zeroclaw
+FROM ghcr.io/tomasward1/zeroclaw:v0.6.3-custom AS zeroclaw
 
 # ──────────────────────────────────────────────
 # Stage 3: final runtime image
