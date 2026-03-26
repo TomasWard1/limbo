@@ -148,7 +148,7 @@ fi
 
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
 ZC_SECRETS="$ZEROCLAW_STATE_DIR/secrets"
-mkdir -p /data/vault/notes /data/vault/maps /data/config "$ZEROCLAW_STATE_DIR" "$ZC_SECRETS"
+mkdir -p /data/vault/notes /data/vault/maps /data/vault/assets /data/config "$ZEROCLAW_STATE_DIR" "$ZC_SECRETS"
 
 # Sync Docker secrets into ZeroClaw state dir.
 # Docker mounts secrets as read-only in /run/secrets/; we copy to a writable path.

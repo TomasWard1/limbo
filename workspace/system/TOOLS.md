@@ -98,3 +98,59 @@ Call `vault_update_map` with:
 | `entries` | string[] | yes | Markdown link strings to append, e.g. `["- [[note-id|Note Title]]"]` |
 
 **Returns:** Confirmation with the map name and updated section.
+
+---
+
+## vault_store_file
+
+Store a binary file (image, PDF, document) in the vault and create a linked note with metadata. The file is saved to `vault/assets/` and a markdown note is created in `vault/notes/` referencing it.
+
+Call `vault_store_file` with:
+```json
+{
+  "noteId": "receipt-hardware-store-2026-03",
+  "title": "Hardware Store Receipt March 2026",
+  "description": "Receipt for drill and screws purchased March 26, 2026",
+  "content": "Purchased at the hardware store on March 26. Total: $45.",
+  "filename": "receipt.pdf",
+  "fileData": "<base64-encoded-content>",
+  "subdirectory": "documents",
+  "source": "telegram"
+}
+```
+
+**Input:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `noteId` | string | yes | Unique ID for the linked note (alphanumeric, dashes, underscores) |
+| `title` | string | yes | Human-readable title for the linked note |
+| `description` | string | yes | One-sentence description of the file's content or purpose |
+| `content` | string | yes | Markdown body — include context from the conversation about why this file was saved |
+| `filename` | string | yes | Original filename with extension (e.g. `photo.jpg`, `report.pdf`) |
+| `fileData` | string | yes | Base64-encoded file content (max 10MB) |
+| `subdirectory` | string | no | Subdirectory under `assets/` (e.g. `images`, `documents`, `screenshots`) |
+| `noteSubdirectory` | string | no | Subdirectory under `notes/` for the linked note |
+| `mimeType` | string | no | MIME type (auto-detected from extension if omitted) |
+| `domain` | string | no | Knowledge domain |
+| `source` | string | no | Provenance (e.g. `limbo`, `telegram`) |
+| `topics` | string[] | no | Map references as wikilinks |
+
+**Returns:** Confirmation with the note ID, note path, and asset path.
+
+---
+
+## vault_get_file
+
+Retrieve a stored file by its linked note ID. Reads the `asset_path` from the note's frontmatter and returns the file as base64.
+
+Call `vault_get_file` with:
+```json
+{ "noteId": "receipt-hardware-store-2026-03" }
+```
+
+**Input:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `noteId` | string | yes | The note ID of the linked note (must have `asset_path` in frontmatter) |
+
+**Returns:** For images: an image content block. For other files: JSON with `filename`, `mimeType`, and `data` (base64).
