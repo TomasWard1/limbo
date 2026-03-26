@@ -1,0 +1,12 @@
+{
+  "name": "hard-ambiguous-request",
+  "description": "User gives a vague save command with no clear content — model should ask for clarification",
+  "input": "Guardate esto para después",
+  "assertions": [
+    { "type": "response_matches", "pattern": "(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)" }
+  ],
+  "runs": 1,
+  "pass_threshold": 1.0,
+  "tags": ["ambiguity", "clarification"],
+  "difficulty": "hard"
+}
