@@ -184,9 +184,9 @@ test('entrypoint.sh renders config.toml from template via envsubst', () => {
 
 // ─── 7. Migration version bumped correctly ──────────────────────────────────
 
-test('migration index has CURRENT_DATA_VERSION = 3', () => {
+test('migration index has CURRENT_DATA_VERSION = 4', () => {
   const idx = read('migrations/index.js');
-  assert.ok(idx.includes('CURRENT_DATA_VERSION = 3'));
+  assert.ok(idx.includes('CURRENT_DATA_VERSION = 4'));
 });
 
 test('migration 003-zeroclaw-migration.js exists', () => {
@@ -200,6 +200,16 @@ test('migration 003 exports version 3 and up function', () => {
   // Check for function export - can be export const up or export function up
   assert.ok(mig.includes('up') && (mig.includes('export') || mig.includes('module.exports')),
     'Migration 003 must export an up function');
+});
+
+test('migration 004-fts5-search.js exists', () => {
+  assert.ok(exists('migrations/versions/004-fts5-search.js'));
+});
+
+test('migration 004 exports version 4 and up function', async () => {
+  const mod = await import(path.join(ROOT, 'migrations/versions/004-fts5-search.js'));
+  assert.strictEqual(mod.version, 4, 'Migration 004 must export version = 4');
+  assert.strictEqual(typeof mod.up, 'function', 'Migration 004 must export an up function');
 });
 
 // ─── 8. CLI filter suppresses both openclaw and zeroclaw branding ───────────
