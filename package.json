@@ -4,7 +4,8 @@
   "description": "Your personal AI memory agent — install and manage Limbo via npx",
   "type": "commonjs",
   "bin": {
-    "limbo": "cli.js"
+    "limbo": "cli.js",
+    "limbo-eval": "evals/cli.js"
   },
   "engines": {
     "node": ">=18"

@@ -1,0 +1,12 @@
+{
+  "name": "read-note-by-id",
+  "description": "User asks to read a specific note (tests vault_read tool selection)",
+  "input": "Lee la nota eval-seed-birthday",
+  "assertions": [
+    { "type": "tool_called", "tool": "vault_read" },
+    { "type": "response_matches", "pattern": "(?i)(march 15|tomas|birthday)" }
+  ],
+  "runs": 1,
+  "pass_threshold": 1.0,
+  "tags": ["tool-calling", "vault_read"]
+}

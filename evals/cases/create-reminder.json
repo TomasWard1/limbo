@@ -1,0 +1,14 @@
+{
+  "name": "create-reminder",
+  "description": "User asks Limbo to remember a dentist appointment",
+  "input": "Recordame que el jueves tengo dentista a las 10",
+  "assertions": [
+    { "type": "tool_called", "tool": "vault_write_note" },
+    { "type": "param_match", "tool": "vault_write_note", "key": "type", "pattern": "event" },
+    { "type": "vault_note_created", "pattern": "dentist" },
+    { "type": "response_matches", "pattern": "(?i)(dentista|guardado|guardé|saved|nota)" }
+  ],
+  "runs": 1,
+  "pass_threshold": 1.0,
+  "tags": ["tool-calling", "vault_write_note"]
+}

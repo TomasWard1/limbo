@@ -1,0 +1,47 @@
+# Eval-mode Limbo — isolated vault, MCP logging enabled, no Telegram
+# Usage: docker compose -f evals/docker-compose.eval.yml up -d
+services:
+  limbo-eval:
+    image: ${LIMBO_IMAGE:-ghcr.io/tomasward1/limbo:latest}
+    container_name: limbo-eval
+    restart: "no"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 200
+    tmpfs:
+      - /tmp:size=100M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
+    ports:
+      - "127.0.0.1:18790:18790"
+    volumes:
+      - ./vault-seed:/data/vault
+      - limbo-eval-data:/data/logs
+      - limbo-eval-data:/data/config
+      - limbo-eval-zc:/home/limbo/.zeroclaw
+    secrets:
+      - llm_api_key
+      - gateway_token
+    env_file:
+      - .env.eval
+    environment:
+      LIMBO_EVAL: "true"
+      LIMBO_PORT: "18790"
+    healthcheck:
+      test: ["CMD-SHELL", "zeroclaw status --format=exit-code 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+secrets:
+  llm_api_key:
+    file: ../secrets/llm_api_key
+  gateway_token:
+    file: ../secrets/gateway_token
+
+volumes:
+  limbo-eval-data:
+  limbo-eval-zc:
