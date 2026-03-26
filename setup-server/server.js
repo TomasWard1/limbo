@@ -236,22 +236,26 @@ function decodeJwtPayload(token) {
 const AUTH_PROFILES_FILE = path.join(ZEROCLAW_STATE, 'auth-profiles.json');
 
 function buildCodexAuthProfile(profile) {
-  const profileId = profile.email ? `openai-codex:${profile.email}` : 'openai-codex:default';
+  const profileName = profile.email || 'default';
+  const profileId = `openai-codex:${profileName}`;
+  const now = new Date().toISOString();
   return {
-    version: 1,
+    schema_version: 1,
+    updated_at: now,
+    active_profiles: { 'openai-codex': profileId },
     profiles: {
       [profileId]: {
-        type: 'oauth',
         provider: 'openai-codex',
-        access: profile.access,
-        refresh: profile.refresh,
-        expires: profile.expires,
-        accountId: profile.accountId || '',
+        profile_name: profileName,
+        kind: 'oauth',
+        account_id: profile.accountId || null,
+        access_token: profile.access,
+        refresh_token: profile.refresh,
+        expires_at: new Date(profile.expires).toISOString(),
+        created_at: now,
+        updated_at: now,
       },
     },
-    order: {},
-    lastGood: {},
-    usageStats: {},
   };
 }
 
