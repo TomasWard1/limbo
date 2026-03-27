@@ -110,8 +110,18 @@ h1, h2, h3, h4 {
   border-color: var(--slate-800);
 }
 
-.nav-meta {
+.nav-controls {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-controls .control-group {
+  min-width: 200px;
+}
+
+.nav-meta {
   font-size: 12px;
   color: var(--slate-400);
   display: flex;

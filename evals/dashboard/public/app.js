@@ -10,10 +10,6 @@ const state = {
   runCache: {},
   profiles: [],
   selectedProfile: null,
-  selectedOverviewRunId: null,
-  selectedOverviewBaselineId: '',
-  selectedSpeedRunId: null,
-  selectedSpeedBaselineId: '',
   expandedCase: null,
   expandedRun: null,
 };
@@ -70,7 +66,8 @@ function normalizeRunSummary(run) {
   };
 }
 
-function normalizeMeta(meta = {}) {
+function normalizeMeta(meta) {
+  meta = meta || {};
   const provider = meta.provider || 'unknown-provider';
   const model = meta.model || 'unknown-model';
   const reasoningEffort = meta.reasoningEffort || 'default';
@@ -93,10 +90,10 @@ function deriveRunKind(run) {
 
 function pct(n) { return `${Math.round(n * 100)}%`; }
 function statusOf(passRate) { return passRate >= 1 ? 'pass' : passRate > 0 ? 'partial' : 'fail'; }
-function statusIcon(passRate) { return passRate >= 1 ? '✓' : passRate > 0 ? '◐' : '✗'; }
+function statusIcon(passRate) { return passRate >= 1 ? '\u2713' : passRate > 0 ? '\u25D0' : '\u2717'; }
 
 function formatDate(ts) {
-  if (!ts) return '—';
+  if (!ts) return '\u2014';
   const d = new Date(ts);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
     ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -178,40 +175,21 @@ function collectProfiles() {
 
 function initializeSelectionState() {
   state.selectedProfile = state.latest?.meta.profileKey || state.profiles[0]?.key || null;
-  resetSelectionsForProfile();
 }
 
-function resetSelectionsForProfile() {
-  state.selectedOverviewRunId = pickDefaultRunId(state.selectedProfile, 'accuracy');
-  state.selectedOverviewBaselineId = pickDefaultBaselineId(state.selectedProfile, 'accuracy');
-  state.selectedSpeedRunId = pickDefaultRunId(state.selectedProfile, 'speed');
-  state.selectedSpeedBaselineId = pickDefaultBaselineId(state.selectedProfile, 'speed');
+function getLatestRunForProfile(profileKey) {
+  const runs = state.history
+    .filter(r => r.meta.profileKey === profileKey)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  // Prefer full runs for accuracy/speed extraction
+  const full = runs.filter(r => r.kind === 'full');
+  return full.length ? full[0] : runs[0] || null;
 }
 
-function getRunsForProfile(profileKey, mode) {
-  const runs = state.history.filter(r => r.meta.profileKey === profileKey);
-  const sorted = runs.slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  if (mode === 'speed') {
-    return sorted.filter(r => r.kind === 'speed');
-  }
-  if (mode === 'accuracy') {
-    const full = sorted.filter(r => r.kind === 'full');
-    return full.length ? full : sorted.filter(r => r.kind !== 'speed');
-  }
-  return sorted;
-}
-
-function pickDefaultRunId(profileKey, mode) {
-  const runs = getRunsForProfile(profileKey, mode);
-  if (runs.length) return runs[0].id;
-  return '';
-}
-
-function pickDefaultBaselineId(profileKey, mode) {
-  const entry = state.baselinesIndex?.[profileKey];
-  if (!entry) return '';
-  const kind = mode === 'speed' ? 'speed' : 'full';
-  return entry[kind]?.id || entry.any?.id || '';
+function getRunsForProfile(profileKey) {
+  return state.history
+    .filter(r => r.meta.profileKey === profileKey)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
 async function getRunById(runId) {
@@ -231,7 +209,7 @@ function formatRunOption(run) {
   const totalAssertions = run.totalAssertions ?? run.results?.reduce((s, r) => s + r.total, 0) ?? 0;
   const rate = totalAssertions ? totalPassed / totalAssertions : 0;
   const kindLabel = run.kind || 'full';
-  return `${shortDate(run.timestamp)} · ${kindLabel} · ${pct(rate)} · ${run.id}`;
+  return `${run.meta.profileLabel} \u00B7 ${kindLabel} \u00B7 ${pct(rate)} \u00B7 ${shortDate(run.timestamp)}`;
 }
 
 function renderNavMeta() {
@@ -261,73 +239,19 @@ function setupControls() {
   profileSelect.value = state.selectedProfile;
   profileSelect.addEventListener('change', () => {
     state.selectedProfile = profileSelect.value;
-    resetSelectionsForProfile();
     renderNavMeta();
     renderAll();
   });
 
-  document.getElementById('overview-run-select').addEventListener('change', e => {
-    state.selectedOverviewRunId = e.target.value;
-    renderOverview();
-    renderCompareSelectors();
-  });
-  document.getElementById('overview-baseline-select').addEventListener('change', e => {
-    state.selectedOverviewBaselineId = e.target.value;
-    renderOverview();
-    renderCompareSelectors();
-  });
-  document.getElementById('speed-run-select').addEventListener('change', e => {
-    state.selectedSpeedRunId = e.target.value;
-    renderSpeed();
-  });
-  document.getElementById('speed-baseline-select').addEventListener('change', e => {
-    state.selectedSpeedBaselineId = e.target.value;
-    renderSpeed();
-  });
   document.getElementById('compare-btn').addEventListener('click', doCompare);
 }
 
 function renderAll() {
-  populateSelectors();
-  renderOverview();
+  renderAccuracy();
   renderSpeed();
-  renderHistory();
   renderCompareSelectors();
+  renderHistory();
   setupFilters();
-}
-
-function populateSelectors() {
-  const accuracyRuns = getRunsForProfile(state.selectedProfile, 'accuracy');
-  const speedRuns = getRunsForProfile(state.selectedProfile, 'speed');
-
-  populateRunSelect(document.getElementById('overview-run-select'), accuracyRuns, state.selectedOverviewRunId, 'No accuracy runs');
-  populateRunSelect(document.getElementById('speed-run-select'), speedRuns, state.selectedSpeedRunId, 'No speed runs');
-  populateBaselineSelect(document.getElementById('overview-baseline-select'), accuracyRuns, state.selectedOverviewBaselineId, 'No baseline');
-  populateBaselineSelect(document.getElementById('speed-baseline-select'), speedRuns, state.selectedSpeedBaselineId, 'No baseline');
-
-  if (accuracyRuns.length && !accuracyRuns.some(r => r.id === state.selectedOverviewRunId)) {
-    state.selectedOverviewRunId = accuracyRuns[0].id;
-  }
-  if (speedRuns.length && !speedRuns.some(r => r.id === state.selectedSpeedRunId)) {
-    state.selectedSpeedRunId = speedRuns[0].id;
-  }
-}
-
-function populateRunSelect(el, runs, selectedId, emptyLabel) {
-  if (!runs.length) {
-    el.replaceChildren(createEl('option', { value: '' }, emptyLabel));
-    el.value = '';
-    return;
-  }
-  el.replaceChildren(...runs.map(r => createEl('option', { value: r.id }, formatRunOption(r))));
-  el.value = runs.some(r => r.id === selectedId) ? selectedId : runs[0].id;
-}
-
-function populateBaselineSelect(el, runs, selectedId, emptyLabel) {
-  const options = [createEl('option', { value: '' }, emptyLabel)];
-  runs.forEach(r => options.push(createEl('option', { value: r.id }, formatRunOption(r))));
-  el.replaceChildren(...options);
-  el.value = selectedId && runs.some(r => r.id === selectedId) ? selectedId : '';
 }
 
 function setupFilters() {
@@ -339,7 +263,9 @@ function setupFilters() {
   diffFilter.dataset.bound = '1';
 
   const applyFilters = async () => {
-    const run = await getRunById(state.selectedOverviewRunId);
+    const latestSummary = getLatestRunForProfile(state.selectedProfile);
+    if (!latestSummary) return;
+    const run = await getRunById(latestSummary.id);
     if (!run) return;
     let results = [...run.results];
 
@@ -369,42 +295,36 @@ function setupFilters() {
   searchFilter.addEventListener('input', applyFilters);
 }
 
-async function renderOverview() {
-  const run = await getRunById(state.selectedOverviewRunId);
-  const baseline = await getRunById(state.selectedOverviewBaselineId);
-  if (!run) {
-    document.getElementById('overview-run-id').textContent = 'No accuracy run selected';
-    document.getElementById('overview-stats').replaceChildren();
-    document.getElementById('overview-difficulty').replaceChildren();
-    document.getElementById('overview-results').replaceChildren(
-      createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No accuracy runs for this profile')])
+// === ACCURACY TAB ===
+
+async function renderAccuracy() {
+  const latestSummary = getLatestRunForProfile(state.selectedProfile);
+  if (!latestSummary) {
+    document.getElementById('accuracy-run-id').textContent = 'No runs for this profile';
+    document.getElementById('accuracy-stats').replaceChildren();
+    document.getElementById('accuracy-difficulty').replaceChildren();
+    document.getElementById('accuracy-results').replaceChildren(
+      createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No runs for this profile')])
     );
     return;
   }
 
-  const baselineText = baseline ? ` vs baseline ${baseline.id}` : '';
-  document.getElementById('overview-run-id').textContent =
-    `${run.id} — ${run.meta.profileLabel} — ${formatDate(run.timestamp)}${baselineText}`;
+  const run = await getRunById(latestSummary.id);
+  if (!run) return;
+
+  document.getElementById('accuracy-run-id').textContent =
+    `${run.id} \u2014 ${run.meta.profileLabel} \u2014 ${formatDate(run.timestamp)}`;
 
   const totalPassed = run.results.reduce((s, r) => s + r.passed, 0);
   const totalAssertions = run.results.reduce((s, r) => s + r.total, 0);
   const overallRate = totalAssertions ? totalPassed / totalAssertions : 0;
   const casesFullPass = run.results.filter(r => r.passRate >= 1).length;
   const casesFailed = run.results.filter(r => r.passRate < 1).length;
-  const baselineRate = baseline ? (baseline.results.reduce((s, r) => s + r.passed, 0) / baseline.results.reduce((s, r) => s + r.total, 0)) : null;
-  const delta = baselineRate !== null ? overallRate - baselineRate : null;
 
-  const speedSearchTimes = run.results
-    .filter(r => isSpeedCase(r.case) && typeof r.searchTimeMs === 'number' && r.searchTimeMs > 0)
-    .map(r => r.searchTimeMs);
-  const avgSpeedLatency = speedSearchTimes.length
-    ? Math.round(speedSearchTimes.reduce((a, b) => a + b, 0) / speedSearchTimes.length)
-    : null;
-
-  document.getElementById('overview-stats').replaceChildren(
-    buildStatCard('Pass Rate', pct(overallRate), statusOf(overallRate), delta !== null ? `baseline ${pct(baselineRate)} (${delta > 0 ? '+' : ''}${pct(delta)})` : `${totalPassed}/${totalAssertions} assertions`),
+  document.getElementById('accuracy-stats').replaceChildren(
+    buildStatCard('Pass Rate', pct(overallRate), statusOf(overallRate), `${totalPassed}/${totalAssertions} assertions`),
     buildStatCard('Cases', String(run.results.length), 'neutral', `${casesFullPass} passed, ${casesFailed} partial/fail`),
-    buildStatCard('Avg Search Time', avgSpeedLatency ? `${avgSpeedLatency}ms` : '—', avgSpeedLatency !== null ? 'partial' : 'neutral', speedSearchTimes.length ? `${speedSearchTimes.length} vault_search calls in this run` : 'no search data'),
+    buildStatCard('Run Kind', run.kind, 'neutral', formatDate(run.timestamp)),
   );
 
   const byDiff = {};
@@ -418,7 +338,7 @@ async function renderOverview() {
   });
 
   const diffOrder = ['easy', 'medium', 'hard'];
-  document.getElementById('overview-difficulty').replaceChildren(
+  document.getElementById('accuracy-difficulty').replaceChildren(
     ...diffOrder.filter(d => byDiff[d]).map(d => {
       const b = byDiff[d];
       const rate = b.total ? b.passed / b.total : 0;
@@ -451,7 +371,7 @@ function buildStatCard(label, value, status, sub) {
 }
 
 function renderResultsList(results) {
-  const container = document.getElementById('overview-results');
+  const container = document.getElementById('accuracy-results');
   const children = [];
 
   results.forEach(r => {
@@ -498,9 +418,9 @@ function buildAccordionDetail(caseName, result) {
   assertSection.appendChild(createEl('h3', {}, `Assertions (${result.passed}/${result.total})`));
   result.scoreResults.forEach(sr => {
     const row = createEl('div', { className: 'assertion-row' });
-    row.appendChild(createEl('div', { className: `assertion-icon ${sr.pass ? 'pass' : 'fail'}` }, sr.pass ? '✓' : '✗'));
+    row.appendChild(createEl('div', { className: `assertion-icon ${sr.pass ? 'pass' : 'fail'}` }, sr.pass ? '\u2713' : '\u2717'));
     const info = createEl('div');
-    info.appendChild(createEl('div', { className: 'assertion-type' }, sr.assertion.type + (sr.assertion.tool ? ` → ${sr.assertion.tool}` : '')));
+    info.appendChild(createEl('div', { className: 'assertion-type' }, sr.assertion.type + (sr.assertion.tool ? ` \u2192 ${sr.assertion.tool}` : '')));
     info.appendChild(createEl('div', { className: 'assertion-reason' }, sr.reason));
     row.appendChild(info);
     assertSection.appendChild(row);
@@ -529,25 +449,28 @@ function buildAccordionDetail(caseName, result) {
   return el;
 }
 
-async function renderSpeed() {
-  const run = await getRunById(state.selectedSpeedRunId);
-  const baseline = await getRunById(state.selectedSpeedBaselineId);
+// === SPEED TAB ===
+// Extracts speed cases from ANY run that contains them (not filtered by kind === 'speed')
 
-  if (!run) {
-    document.getElementById('speed-run-id').textContent = 'No speed runs for this profile';
+async function renderSpeed() {
+  const latestSummary = getLatestRunForProfile(state.selectedProfile);
+  if (!latestSummary) {
+    document.getElementById('speed-run-id').textContent = 'No runs for this profile';
     document.getElementById('speed-stats').replaceChildren();
     document.getElementById('speed-chart').replaceChildren(
-      createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No speed runs for this profile')])
+      createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No runs for this profile')])
     );
     document.getElementById('speed-results').replaceChildren();
     return;
   }
 
-  document.getElementById('speed-run-id').textContent =
-    `${run.id} — ${run.meta.profileLabel} — ${formatDate(run.timestamp)}${baseline ? ` vs baseline ${baseline.id}` : ''}`;
+  const run = await getRunById(latestSummary.id);
+  if (!run) return;
 
   const speedResults = run.results.filter(r => isSpeedCase(r.case));
+
   if (!speedResults.length) {
+    document.getElementById('speed-run-id').textContent = `${run.id} \u2014 No speed cases in this run`;
     document.getElementById('speed-stats').replaceChildren();
     document.getElementById('speed-chart').replaceChildren(
       createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No speed cases found in this run')])
@@ -556,22 +479,27 @@ async function renderSpeed() {
     return;
   }
 
+  document.getElementById('speed-run-id').textContent =
+    `${run.id} \u2014 ${run.meta.profileLabel} \u2014 ${formatDate(run.timestamp)}`;
+
   function getSearchTime(result) {
     if (typeof result.searchTimeMs === 'number' && result.searchTimeMs > 0) return result.searchTimeMs;
+    if (typeof result.latencyMs === 'number' && result.latencyMs > 0) return result.latencyMs;
     return null;
   }
 
   const searchTimes = speedResults.map(r => getSearchTime(r)).filter(t => t !== null);
-  const latencies = speedResults.filter(r => typeof r.latencyMs === 'number' && r.latencyMs > 0).map(r => r.latencyMs);
   const avgSearch = searchTimes.length ? Math.round(searchTimes.reduce((a, b) => a + b, 0) / searchTimes.length) : null;
-  const avgTotal = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
+  const fastest = searchTimes.length ? Math.min(...searchTimes) : null;
+  const slowest = searchTimes.length ? Math.max(...searchTimes) : null;
 
   document.getElementById('speed-stats').replaceChildren(
-    buildStatCard('Avg Search Time', avgSearch !== null ? `${avgSearch}ms` : '—', avgSearch !== null ? 'partial' : 'neutral', searchTimes.length ? `${searchTimes.length} vault_search calls` : 'no search data yet'),
-    buildStatCard('Speed Cases', String(speedResults.length), 'neutral', ''),
-    buildStatCard('Avg Total Turn', avgTotal ? `${(avgTotal / 1000).toFixed(1)}s` : '—', 'neutral', 'includes LLM thinking'),
+    buildStatCard('Avg Search Time', avgSearch !== null ? `${avgSearch}ms` : '\u2014', avgSearch !== null ? 'partial' : 'neutral', searchTimes.length ? `${searchTimes.length} vault_search calls` : 'no search data'),
+    buildStatCard('Fastest', fastest !== null ? `${fastest}ms` : '\u2014', fastest !== null ? 'pass' : 'neutral', ''),
+    buildStatCard('Slowest', slowest !== null ? `${slowest}ms` : '\u2014', slowest !== null ? 'fail' : 'neutral', ''),
   );
 
+  // Bar chart
   const chartEl = document.getElementById('speed-chart');
   chartEl.replaceChildren();
   chartEl.appendChild(createEl('h3', { style: { fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: 'var(--slate-700)' } }, 'vault_search Execution Time'));
@@ -582,21 +510,7 @@ async function renderSpeed() {
       createEl('p', {}, 'No vault_search timing data. Re-run evals to capture MCP tool timestamps.'),
     ]));
   } else {
-    const baselineSearchMap = {};
-    if (baseline) {
-      baseline.results.forEach(r => {
-        if (isSpeedCase(r.case) && typeof r.searchTimeMs === 'number') baselineSearchMap[r.case] = r.searchTimeMs;
-      });
-    }
-
-    if (Object.keys(baselineSearchMap).length > 0) {
-      const legend = createEl('div', { style: { display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '11px', color: 'var(--slate-400)' } });
-      legend.appendChild(createEl('span', {}, 'Selected run (bar)'));
-      legend.appendChild(createEl('span', {}, 'Selected baseline (marker)'));
-      chartEl.appendChild(legend);
-    }
-
-    const maxTime = Math.max(...searchTimes, ...Object.values(baselineSearchMap), 1);
+    const maxTime = Math.max(...searchTimes, 1);
     const bars = createEl('div', { className: 'speed-bars' });
     speedResults.forEach(r => {
       const searchTime = getSearchTime(r);
@@ -610,14 +524,6 @@ async function renderSpeed() {
       const fill = createEl('div', { className: `speed-bar-fill ${speedClass}` });
       fill.style.width = `${pctWidth}%`;
       track.appendChild(fill);
-
-      if (baselineSearchMap[r.case] !== undefined) {
-        const marker = createEl('div', { className: 'speed-bar-baseline' });
-        marker.style.left = `${(baselineSearchMap[r.case] / maxTime) * 100}%`;
-        marker.title = `Baseline: ${baselineSearchMap[r.case]}ms`;
-        track.appendChild(marker);
-      }
-
       row.appendChild(track);
       row.appendChild(createEl('div', { className: 'speed-bar-value' }, `${searchTime}ms`));
       bars.appendChild(row);
@@ -625,12 +531,14 @@ async function renderSpeed() {
     chartEl.appendChild(bars);
   }
 
+  // Speed cases list
   const speedList = document.getElementById('speed-results');
   const children = [];
   speedResults.forEach(r => {
     const caseDef = state.caseMap[r.case];
     const diff = caseDef ? caseDef.difficulty : '?';
     const status = statusOf(r.passRate);
+    const searchTime = getSearchTime(r);
 
     const row = createEl('div', { className: 'result-row', 'data-case': r.case });
     row.appendChild(createEl('div', { className: `result-icon ${status}` }, statusIcon(r.passRate)));
@@ -639,13 +547,155 @@ async function renderSpeed() {
     row.appendChild(info);
     row.appendChild(difficultyPill(diff));
     row.appendChild(createEl('div', { className: `result-score ${status}` }, `${r.passed}/${r.total}`));
-    row.appendChild(createEl('div', { className: 'result-latency' }, getSearchTime(r) !== null ? `${getSearchTime(r)}ms` : '—'));
+    row.appendChild(createEl('div', { className: 'result-latency' }, searchTime !== null ? `${searchTime}ms` : '\u2014'));
     row.appendChild(statusPill(status));
     row.addEventListener('click', () => toggleAccordion(speedList, r.case, r, row));
     children.push(row);
   });
   speedList.replaceChildren(...children);
 }
+
+// === COMPARE TAB ===
+
+function renderCompareSelectors() {
+  const selectA = document.getElementById('compare-a');
+  const selectB = document.getElementById('compare-b');
+  selectA.replaceChildren();
+  selectB.replaceChildren();
+
+  // Include all history runs + baselines
+  const allOptions = [];
+  state.history.forEach(r => {
+    allOptions.push({ id: r.id, label: `${r.meta.profileLabel} \u00B7 ${r.kind} \u00B7 ${pct(r.passRate)} \u00B7 ${shortDate(r.timestamp)}` });
+  });
+
+  // Add baselines from index
+  Object.entries(state.baselinesIndex || {}).forEach(([profileKey, entry]) => {
+    Object.entries(entry || {}).forEach(([kind, candidate]) => {
+      if (candidate?.id && !allOptions.some(o => o.id === candidate.id)) {
+        const label = candidate.profileLabel || profileKey;
+        allOptions.push({ id: candidate.id, label: `[baseline] ${label} \u00B7 ${kind}` });
+      }
+    });
+  });
+
+  allOptions.forEach(opt => {
+    selectA.appendChild(createEl('option', { value: opt.id }, opt.label));
+    selectB.appendChild(createEl('option', { value: opt.id }, opt.label));
+  });
+
+  // Default: first two runs if available
+  if (allOptions.length >= 2) {
+    selectA.selectedIndex = 0;
+    selectB.selectedIndex = 1;
+  }
+}
+
+async function doCompare() {
+  const aId = document.getElementById('compare-a').value;
+  const bId = document.getElementById('compare-b').value;
+  const runA = await getRunById(aId);
+  const runB = await getRunById(bId);
+  if (!runA || !runB) return;
+
+  const container = document.getElementById('compare-results');
+
+  // Build accuracy comparison
+  const bMap = {};
+  runB.results.forEach(r => { bMap[r.case] = r; });
+  const allCases = [...new Set([...runA.results.map(r => r.case), ...runB.results.map(r => r.case)])];
+
+  const rows = allCases.map(c => {
+    const a = runA.results.find(r => r.case === c);
+    const b = bMap[c];
+    const caseDef = state.caseMap[c];
+    const rateA = a ? a.passRate : null;
+    const rateB = b ? b.passRate : null;
+    const delta = (rateA !== null && rateB !== null) ? rateA - rateB : null;
+    const searchA = a && typeof a.searchTimeMs === 'number' ? a.searchTimeMs : null;
+    const searchB = b && typeof b.searchTimeMs === 'number' ? b.searchTimeMs : null;
+    const searchDelta = (searchA !== null && searchB !== null) ? searchA - searchB : null;
+    return { case: c, caseDef, rateA, rateB, delta, searchA, searchB, searchDelta, isSpeed: isSpeedCase(c) };
+  }).sort((x, y) => {
+    if (x.delta !== null && y.delta !== null) return x.delta - y.delta;
+    return 0;
+  });
+
+  const header = createEl('div', { className: 'compare-meta' }, [
+    metaBadge(`A: ${runA.meta.profileLabel} \u00B7 ${runA.kind} \u00B7 ${runA.id}`),
+    metaBadge(`B: ${runB.meta.profileLabel} \u00B7 ${runB.kind} \u00B7 ${runB.id}`),
+  ]);
+
+  // Accuracy table
+  const accTitle = createEl('div', { className: 'section-title', style: { marginTop: '16px' } }, 'Accuracy Comparison');
+  const table = createEl('table', { className: 'compare-table' });
+  const thead = createEl('thead');
+  const headerRow = createEl('tr');
+  ['Case', 'Difficulty', 'Run A', 'Run B', 'Delta'].forEach(h => headerRow.appendChild(createEl('th', {}, h)));
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = createEl('tbody');
+  rows.forEach(r => {
+    const tr = createEl('tr');
+    tr.appendChild(createEl('td', {}, createEl('strong', {}, r.case)));
+    const tdDiff = createEl('td');
+    tdDiff.appendChild(r.caseDef ? difficultyPill(r.caseDef.difficulty) : document.createTextNode('\u2014'));
+    tr.appendChild(tdDiff);
+    tr.appendChild(createEl('td', { className: r.rateA !== null ? statusOf(r.rateA) : '' }, r.rateA !== null ? pct(r.rateA) : '\u2014'));
+    tr.appendChild(createEl('td', { className: r.rateB !== null ? statusOf(r.rateB) : '' }, r.rateB !== null ? pct(r.rateB) : '\u2014'));
+    const tdDelta = createEl('td');
+    if (r.delta !== null) {
+      if (r.delta > 0) tdDelta.appendChild(createEl('span', { className: 'delta-up' }, `+${pct(r.delta)}`));
+      else if (r.delta < 0) tdDelta.appendChild(createEl('span', { className: 'delta-down' }, pct(r.delta)));
+      else tdDelta.appendChild(createEl('span', { className: 'delta-same' }, '='));
+    } else {
+      tdDelta.textContent = '\u2014';
+    }
+    tr.appendChild(tdDelta);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  // Speed comparison table (only speed cases with searchTimeMs)
+  const speedRows = rows.filter(r => r.isSpeed && (r.searchA !== null || r.searchB !== null));
+  const elements = [header, accTitle, table];
+
+  if (speedRows.length) {
+    const speedTitle = createEl('div', { className: 'section-title', style: { marginTop: '24px' } }, 'Speed Comparison (searchTimeMs)');
+    const speedTable = createEl('table', { className: 'compare-table' });
+    const speedThead = createEl('thead');
+    const speedHeaderRow = createEl('tr');
+    ['Case', 'Run A (ms)', 'Run B (ms)', 'Delta (ms)'].forEach(h => speedHeaderRow.appendChild(createEl('th', {}, h)));
+    speedThead.appendChild(speedHeaderRow);
+    speedTable.appendChild(speedThead);
+
+    const speedTbody = createEl('tbody');
+    speedRows.forEach(r => {
+      const tr = createEl('tr');
+      tr.appendChild(createEl('td', {}, createEl('strong', {}, r.case)));
+      tr.appendChild(createEl('td', {}, r.searchA !== null ? String(r.searchA) : '\u2014'));
+      tr.appendChild(createEl('td', {}, r.searchB !== null ? String(r.searchB) : '\u2014'));
+      const tdDelta = createEl('td');
+      if (r.searchDelta !== null) {
+        // For speed: negative delta = faster A (good), positive = slower A (bad)
+        if (r.searchDelta < 0) tdDelta.appendChild(createEl('span', { className: 'delta-up' }, `${r.searchDelta}ms`));
+        else if (r.searchDelta > 0) tdDelta.appendChild(createEl('span', { className: 'delta-down' }, `+${r.searchDelta}ms`));
+        else tdDelta.appendChild(createEl('span', { className: 'delta-same' }, '='));
+      } else {
+        tdDelta.textContent = '\u2014';
+      }
+      tr.appendChild(tdDelta);
+      speedTbody.appendChild(tr);
+    });
+    speedTable.appendChild(speedTbody);
+    elements.push(speedTitle, speedTable);
+  }
+
+  container.replaceChildren(...elements);
+}
+
+// === HISTORY TAB ===
 
 function renderHistory() {
   const runs = state.history;
@@ -664,14 +714,26 @@ function renderHistory() {
   const barsEl = createEl('div', { className: 'chart-bars' });
   const runDetailContainer = createEl('div', { id: 'history-run-detail-container' });
 
+  // Color by profile
+  const profileColors = {};
+  const palette = ['var(--green)', 'var(--amber)', '#6366f1', '#ec4899', '#14b8a6', 'var(--red)'];
+  let colorIdx = 0;
+  runs.forEach(r => {
+    if (!profileColors[r.meta.profileKey]) {
+      profileColors[r.meta.profileKey] = palette[colorIdx % palette.length];
+      colorIdx++;
+    }
+  });
+
   runs.slice().reverse().forEach(r => {
     const h = Math.max(4, r.passRate * 120);
+    const color = profileColors[r.meta.profileKey] || barColor(r.passRate);
     const wrapper = createEl('div', { className: 'chart-bar-wrapper', 'data-run-id': r.id });
     wrapper.appendChild(createEl('div', { className: 'chart-value' }, pct(r.passRate)));
     const bar = createEl('div', { className: 'chart-bar' });
     bar.style.height = `${h}px`;
-    bar.style.background = barColor(r.passRate);
-    bar.title = `${r.id}: ${pct(r.passRate)}`;
+    bar.style.background = color;
+    bar.title = `${r.meta.profileLabel}: ${pct(r.passRate)} (${r.id})`;
     wrapper.appendChild(bar);
     wrapper.appendChild(createEl('div', { className: 'chart-label' }, shortDate(r.timestamp)));
     wrapper.addEventListener('click', async () => {
@@ -681,6 +743,20 @@ function renderHistory() {
     barsEl.appendChild(wrapper);
   });
   chartContainer.appendChild(barsEl);
+
+  // Legend
+  if (Object.keys(profileColors).length > 1) {
+    const legend = createEl('div', { style: { display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap' } });
+    Object.entries(profileColors).forEach(([key, color]) => {
+      const label = state.profiles.find(p => p.key === key)?.label || key;
+      const item = createEl('div', { style: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--slate-500)' } });
+      item.appendChild(createEl('div', { style: { width: '10px', height: '10px', borderRadius: '2px', background: color } }));
+      item.appendChild(document.createTextNode(label));
+      legend.appendChild(item);
+    });
+    chartContainer.appendChild(legend);
+  }
+
   chartContainer.after(runDetailContainer);
 
   const listEl = document.getElementById('history-list');
@@ -690,7 +766,7 @@ function renderHistory() {
     info.appendChild(createEl('div', { className: 'run-label' }, r.id));
     const metaRow = createEl('div', { className: 'run-date' });
     metaRow.appendChild(document.createTextNode(formatDate(r.timestamp)));
-    metaRow.appendChild(document.createTextNode(' · '));
+    metaRow.appendChild(document.createTextNode(' \u00B7 '));
     metaRow.appendChild(metaBadge(r.meta.profileLabel));
     metaRow.appendChild(document.createTextNode(' '));
     metaRow.appendChild(metaBadge(r.kind));
@@ -762,83 +838,6 @@ function showHistoryRunDetail(runData, container) {
   });
   detail.appendChild(resultsList);
   container.replaceChildren(detail);
-}
-
-function renderCompareSelectors() {
-  const selectA = document.getElementById('compare-a');
-  const selectB = document.getElementById('compare-b');
-  selectA.replaceChildren();
-  selectB.replaceChildren();
-
-  state.history.forEach(r => {
-    const text = `${r.meta.profileLabel} · ${r.kind} · ${pct(r.passRate)} · ${shortDate(r.timestamp)}`;
-    selectA.appendChild(createEl('option', { value: r.id }, text));
-    selectB.appendChild(createEl('option', { value: r.id }, text));
-  });
-
-  if (state.selectedOverviewRunId) selectA.value = state.selectedOverviewRunId;
-  if (state.selectedOverviewBaselineId) selectB.value = state.selectedOverviewBaselineId;
-  else if (state.history.length > 1) selectB.selectedIndex = 1;
-}
-
-async function doCompare() {
-  const aId = document.getElementById('compare-a').value;
-  const bId = document.getElementById('compare-b').value;
-  const runA = await getRunById(aId);
-  const runB = await getRunById(bId);
-  if (!runA || !runB) return;
-
-  const bMap = {};
-  runB.results.forEach(r => { bMap[r.case] = r; });
-  const allCases = [...new Set([...runA.results.map(r => r.case), ...runB.results.map(r => r.case)])];
-
-  const rows = allCases.map(c => {
-    const a = runA.results.find(r => r.case === c);
-    const b = bMap[c];
-    const caseDef = state.caseMap[c];
-    const rateA = a ? a.passRate : null;
-    const rateB = b ? b.passRate : null;
-    const delta = (rateA !== null && rateB !== null) ? rateA - rateB : null;
-    return { case: c, caseDef, rateA, rateB, delta };
-  }).sort((x, y) => {
-    if (x.delta !== null && y.delta !== null) return x.delta - y.delta;
-    return 0;
-  });
-
-  const container = document.getElementById('compare-results');
-  const header = createEl('div', { className: 'compare-meta' }, [
-    metaBadge(`A: ${runA.meta.profileLabel} · ${runA.kind} · ${runA.id}`),
-    metaBadge(`B: ${runB.meta.profileLabel} · ${runB.kind} · ${runB.id}`),
-  ]);
-  const table = createEl('table', { className: 'compare-table' });
-  const thead = createEl('thead');
-  const headerRow = createEl('tr');
-  ['Case', 'Difficulty', 'Run A', 'Run B', 'Delta'].forEach(h => headerRow.appendChild(createEl('th', {}, h)));
-  thead.appendChild(headerRow);
-  table.appendChild(thead);
-
-  const tbody = createEl('tbody');
-  rows.forEach(r => {
-    const tr = createEl('tr');
-    tr.appendChild(createEl('td', {}, createEl('strong', {}, r.case)));
-    const tdDiff = createEl('td');
-    tdDiff.appendChild(r.caseDef ? difficultyPill(r.caseDef.difficulty) : document.createTextNode('—'));
-    tr.appendChild(tdDiff);
-    tr.appendChild(createEl('td', { className: r.rateA !== null ? statusOf(r.rateA) : '' }, r.rateA !== null ? pct(r.rateA) : '—'));
-    tr.appendChild(createEl('td', { className: r.rateB !== null ? statusOf(r.rateB) : '' }, r.rateB !== null ? pct(r.rateB) : '—'));
-    const tdDelta = createEl('td');
-    if (r.delta !== null) {
-      if (r.delta > 0) tdDelta.appendChild(createEl('span', { className: 'delta-up' }, `+${pct(r.delta)}`));
-      else if (r.delta < 0) tdDelta.appendChild(createEl('span', { className: 'delta-down' }, pct(r.delta)));
-      else tdDelta.appendChild(createEl('span', { className: 'delta-same' }, '='));
-    } else {
-      tdDelta.textContent = '—';
-    }
-    tr.appendChild(tdDelta);
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-  container.replaceChildren(header, table);
 }
 
 init().catch(err => {
