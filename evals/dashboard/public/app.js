@@ -155,18 +155,18 @@ function renderOverview() {
   const casesFullPass = run.results.filter(r => r.passRate >= 1).length;
   const casesFailed = run.results.filter(r => r.passRate < 1).length;
 
-  // Speed cases avg latency
-  const speedLatencies = run.results
-    .filter(r => isSpeedCase(r.case) && typeof r.latencyMs === 'number' && r.latencyMs > 0)
-    .map(r => r.latencyMs);
-  const avgSpeedLatency = speedLatencies.length
-    ? Math.round(speedLatencies.reduce((a, b) => a + b, 0) / speedLatencies.length)
+  // Speed cases — vault_search time
+  const speedSearchTimes = run.results
+    .filter(r => isSpeedCase(r.case) && typeof r.searchTimeMs === 'number' && r.searchTimeMs > 0)
+    .map(r => r.searchTimeMs);
+  const avgSpeedLatency = speedSearchTimes.length
+    ? Math.round(speedSearchTimes.reduce((a, b) => a + b, 0) / speedSearchTimes.length)
     : null;
 
   document.getElementById('overview-stats').replaceChildren(
     buildStatCard('Pass Rate', pct(overallRate), statusOf(overallRate), `${totalPassed}/${totalAssertions} assertions`),
     buildStatCard('Cases', String(run.results.length), 'neutral', `${casesFullPass} passed, ${casesFailed} failed`),
-    buildStatCard('Avg Latency (speed)', avgSpeedLatency ? `${(avgSpeedLatency / 1000).toFixed(1)}s` : '\u2014', avgSpeedLatency && avgSpeedLatency < 15000 ? 'pass' : avgSpeedLatency ? 'partial' : 'neutral', speedLatencies.length ? `${speedLatencies.length} speed cases` : 'no speed cases'),
+    buildStatCard('Avg Search Time', avgSpeedLatency ? `${avgSpeedLatency}ms` : '\u2014', avgSpeedLatency && avgSpeedLatency < 50 ? 'pass' : avgSpeedLatency ? 'partial' : 'neutral', speedSearchTimes.length ? `${speedSearchTimes.length} vault_search calls` : 'no search data'),
   );
 
   // Difficulty breakdown
@@ -383,73 +383,84 @@ function renderSpeed() {
     return;
   }
 
-  const latencies = speedResults
-    .filter(r => typeof r.latencyMs === 'number' && r.latencyMs > 0)
-    .map(r => r.latencyMs);
-  const avg = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
-  const max = latencies.length ? Math.max(...latencies) : null;
-  const min = latencies.length ? Math.min(...latencies) : null;
+  // Use searchTimeMs (vault_search tool execution time) if available, fall back to latencyMs
+  function getSearchTime(r) {
+    if (typeof r.searchTimeMs === 'number' && r.searchTimeMs > 0) return r.searchTimeMs;
+    return null;
+  }
+
+  const searchTimes = speedResults.map(r => getSearchTime(r)).filter(t => t !== null);
+  const latencies = speedResults.filter(r => typeof r.latencyMs === 'number' && r.latencyMs > 0).map(r => r.latencyMs);
+
+  const avgSearch = searchTimes.length ? Math.round(searchTimes.reduce((a, b) => a + b, 0) / searchTimes.length) : null;
+  const avgTotal = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
 
   // Stats
   document.getElementById('speed-stats').replaceChildren(
-    buildStatCard('Avg Latency', avg ? `${(avg / 1000).toFixed(1)}s` : '\u2014', avg && avg < 15000 ? 'pass' : avg ? 'partial' : 'neutral', `${latencies.length} cases`),
-    buildStatCard('Fastest', min ? `${(min / 1000).toFixed(1)}s` : '\u2014', 'pass', ''),
-    buildStatCard('Slowest', max ? `${(max / 1000).toFixed(1)}s` : '\u2014', max && max > 20000 ? 'fail' : 'partial', ''),
+    buildStatCard('Avg Search Time', avgSearch !== null ? `${avgSearch}ms` : '\u2014', avgSearch !== null && avgSearch < 50 ? 'pass' : avgSearch !== null ? 'partial' : 'neutral', searchTimes.length ? `${searchTimes.length} vault_search calls` : 'no search data yet'),
+    buildStatCard('Speed Cases', String(speedResults.length), 'neutral', ''),
+    buildStatCard('Avg Total Turn', avgTotal ? `${(avgTotal / 1000).toFixed(1)}s` : '\u2014', 'neutral', 'includes LLM thinking'),
   );
 
-  // Bar chart
-  const maxLatency = Math.max(...latencies, 1);
-
-  // Check for baseline speed data
-  let baselineSpeedMap = {};
-  if (state.baseline) {
-    state.baseline.results.forEach(r => {
-      if (isSpeedCase(r.case) && typeof r.latencyMs === 'number') {
-        baselineSpeedMap[r.case] = r.latencyMs;
-      }
-    });
-  }
-
+  // Bar chart — vault_search time only
   const chartEl = document.getElementById('speed-chart');
   chartEl.replaceChildren();
-  chartEl.appendChild(createEl('h3', { style: { fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: 'var(--slate-700)' } }, 'Latency by Case'));
+  chartEl.appendChild(createEl('h3', { style: { fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: 'var(--slate-700)' } }, 'vault_search Execution Time'));
 
-  if (Object.keys(baselineSpeedMap).length > 0) {
-    const legend = createEl('div', { style: { display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '11px', color: 'var(--slate-400)' } });
-    legend.appendChild(createEl('span', {}, 'Latest (bar)'));
-    legend.appendChild(createEl('span', {}, 'Baseline (line)'));
-    chartEl.appendChild(legend);
-  }
-
-  const bars = createEl('div', { className: 'speed-bars' });
-  speedResults.forEach(r => {
-    const latency = r.latencyMs || 0;
-    const pctWidth = maxLatency ? (latency / maxLatency) * 100 : 0;
-    const speedClass = latency < 10000 ? 'fast' : latency < 20000 ? 'medium' : 'slow';
-
-    const row = createEl('div', { className: 'speed-bar-row' });
-    row.appendChild(createEl('div', { className: 'speed-bar-label', textContent: r.case }));
-
-    const track = createEl('div', { className: 'speed-bar-track' });
-    const fill = createEl('div', { className: `speed-bar-fill ${speedClass}` });
-    fill.style.width = `${pctWidth}%`;
-    track.appendChild(fill);
-
-    // Baseline marker
-    const baselineMs = baselineSpeedMap[r.case];
-    if (baselineMs) {
-      const baselinePct = (baselineMs / maxLatency) * 100;
-      const marker = createEl('div', { className: 'speed-bar-baseline' });
-      marker.style.left = `${baselinePct}%`;
-      marker.title = `Baseline: ${(baselineMs / 1000).toFixed(1)}s`;
-      track.appendChild(marker);
+  const hasSearchData = speedResults.some(r => getSearchTime(r) !== null);
+  if (!hasSearchData) {
+    chartEl.appendChild(createEl('div', { className: 'empty-state', style: { padding: '24px' } }, [
+      createEl('p', {}, 'No vault_search timing data. Re-run evals to capture MCP tool timestamps.'),
+    ]));
+  } else {
+    // Baseline comparison
+    let baselineSearchMap = {};
+    if (state.baseline) {
+      state.baseline.results.forEach(r => {
+        if (isSpeedCase(r.case) && typeof r.searchTimeMs === 'number') {
+          baselineSearchMap[r.case] = r.searchTimeMs;
+        }
+      });
     }
 
-    row.appendChild(track);
-    row.appendChild(createEl('div', { className: 'speed-bar-value' }, latency ? `${(latency / 1000).toFixed(1)}s` : '\u2014'));
-    bars.appendChild(row);
-  });
-  chartEl.appendChild(bars);
+    if (Object.keys(baselineSearchMap).length > 0) {
+      const legend = createEl('div', { style: { display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '11px', color: 'var(--slate-400)' } });
+      legend.appendChild(createEl('span', {}, 'Latest (bar)'));
+      legend.appendChild(createEl('span', {}, 'Baseline (marker)'));
+      chartEl.appendChild(legend);
+    }
+
+    const maxTime = Math.max(...searchTimes, ...Object.values(baselineSearchMap), 1);
+    const bars = createEl('div', { className: 'speed-bars' });
+    speedResults.forEach(r => {
+      const searchTime = getSearchTime(r);
+      if (searchTime === null) return;
+      const pctWidth = (searchTime / maxTime) * 100;
+      const speedClass = searchTime < 10 ? 'fast' : searchTime < 50 ? 'medium' : 'slow';
+
+      const row = createEl('div', { className: 'speed-bar-row' });
+      row.appendChild(createEl('div', { className: 'speed-bar-label', textContent: r.case }));
+
+      const track = createEl('div', { className: 'speed-bar-track' });
+      const fill = createEl('div', { className: `speed-bar-fill ${speedClass}` });
+      fill.style.width = `${pctWidth}%`;
+      track.appendChild(fill);
+
+      const baselineMs = baselineSearchMap[r.case];
+      if (baselineMs !== undefined) {
+        const baselinePct = (baselineMs / maxTime) * 100;
+        const marker = createEl('div', { className: 'speed-bar-baseline' });
+        marker.style.left = `${baselinePct}%`;
+        marker.title = `Baseline: ${baselineMs}ms`;
+        track.appendChild(marker);
+      }
+
+      row.appendChild(track);
+      row.appendChild(createEl('div', { className: 'speed-bar-value' }, `${searchTime}ms`));
+      bars.appendChild(row);
+    });
+    chartEl.appendChild(bars);
+  }
 
   // Results list for speed cases
   const speedList = document.getElementById('speed-results');
@@ -466,7 +477,8 @@ function renderSpeed() {
     row.appendChild(info);
     row.appendChild(difficultyPill(diff));
     row.appendChild(createEl('div', { className: `result-score ${status}` }, `${r.passed}/${r.total}`));
-    row.appendChild(createEl('div', { className: 'result-latency' }, typeof r.latencyMs === 'number' ? `${(r.latencyMs / 1000).toFixed(1)}s` : '\u2014'));
+    const st = getSearchTime(r);
+    row.appendChild(createEl('div', { className: 'result-latency' }, st !== null ? `${st}ms` : '\u2014'));
     row.appendChild(statusPill(status));
 
     row.addEventListener('click', () => {

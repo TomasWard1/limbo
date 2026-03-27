@@ -99,6 +99,23 @@ function clearCrons(container) {
   }
 }
 
+function extractSearchTime(mcpLogs) {
+  // Find vault_search call/result pairs and sum their execution times
+  let totalMs = 0;
+  const calls = mcpLogs.filter(l => l.type === 'tool_call' && l.tool === 'vault_search');
+  for (const call of calls) {
+    const result = mcpLogs.find(l =>
+      l.type === 'tool_result' && l.tool === 'vault_search' &&
+      new Date(l.timestamp) >= new Date(call.timestamp)
+    );
+    if (result) {
+      const delta = new Date(result.timestamp) - new Date(call.timestamp);
+      totalMs += delta;
+    }
+  }
+  return totalMs || null;
+}
+
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
 }
@@ -196,6 +213,7 @@ async function cmdRun(args) {
         let lastVaultDiff = { created: [], modified: [], deleted: [] };
         let totalMcpLogs = 0;
         let totalLatencyMs = 0;
+        let allMcpLogs = [];
 
         for (let s = 0; s < steps.length; s++) {
           const step = steps[s];
@@ -225,6 +243,7 @@ async function cmdRun(args) {
           const cronJobs = cronsAfter.filter(j => !beforeIds.has(j.id));
 
           totalMcpLogs += mcpLogs.length;
+          allMcpLogs = allMcpLogs.concat(mcpLogs);
           totalLatencyMs += latencyMs;
 
           // Score assertions for this step
@@ -278,6 +297,8 @@ async function cmdRun(args) {
             deleted: lastVaultDiff.deleted.length,
           },
           mcpLogCount: totalMcpLogs,
+          mcpLogs: allMcpLogs,
+          searchTimeMs: extractSearchTime(allMcpLogs),
           latencyMs: totalLatencyMs,
           timestamp: new Date().toISOString(),
         });
