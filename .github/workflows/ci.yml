@@ -58,6 +58,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install MCP server dependencies
+        working-directory: mcp-server
+        run: npm ci
 
       - name: Verify CLI module exports
         run: node -e "require('./cli.js')"
