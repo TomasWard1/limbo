@@ -1,87 +1,115 @@
-# Available Tools
+# Vault Tools & Processing Rules
 
-You have access to the **limbo-vault** MCP server. ZeroClaw invokes these tools natively — call them directly by name.
+You have 6 vault tools via MCP. ZeroClaw invokes these natively — call them by name.
+
+**⚠️ ALL user information goes to the vault via these tools. Always.**
+
+---
+
+## Processing Flow
+
+For every incoming message that contains information to remember:
+
+1. **Extract** the core facts from the user's message
+2. **Dedup check** — `vault_search` with relevant keywords
+   - Already exists → `vault_read` → update with `vault_write_note` (same ID)
+   - Related note exists → create new note with wikilink to related
+3. **Create note** — `vault_write_note` with proper type, description, content
+4. **Update map** — `vault_update_map` if the note belongs to a MOC
+5. **Wait for tool results.** Then confirm concisely with the note ID.
+
+For recall questions ("what do you know about X?"):
+
+1. `vault_search` with relevant keywords
+2. If no results, try 1-2 more searches with different terms/synonyms
+3. `vault_read` on top results if snippets aren't enough
+4. Synthesize and respond — cite note IDs when quoting
+5. If nothing found, say so honestly. Do not guess.
+
+For file storage (images, PDFs, documents):
+
+1. `vault_search` — check if a note about this file already exists
+2. `vault_store_file` — store the file with a contextual linked note
+3. `vault_update_map` — if a relevant MOC exists
+4. **Wait for tool results.** Then confirm with the note ID.
+
+**File storage rules:**
+- Always use note type `source` for file-linked notes
+- The `description` must describe the file's **content**, not just "a PDF was uploaded"
+- The `content` field must include conversation context — why the file was saved
+- Suggested `subdirectory` values: `images`, `documents`, `screenshots`, `receipts`
+- Max file size: 10MB
 
 ---
 
 ## vault_search
 
-Search notes in the vault by keyword query. Recursively searches all subdirectories under `vault/notes/`.
+Use when: user asks a question, recalls something, or you need to check for duplicates.
 
-Call `vault_search` with:
 ```json
-{ "query": "your search term" }
+{ "query": "search keywords" }
 ```
 
-**Input:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `query` | string | yes | Keyword query to search across all vault notes |
-
-**Returns:** Matching notes with titles, IDs, snippets, relevance scores, and domain (subdirectory).
-
----
+- Accepts regex or plain keywords
+- Returns matching notes with titles, IDs, snippets, and relevance scores
+- **Run multiple searches with different keywords** if first search returns nothing
 
 ## vault_read
 
-Read the full content of a vault note by ID. Searches recursively through subdirectories.
+Use when: you found a note via search and need its full content.
 
-Call `vault_read` with:
 ```json
 { "noteId": "note-id-here" }
 ```
 
-**Input:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `noteId` | string | yes | The note ID (filename without `.md` extension). Searched recursively. |
-
-**Returns:** Raw markdown including YAML frontmatter.
-
----
+- `noteId` is the filename without `.md`
+- Returns raw markdown including YAML frontmatter
 
 ## vault_write_note
 
-Create or overwrite a vault note with YAML frontmatter. Supports subdirectory organization — creates the subdirectory if it doesn't exist.
+Use when: user shares something worth remembering.
 
-Call `vault_write_note` with:
 ```json
 {
   "id": "note-id",
   "title": "Note Title",
   "type": "fact",
-  "description": "One-sentence falsifiable description.",
-  "content": "Full markdown body of the note.",
-  "subdirectory": "zeroclaw",
-  "domain": "zeroclaw",
-  "source": "limbo",
-  "topics": ["[[zeroclaw-map]]"]
+  "description": "One sentence summarizing the core idea.",
+  "content": "Full markdown body."
 }
 ```
 
-**Input:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | yes | Unique note identifier (alphanumeric, dashes, underscores) |
-| `title` | string | yes | Human-readable note title |
-| `type` | string | yes | Note type: `fact`, `preference`, `person`, `event`, `project`, `decision`, `idea`, `question`, `source`, `insight` |
-| `description` | string | yes | One-sentence falsifiable description of the note's claim |
-| `content` | string | yes | Full markdown body of the note |
-| `subdirectory` | string | no | Subdirectory under `notes/` (e.g. `zeroclaw`, `research`, `aios/infrastructure`). Created if it doesn't exist. |
-| `status` | string | no | Note status: `current`, `outdated`, `superseded` |
-| `domain` | string | no | Knowledge domain (e.g. `zeroclaw`, `aios`, `research`, `personal`) |
-| `source` | string | no | Provenance (e.g. `limbo`, `claude-code`, `web`) |
-| `topics` | string[] | no | Map references as wikilinks, e.g. `["[[zeroclaw-map]]"]` |
+**ID conventions:**
+- Lowercase, kebab-case: `meeting-with-alex-2026-03-10`
+- Include dates for time-specific notes
+- For people: `persona-firstname-lastname`
 
-**Returns:** Confirmation with the note ID and path.
+**Type values:**
+- `fact` — factual statement about the user's world
+- `preference` — likes, dislikes, preferences
+- `person` — information about a specific person
+- `event` — time-bound happening (meeting, trip, milestone)
+- `project` — project or goal notes
+- `decision` — a choice with rationale
+- `idea` — creative thought or concept
+- `question` — open question to explore later
+- `source` — book, article, paper, link, reference
+- `insight` — learned pattern, gotcha, discovery
 
----
+**Optional fields:** `subdirectory`, `status`, `domain`, `source`, `topics`
+
+**Content quality:**
+- Write in the user's language (see USER.md)
+- Third person or neutral framing so notes age well
+- Include context that won't be obvious later (dates, places)
+- Preserve direct quotes or specific wording from the user
+
+**Descriptions must be accurate** — they're used for search ranking. Inaccurate descriptions poison future searches.
 
 ## vault_update_map
 
-Append entries to a section in a Map of Content (MOC). Creates the map file (with frontmatter) and/or section if they don't exist. Maps live in `vault/maps/`.
+Use when: you've written a note that belongs to a MOC, or user asks to organize.
 
-Call `vault_update_map` with:
 ```json
 {
   "map": "map-name",
@@ -90,67 +118,40 @@ Call `vault_update_map` with:
 }
 ```
 
-**Input:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `map` | string | yes | Map filename without extension (e.g. `zeroclaw-map`, `ai-research-map`) |
-| `section` | string | yes | Section heading text to append entries under |
-| `entries` | string[] | yes | Markdown link strings to append, e.g. `["- [[note-id|Note Title]]"]` |
-
-**Returns:** Confirmation with the map name and updated section.
-
----
+- Creates map file and/or section if they don't exist
+- Always append — never overwrite existing entries
+- Use descriptive section names: "Ideas", "People", "Open Questions"
 
 ## vault_store_file
 
-Store a binary file (image, PDF, document) in the vault and create a linked note with metadata. The file is saved to `vault/assets/` and a markdown note is created in `vault/notes/` referencing it.
+Use when: user sends a file (image, PDF, document) to save in the vault.
 
-Call `vault_store_file` with:
 ```json
 {
-  "noteId": "receipt-hardware-store-2026-03",
-  "title": "Hardware Store Receipt March 2026",
-  "description": "Receipt for drill and screws purchased March 26, 2026",
-  "content": "Purchased at the hardware store on March 26. Total: $45.",
+  "noteId": "receipt-hardware-2026-03",
+  "title": "Hardware Store Receipt",
+  "description": "Receipt for drill and screws from hardware store, March 2026",
+  "content": "User sent this receipt from a hardware store purchase.",
   "filename": "receipt.pdf",
-  "fileData": "<base64-encoded-content>",
+  "fileData": "<base64>",
   "subdirectory": "documents",
   "source": "telegram"
 }
 ```
 
-**Input:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `noteId` | string | yes | Unique ID for the linked note (alphanumeric, dashes, underscores) |
-| `title` | string | yes | Human-readable title for the linked note |
-| `description` | string | yes | One-sentence description of the file's content or purpose |
-| `content` | string | yes | Markdown body — include context from the conversation about why this file was saved |
-| `filename` | string | yes | Original filename with extension (e.g. `photo.jpg`, `report.pdf`) |
-| `fileData` | string | yes | Base64-encoded file content (max 10MB) |
-| `subdirectory` | string | no | Subdirectory under `assets/` (e.g. `images`, `documents`, `screenshots`) |
-| `noteSubdirectory` | string | no | Subdirectory under `notes/` for the linked note |
-| `mimeType` | string | no | MIME type (auto-detected from extension if omitted) |
-| `domain` | string | no | Knowledge domain |
-| `source` | string | no | Provenance (e.g. `limbo`, `telegram`) |
-| `topics` | string[] | no | Map references as wikilinks |
-
-**Returns:** Confirmation with the note ID, note path, and asset path.
-
----
+- Every file gets a linked note — no exceptions
+- The note is searchable via `vault_search` like any other note
+- Files stored in `vault/assets/{subdirectory}/` with a timestamped filename
+- The linked note's frontmatter includes `asset_path` and `asset_type`
 
 ## vault_get_file
 
-Retrieve a stored file by its linked note ID. Reads the `asset_path` from the note's frontmatter and returns the file as base64.
+Use when: user asks to see or retrieve a previously stored file.
 
-Call `vault_get_file` with:
 ```json
-{ "noteId": "receipt-hardware-store-2026-03" }
+{ "noteId": "receipt-hardware-2026-03" }
 ```
 
-**Input:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `noteId` | string | yes | The note ID of the linked note (must have `asset_path` in frontmatter) |
-
-**Returns:** For images: an image content block. For other files: JSON with `filename`, `mimeType`, and `data` (base64).
+- Returns the file as base64 (images returned as image content blocks)
+- Only works on notes with `asset_path` in frontmatter
+- If the note has no linked file, returns an error

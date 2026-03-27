@@ -12,9 +12,10 @@ RUN cd mcp-server && npm ci --omit=dev
 
 # ──────────────────────────────────────────────
 # Stage 2: ZeroClaw binary
-# v0.5.3 includes OAuth setup-token fix (#4053)
+# Custom build with rag-pdf feature enabled.
+# Build with: ./scripts/build-zeroclaw.sh
 # ──────────────────────────────────────────────
-FROM ghcr.io/zeroclaw-labs/zeroclaw:v0.5.3 AS zeroclaw
+FROM ghcr.io/tomasward1/zeroclaw:v0.5.3-custom AS zeroclaw
 
 # ──────────────────────────────────────────────
 # Stage 3: final runtime image
