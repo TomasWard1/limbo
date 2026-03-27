@@ -20,19 +20,30 @@ const CASES_DIR = path.join(EVALS_DIR, 'cases');
 const RESULTS_DIR = path.join(EVALS_DIR, 'results');
 const HISTORY_DIR = path.join(RESULTS_DIR, 'history');
 const BASELINE_PATH = path.join(RESULTS_DIR, 'baseline.json');
+const BASELINES_DIR = path.join(RESULTS_DIR, 'baselines');
+const BASELINES_INDEX_PATH = path.join(RESULTS_DIR, 'baselines-index.json');
 const VAULT_SEED = path.join(EVALS_DIR, 'vault-seed');
 
 // ── Message sending ─────────────────────────────────────────────────────────
 
 function sendMessage(message, container) {
-  // zeroclaw agent needs credentials in env — docker exec doesn't inherit
-  // the entrypoint's exports, so we read the secret and pass it explicitly.
-  const proc = spawnSync('docker', [
-    'exec',
-    '-e', 'ANTHROPIC_OAUTH_TOKEN=' + readContainerSecret(container, 'llm_api_key'),
-    container, 'zeroclaw', 'agent',
+  const runtimeConfig = readZeroClawConfig(container);
+  const dockerArgs = ['exec'];
+
+  // Anthropic OAuth still needs the token exported explicitly for docker exec.
+  if (runtimeConfig.provider === 'anthropic') {
+    dockerArgs.push('-e', 'ANTHROPIC_OAUTH_TOKEN=' + readContainerSecret(container, 'llm_api_key'));
+  }
+
+  dockerArgs.push(
+    container,
+    'zeroclaw', 'agent',
+    '--provider', runtimeConfig.provider,
+    '--model', runtimeConfig.model,
     '--message', message,
-  ], { encoding: 'utf8', timeout: 130000 });
+  );
+
+  const proc = spawnSync('docker', dockerArgs, { encoding: 'utf8', timeout: 130000 });
 
   if (proc.error) throw proc.error;
   if (proc.status !== 0) {
@@ -116,6 +127,146 @@ function extractSearchTime(mcpLogs) {
   return totalMs || null;
 }
 
+function buildProfileKey({ provider, model, reasoningEffort }) {
+  const raw = [provider || 'unknown', model || 'unknown', reasoningEffort || 'default'].join('__');
+  return raw.replace(/[^a-zA-Z0-9._-]+/g, '-');
+}
+
+function buildProfileLabel({ provider, model, reasoningEffort }) {
+  const modelLabel = model || 'unknown-model';
+  const effortLabel = reasoningEffort || 'default';
+  const providerLabel = provider || 'unknown-provider';
+  return `${modelLabel} · ${effortLabel} · ${providerLabel}`;
+}
+
+function parseEnvFile(filePath) {
+  try {
+    const content = fsSync.readFileSync(filePath, 'utf8');
+    const out = {};
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx === -1) continue;
+      const key = trimmed.slice(0, idx).trim();
+      const value = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
+      out[key] = value;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function parseStatusField(output, label) {
+  const match = output.match(new RegExp(`${label}:\\s*(.+)`));
+  return match ? match[1].trim() : null;
+}
+
+function readZeroClawConfig(container) {
+  try {
+    const cfg = execFileSync('docker', [
+      'exec', container, 'cat', '/home/limbo/.zeroclaw/config.toml',
+    ], { encoding: 'utf8', timeout: 10000 });
+    const providerMatch = cfg.match(/default_provider\s*=\s*"([^"]+)"/);
+    const modelMatch = cfg.match(/default_model\s*=\s*"([^"]+)"/);
+    const reasoningMatch = cfg.match(/reasoning_effort\s*=\s*"([^"]+)"/);
+    return {
+      provider: providerMatch ? providerMatch[1].trim() : null,
+      model: modelMatch ? modelMatch[1].trim() : null,
+      reasoningEffort: reasoningMatch ? reasoningMatch[1].trim() : null,
+    };
+  } catch {
+    return { provider: null, model: null, reasoningEffort: null };
+  }
+}
+
+function resolveRunKind({ tag, caseName, difficulty }) {
+  if (tag === 'speed') return 'speed';
+  if (caseName || tag || difficulty) return 'subset';
+  return 'full';
+}
+
+function readJSON(filePath, fallback) {
+  try {
+    return JSON.parse(fsSync.readFileSync(filePath, 'utf8'));
+  } catch {
+    return fallback;
+  }
+}
+
+async function readRuntimeMeta(container) {
+  const envEval = parseEnvFile(path.join(EVALS_DIR, '.env.eval'));
+  const runtimeConfig = readZeroClawConfig(container);
+  let provider = runtimeConfig.provider || process.env.MODEL_PROVIDER || envEval.MODEL_PROVIDER || null;
+  let model = runtimeConfig.model || process.env.MODEL_NAME || envEval.MODEL_NAME || null;
+  let reasoningEffort = runtimeConfig.reasoningEffort || process.env.RUNTIME_REASONING_EFFORT || envEval.RUNTIME_REASONING_EFFORT || null;
+  let authMode = process.env.AUTH_MODE || envEval.AUTH_MODE || null;
+  let zeroclawVersion = null;
+
+  try {
+    const status = execFileSync('docker', [
+      'exec', container, 'zeroclaw', 'status',
+    ], { encoding: 'utf8', timeout: 10000 });
+    provider = parseStatusField(status, 'Provider') || provider;
+    model = parseStatusField(status, 'Model') || model;
+    zeroclawVersion = parseStatusField(status, 'Version') || zeroclawVersion;
+  } catch {}
+
+  const meta = {
+    provider,
+    model,
+    reasoningEffort,
+    authMode,
+    zeroclawVersion,
+  };
+  meta.profileKey = buildProfileKey(meta);
+  meta.profileLabel = buildProfileLabel(meta);
+  return meta;
+}
+
+async function updateBaselinesIndex(runData, baselineFile) {
+  const profileKey = runData.meta?.profileKey || buildProfileKey({});
+  const kind = runData.kind || 'full';
+  const index = readJSON(BASELINES_INDEX_PATH, {});
+  if (!index[profileKey]) index[profileKey] = {};
+  index[profileKey][kind] = {
+    id: runData.id,
+    file: path.basename(baselineFile),
+    profileKey,
+    profileLabel: runData.meta?.profileLabel || buildProfileLabel({}),
+    kind,
+    timestamp: runData.timestamp,
+  };
+  index[profileKey].any = {
+    id: runData.id,
+    file: path.basename(baselineFile),
+    profileKey,
+    profileLabel: runData.meta?.profileLabel || buildProfileLabel({}),
+    kind,
+    timestamp: runData.timestamp,
+  };
+  await fs.writeFile(BASELINES_INDEX_PATH, JSON.stringify(index, null, 2));
+}
+
+function resolveBaselineForRun(runData) {
+  const profileKey = runData.meta?.profileKey;
+  const kind = runData.kind || 'full';
+  const index = readJSON(BASELINES_INDEX_PATH, {});
+  const entry = profileKey && index[profileKey] ? (index[profileKey][kind] || index[profileKey].any) : null;
+  if (entry && entry.file) {
+    const pathForProfile = path.join(BASELINES_DIR, entry.file);
+    try {
+      return JSON.parse(fsSync.readFileSync(pathForProfile, 'utf8'));
+    } catch {}
+  }
+  try {
+    return JSON.parse(fsSync.readFileSync(BASELINE_PATH, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
 }
@@ -176,12 +327,14 @@ async function cmdRun(args) {
   const caseName = args['--case'] || null;
   const tag = args['--tag'] || null;
   const useJudge = args['--judge'] || false;
+  const difficulty = args['--difficulty'] || null;
+  const runMeta = await readRuntimeMeta(CONTAINER);
+  const runKind = resolveRunKind({ tag, caseName, difficulty });
 
   let cases = loadCases(caseName);
   if (tag) {
     cases = cases.filter(c => (c.tags || []).includes(tag));
   }
-  const difficulty = args['--difficulty'] || null;
   if (difficulty) {
     cases = cases.filter(c => c.difficulty === difficulty);
   }
@@ -327,7 +480,19 @@ async function cmdRun(args) {
   // Save results
   const resultFile = path.join(HISTORY_DIR, `${runId}.json`);
   await fs.mkdir(HISTORY_DIR, { recursive: true });
-  const runData = { id: runId, timestamp: new Date().toISOString(), results };
+  const runData = {
+    id: runId,
+    timestamp: new Date().toISOString(),
+    meta: runMeta,
+    kind: runKind,
+    scope: {
+      case: caseName,
+      tag,
+      difficulty,
+      judge: Boolean(useJudge),
+    },
+    results,
+  };
   await fs.writeFile(resultFile, JSON.stringify(runData, null, 2));
   await fs.writeFile(path.join(RESULTS_DIR, 'latest.json'), JSON.stringify(runData, null, 2));
 
@@ -350,15 +515,13 @@ async function cmdCompare(args) {
     process.exit(1);
   }
 
-  let baseline;
-  try {
-    baseline = JSON.parse(await fs.readFile(BASELINE_PATH, 'utf8'));
-  } catch {
+  const baseline = resolveBaselineForRun(latest);
+  if (!baseline) {
     console.error('No baseline found. Run `limbo-eval promote` to create one.');
     process.exit(1);
   }
 
-  console.log(`Comparing latest run (${latest.id}) vs baseline (${baseline.id}):\n`);
+  console.log(`Comparing latest run (${latest.id}) vs baseline (${baseline.id}) for ${latest.meta?.profileLabel || 'unknown profile'}:\n`);
 
   const baseMap = new Map(baseline.results.map(r => [`${r.case}:${r.run}`, r]));
   let regressions = 0;
@@ -400,9 +563,16 @@ async function cmdPromote() {
     process.exit(1);
   }
 
-  await fs.writeFile(BASELINE_PATH, latest);
   const parsed = JSON.parse(latest);
-  console.log(`Promoted run ${parsed.id} as new baseline.`);
+  await fs.mkdir(BASELINES_DIR, { recursive: true });
+  const kind = parsed.kind || 'full';
+  const profileKey = parsed.meta?.profileKey || buildProfileKey(parsed.meta || {});
+  const baselineFile = path.join(BASELINES_DIR, `${profileKey}-${kind}.json`);
+
+  await fs.writeFile(BASELINE_PATH, latest);
+  await fs.writeFile(baselineFile, latest);
+  await updateBaselinesIndex(parsed, baselineFile);
+  console.log(`Promoted run ${parsed.id} as baseline for ${parsed.meta?.profileLabel || profileKey} (${kind}).`);
 }
 
 async function cmdReport() {
@@ -418,15 +588,16 @@ async function cmdReport() {
   }
 
   console.log('Last 10 runs:\n');
-  console.log('  Run ID                    Cases   Pass Rate');
-  console.log('  ─────────────────────────────────────────────');
+  console.log('  Run ID                    Cases   Pass Rate   Profile');
+  console.log('  ─────────────────────────────────────────────────────────────────────────');
 
   for (const file of files) {
     const data = JSON.parse(await fs.readFile(path.join(HISTORY_DIR, file), 'utf8'));
     const totalPassed = data.results.reduce((s, r) => s + r.passed, 0);
     const totalAssertions = data.results.reduce((s, r) => s + r.total, 0);
     const rate = totalAssertions > 0 ? ((totalPassed / totalAssertions) * 100).toFixed(1) : '0.0';
-    console.log(`  ${data.id.padEnd(28)} ${String(data.results.length).padEnd(8)} ${rate}%`);
+    const profileLabel = data.meta?.profileLabel || 'unknown-model';
+    console.log(`  ${data.id.padEnd(28)} ${String(data.results.length).padEnd(8)} ${String(rate + '%').padEnd(11)} ${profileLabel}`);
   }
 }
 

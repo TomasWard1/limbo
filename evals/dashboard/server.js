@@ -23,6 +23,22 @@ function readJSON(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function summarizeRun(run) {
+  const totalPassed = run.results.reduce((s, r) => s + r.passed, 0);
+  const totalAssertions = run.results.reduce((s, r) => s + r.total, 0);
+  return {
+    id: run.id,
+    timestamp: run.timestamp,
+    caseCount: run.results.length,
+    totalPassed,
+    totalAssertions,
+    passRate: totalAssertions ? totalPassed / totalAssertions : 0,
+    meta: run.meta || null,
+    kind: run.kind || 'full',
+    scope: run.scope || null,
+  };
+}
+
 // API routes
 const api = {
   '/api/cases'() {
@@ -48,20 +64,12 @@ const api = {
       .filter(f => f.endsWith('.json'))
       .sort()
       .reverse();
-    return files.map(f => {
-      const run = readJSON(path.join(dir, f));
-      // Return summary for list view (don't send all scoreResults)
-      const totalPassed = run.results.reduce((s, r) => s + r.passed, 0);
-      const totalAssertions = run.results.reduce((s, r) => s + r.total, 0);
-      return {
-        id: run.id,
-        timestamp: run.timestamp,
-        caseCount: run.results.length,
-        totalPassed,
-        totalAssertions,
-        passRate: totalAssertions ? totalPassed / totalAssertions : 0,
-      };
-    });
+    return files.map(f => summarizeRun(readJSON(path.join(dir, f))));
+  },
+
+  '/api/baselines-index'() {
+    const p = path.join(EVALS_DIR, 'results', 'baselines-index.json');
+    return fs.existsSync(p) ? readJSON(p) : {};
   },
 
   '/api/run/:id'(params) {
