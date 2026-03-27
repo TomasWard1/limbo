@@ -92,6 +92,13 @@ function listCronJobs(container) {
   }
 }
 
+function clearCrons(container) {
+  const jobs = listCronJobs(container);
+  for (const job of jobs) {
+    spawnSync('docker', ['exec', container, 'zeroclaw', 'cron', 'remove', job.id], { timeout: 5000 });
+  }
+}
+
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
 }
@@ -178,8 +185,9 @@ async function cmdRun(args) {
       console.log(`── ${evalCase.name} (run ${i + 1}/${runs}) ──`);
 
       try {
-        // Reset vault
+        // Reset vault and clear leftover cron jobs
         await resetVault();
+        clearCrons(CONTAINER);
 
         // Resolve steps: multi-step cases have steps[], single-step have input+assertions
         const steps = evalCase.steps || [{ input: evalCase.input, assertions: evalCase.assertions }];
