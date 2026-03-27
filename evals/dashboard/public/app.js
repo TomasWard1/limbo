@@ -164,12 +164,17 @@ function renderOverview() {
   const casesFullPass = run.results.filter(r => r.passRate >= 1).length;
   const casesFailed = run.results.filter(r => r.passRate < 1).length;
 
+  // Latency stats
+  const latencies = run.results.filter(r => typeof r.latencyMs === 'number' && r.latencyMs > 0).map(r => r.latencyMs);
+  const avgLatency = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
+  const maxLatency = latencies.length ? Math.max(...latencies) : null;
+
   const statsEl = document.getElementById('overview-stats');
   statsEl.replaceChildren(
     buildStatCard('Pass Rate', pct(overallRate), statusOf(overallRate), `${totalPassed}/${totalAssertions} assertions`),
     buildStatCard('Cases', String(run.results.length), 'neutral', `${casesFullPass} passed, ${casesFailed} with failures`),
     buildStatCard('Full Pass', String(casesFullPass), 'pass', `${pct(casesFullPass / run.results.length)} of cases`),
-    buildStatCard('With Failures', String(casesFailed), casesFailed ? 'fail' : 'pass', casesFailed ? 'needs attention' : 'all clean'),
+    buildStatCard('Avg Latency', avgLatency ? `${(avgLatency / 1000).toFixed(1)}s` : '\u2014', avgLatency && avgLatency < 15000 ? 'pass' : avgLatency ? 'partial' : 'neutral', maxLatency ? `max ${(maxLatency / 1000).toFixed(1)}s` : 'no latency data'),
   );
 
   // Difficulty breakdown
@@ -231,6 +236,9 @@ function renderResultsList(results) {
     row.appendChild(info);
     row.appendChild(difficultyPill(diff));
     row.appendChild(createEl('div', { className: `result-score ${status}` }, `${r.passed}/${r.total}`));
+    if (typeof r.latencyMs === 'number' && r.latencyMs > 0) {
+      row.appendChild(createEl('div', { className: 'result-latency', style: { fontSize: '12px', color: 'var(--text-gray)', minWidth: '60px', textAlign: 'right' } }, `${(r.latencyMs / 1000).toFixed(1)}s`));
+    }
     row.appendChild(statusPill(status));
     row.addEventListener('click', () => showResultDetail(r.case));
     return row;
@@ -308,6 +316,17 @@ function showResultDetail(caseName, runData) {
   bigScore.style.fontSize = '48px';
   header.appendChild(bigScore);
   container.appendChild(header);
+
+  // Latency
+  if (typeof result.latencyMs === 'number' && result.latencyMs > 0) {
+    const latencySection = createEl('div', { className: 'detail-section' });
+    const latencyGrid = createEl('div', { className: 'stats-grid' });
+    latencyGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    latencyGrid.appendChild(buildStatCard('Total Latency', `${(result.latencyMs / 1000).toFixed(1)}s`, result.latencyMs < 15000 ? 'pass' : 'partial', `${result.latencyMs}ms`));
+    latencyGrid.appendChild(buildStatCard('MCP Tool Calls', String(result.mcpLogCount || 0), 'neutral', 'captured via eval logging'));
+    latencySection.appendChild(latencyGrid);
+    container.appendChild(latencySection);
+  }
 
   // Assertions
   const assertSection = createEl('div', { className: 'detail-section' });

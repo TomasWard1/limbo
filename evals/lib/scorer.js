@@ -7,7 +7,7 @@
  * @param {{ response: string, mcpLogs: Array, vaultDiff: object }} data
  * @returns {Array<{ assertion: object, pass: boolean, reason: string }>}
  */
-function score(assertions, { response, mcpLogs, vaultDiff, cronJobs }) {
+function score(assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs }) {
   return assertions.map((assertion) => {
     try {
       switch (assertion.type) {
@@ -23,6 +23,8 @@ function score(assertions, { response, mcpLogs, vaultDiff, cronJobs }) {
           return checkVaultFileExists(assertion, vaultDiff);
         case 'cron_created':
           return checkCronCreated(assertion, cronJobs || []);
+        case 'latency_under':
+          return checkLatencyUnder(assertion, latencyMs);
         default:
           return { assertion, pass: false, reason: `Unknown assertion type: ${assertion.type}` };
       }
@@ -147,6 +149,21 @@ function checkCronCreated(assertion, cronJobs) {
     reason: found
       ? `Cron job matched /${pattern}/i`
       : `No cron job matched /${pattern}/i`,
+  };
+}
+
+function checkLatencyUnder(assertion, latencyMs) {
+  const maxMs = assertion.max_ms;
+  if (!maxMs || typeof latencyMs !== 'number') {
+    return { assertion, pass: false, reason: 'latency_under requires "max_ms" and latencyMs data' };
+  }
+  const pass = latencyMs <= maxMs;
+  return {
+    assertion,
+    pass,
+    reason: pass
+      ? `Latency ${latencyMs}ms <= ${maxMs}ms`
+      : `Latency ${latencyMs}ms EXCEEDED ${maxMs}ms`,
   };
 }
 
