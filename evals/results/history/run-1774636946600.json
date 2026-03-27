@@ -1,0 +1,151 @@
+{
+  "id": "run-1774636946600",
+  "timestamp": "2026-03-27T18:43:25.870Z",
+  "results": [
+    {
+      "case": "speed-search-broad",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(carlos|sofia|lucas|maria)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(carlos|sofia|lucas|maria)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 45000
+          },
+          "pass": true,
+          "reason": "Latency 17014ms <= 45000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "<tool_result>\n[{\"name\":\"limbo-vault__vault_search\",\"description\":\"Search notes in the vault by keyword query. Recursively searches all subdirectories. Returns matching notes with titles, snippets, relevance scores, and domain (subdirectory).\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Search keywords or regex to find matching notes in the vault.\"}},\"required\":[\"query\"]}}]\n</tool_result>\n<tool_result>\n{\"matches\":[]}\n</tool_result>\n<tool_result>\n{\"matches",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "latencyMs": 17014,
+      "timestamp": "2026-03-27T18:42:44.122Z"
+    },
+    {
+      "case": "speed-search-simple",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(carlos|ingeniero|córdoba|cordoba)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(carlos|ingeniero|córdoba|cordoba)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 10573ms <= 30000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "No results found.Sé esto sobre Carlos:\n\n- **Carlos Ward** — `persona-carlos-ward`\n- Es **tu padre**.\n- Es **ingeniero**.\n- Vive en **Córdoba**.\n\nSi querés, puedo darte el contenido completo de la nota o buscar si hay más contexto relacionado con él.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 6,
+      "latencyMs": 10573,
+      "timestamp": "2026-03-27T18:42:55.253Z"
+    },
+    {
+      "case": "speed-write-and-search",
+      "run": 1,
+      "passRate": 1,
+      "passed": 5,
+      "total": 5,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 14132ms <= 30000ms"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(pedro|parrilla|palermo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(pedro|parrilla|palermo)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 15545ms <= 30000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "<tool_result>\n{\"matches\":[{\"name\":\"limbo-vault__vault_search\",\"description\":\"Search notes in the vault by keyword query. Recursively searches all subdirectories. Returns matching notes with titles, snippets, relevance scores, and domain (subdirectory).\"},{\"name\":\"limbo-vault__vault_read\",\"description\":\"Read the full content of a vault note by ID. Searches recursively through subdirectories. Returns raw markdown including YAML frontmatter.\"}]}\n</tool_result>\n<tool_result>\n{\"results\":[{\"id\":\"almue",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 10,
+      "latencyMs": 29677,
+      "timestamp": "2026-03-27T18:43:25.870Z"
+    }
+  ]
+}
