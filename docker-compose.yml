@@ -28,6 +28,11 @@ services:
       - .env
     environment:
       NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test:
         [

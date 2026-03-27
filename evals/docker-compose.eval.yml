@@ -21,6 +21,11 @@ services:
     environment:
       LIMBO_EVAL: "true"
       LIMBO_PORT: "18790"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     tmpfs:
       - /tmp:size=100M
     healthcheck:
