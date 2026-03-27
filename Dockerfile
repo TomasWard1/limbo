@@ -4,11 +4,19 @@
 # ──────────────────────────────────────────────
 FROM node:22-slim AS deps
 
+# Build tools for native addons (better-sqlite3 requires compilation)
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 
 # Copy MCP server and install its deps
 COPY mcp-server/package.json mcp-server/package-lock.json* ./mcp-server/
-RUN cd mcp-server && npm ci --omit=dev
+RUN cd mcp-server \
+  && npm ci --omit=dev --ignore-scripts \
+  && cd node_modules/better-sqlite3 \
+  && npx node-gyp rebuild --release \
+  && cd /build \
+  && node -e "const d=require('/build/mcp-server/node_modules/better-sqlite3');const db=d(':memory:');db.close();console.log('better-sqlite3 OK')"
 
 # ──────────────────────────────────────────────
 # Stage 2: ZeroClaw binary
@@ -32,9 +40,9 @@ COPY --from=zeroclaw /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw
 # App directories
 WORKDIR /app
 
-# MCP server (code + pruned node_modules)
-COPY --from=deps /build/mcp-server/node_modules ./mcp-server/node_modules
+# MCP server: source code first, then node_modules from deps stage (overrides host binaries)
 COPY --chown=limbo:limbo mcp-server/ ./mcp-server/
+COPY --from=deps /build/mcp-server/node_modules ./mcp-server/node_modules
 
 # Setup wizard server (zero dependencies — plain Node.js HTTP server)
 COPY --chown=limbo:limbo setup-server/ /app/setup-server/
