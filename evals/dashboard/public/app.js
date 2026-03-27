@@ -1,13 +1,15 @@
 // === Limbo Eval Dashboard ===
-// Note: All data comes from local eval JSON files served by our own Node server.
-// All dynamic text is escaped via escapeHtml() before insertion.
+// All dynamic text is escaped via escapeHtml() or textContent.
+// No innerHTML with user data.
 
 const state = {
   latest: null,
   baseline: null,
   cases: [],
   history: [],
-  currentView: 'overview',
+  caseMap: {},
+  expandedCase: null,
+  expandedRun: null,
 };
 
 // === API ===
@@ -31,15 +33,14 @@ async function init() {
   state.cases = cases;
   state.history = history;
 
-  // Build case lookup
   state.caseMap = {};
   cases.forEach(c => { state.caseMap[c.name] = c; });
 
   setupNav();
   renderOverview();
+  renderSpeed();
   renderHistory();
   renderCompareSelectors();
-  renderRubrics();
   setupFilters();
 }
 
@@ -47,12 +48,7 @@ async function init() {
 function setupNav() {
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      tab.classList.add('active');
-      const view = tab.dataset.view;
-      document.getElementById(`view-${view}`).classList.add('active');
-      state.currentView = view;
+      showView(tab.dataset.view);
     });
   });
 }
@@ -63,7 +59,6 @@ function showView(viewId) {
   document.getElementById(`view-${viewId}`).classList.add('active');
   const tab = document.querySelector(`[data-view="${viewId}"]`);
   if (tab) tab.classList.add('active');
-  state.currentView = viewId;
 }
 
 // === Helpers ===
@@ -93,12 +88,17 @@ function shortDate(ts) {
 
 function barColor(rate) {
   if (rate >= 0.9) return 'var(--green)';
-  if (rate >= 0.7) return 'var(--yellow)';
+  if (rate >= 0.7) return 'var(--amber)';
   return 'var(--red)';
 }
 
-// === Safe DOM builders ===
+function isSpeedCase(caseName) {
+  const def = state.caseMap[caseName];
+  if (!def || !def.tags) return false;
+  return def.tags.includes('speed') || def.tags.includes('vault_search');
+}
 
+// === Safe DOM builders ===
 function createEl(tag, attrs, children) {
   const el = document.createElement(tag);
   if (attrs) {
@@ -132,20 +132,11 @@ function statusPill(s) {
   return el;
 }
 
-function tagPill(t) {
-  const el = document.createElement('span');
-  el.className = 'pill';
-  el.style.cssText = 'background: var(--cream); border: 1px solid var(--border-light); color: var(--text-gray)';
-  el.textContent = t;
-  return el;
-}
-
 // === Overview ===
 function renderOverview() {
   const run = state.latest;
   if (!run) {
-    const empty = document.getElementById('view-overview');
-    empty.replaceChildren(
+    document.getElementById('view-overview').replaceChildren(
       createEl('div', { className: 'empty-state' }, [
         createEl('h2', {}, 'No results yet'),
         createEl('p', {}, 'Run node evals/cli.js run to generate results.'),
@@ -164,17 +155,18 @@ function renderOverview() {
   const casesFullPass = run.results.filter(r => r.passRate >= 1).length;
   const casesFailed = run.results.filter(r => r.passRate < 1).length;
 
-  // Latency stats
-  const latencies = run.results.filter(r => typeof r.latencyMs === 'number' && r.latencyMs > 0).map(r => r.latencyMs);
-  const avgLatency = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
-  const maxLatency = latencies.length ? Math.max(...latencies) : null;
+  // Speed cases avg latency
+  const speedLatencies = run.results
+    .filter(r => isSpeedCase(r.case) && typeof r.latencyMs === 'number' && r.latencyMs > 0)
+    .map(r => r.latencyMs);
+  const avgSpeedLatency = speedLatencies.length
+    ? Math.round(speedLatencies.reduce((a, b) => a + b, 0) / speedLatencies.length)
+    : null;
 
-  const statsEl = document.getElementById('overview-stats');
-  statsEl.replaceChildren(
+  document.getElementById('overview-stats').replaceChildren(
     buildStatCard('Pass Rate', pct(overallRate), statusOf(overallRate), `${totalPassed}/${totalAssertions} assertions`),
-    buildStatCard('Cases', String(run.results.length), 'neutral', `${casesFullPass} passed, ${casesFailed} with failures`),
-    buildStatCard('Full Pass', String(casesFullPass), 'pass', `${pct(casesFullPass / run.results.length)} of cases`),
-    buildStatCard('Avg Latency', avgLatency ? `${(avgLatency / 1000).toFixed(1)}s` : '\u2014', avgLatency && avgLatency < 15000 ? 'pass' : avgLatency ? 'partial' : 'neutral', maxLatency ? `max ${(maxLatency / 1000).toFixed(1)}s` : 'no latency data'),
+    buildStatCard('Cases', String(run.results.length), 'neutral', `${casesFullPass} passed, ${casesFailed} failed`),
+    buildStatCard('Avg Latency (speed)', avgSpeedLatency ? `${(avgSpeedLatency / 1000).toFixed(1)}s` : '\u2014', avgSpeedLatency && avgSpeedLatency < 15000 ? 'pass' : avgSpeedLatency ? 'partial' : 'neutral', speedLatencies.length ? `${speedLatencies.length} speed cases` : 'no speed cases'),
   );
 
   // Difficulty breakdown
@@ -189,26 +181,26 @@ function renderOverview() {
   });
 
   const diffOrder = ['easy', 'medium', 'hard'];
-  const diffEl = document.getElementById('overview-difficulty');
-  diffEl.replaceChildren(...diffOrder.filter(d => byDiff[d]).map(d => {
-    const b = byDiff[d];
-    const rate = b.total ? b.passed / b.total : 0;
-    const card = createEl('div', { className: 'difficulty-card' });
-    const header = createEl('div', { className: 'difficulty-header' });
-    const label = createEl('span', { className: 'difficulty-label' });
-    label.appendChild(difficultyPill(d));
-    label.appendChild(document.createTextNode(` ${b.cases} cases`));
-    header.appendChild(label);
-    const rateEl = createEl('span', { className: `difficulty-rate ${statusOf(rate)}`, textContent: pct(rate) });
-    header.appendChild(rateEl);
-    card.appendChild(header);
-    const bar = createEl('div', { className: 'progress-bar' });
-    const fill = createEl('div', { className: `progress-fill ${statusOf(rate)}` });
-    fill.style.width = `${rate * 100}%`;
-    bar.appendChild(fill);
-    card.appendChild(bar);
-    return card;
-  }));
+  document.getElementById('overview-difficulty').replaceChildren(
+    ...diffOrder.filter(d => byDiff[d]).map(d => {
+      const b = byDiff[d];
+      const rate = b.total ? b.passed / b.total : 0;
+      const card = createEl('div', { className: 'difficulty-card' });
+      const header = createEl('div', { className: 'difficulty-header' });
+      const label = createEl('span', { className: 'difficulty-label' });
+      label.appendChild(difficultyPill(d));
+      label.appendChild(document.createTextNode(` ${b.cases} cases`));
+      header.appendChild(label);
+      header.appendChild(createEl('span', { className: `difficulty-rate ${statusOf(rate)}`, textContent: pct(rate) }));
+      card.appendChild(header);
+      const bar = createEl('div', { className: 'progress-bar' });
+      const fill = createEl('div', { className: `progress-fill ${statusOf(rate)}` });
+      fill.style.width = `${rate * 100}%`;
+      bar.appendChild(fill);
+      card.appendChild(bar);
+      return card;
+    })
+  );
 
   renderResultsList(run.results);
 }
@@ -223,7 +215,9 @@ function buildStatCard(label, value, status, sub) {
 
 function renderResultsList(results) {
   const container = document.getElementById('overview-results');
-  container.replaceChildren(...results.map(r => {
+  const children = [];
+
+  results.forEach(r => {
     const caseDef = state.caseMap[r.case];
     const diff = caseDef ? caseDef.difficulty : '?';
     const status = statusOf(r.passRate);
@@ -232,17 +226,103 @@ function renderResultsList(results) {
     row.appendChild(createEl('div', { className: `result-icon ${status}` }, statusIcon(r.passRate)));
     const info = createEl('div');
     info.appendChild(createEl('div', { className: 'result-name' }, r.case));
-    info.appendChild(createEl('div', { className: 'result-desc' }, caseDef ? caseDef.description : ''));
     row.appendChild(info);
     row.appendChild(difficultyPill(diff));
     row.appendChild(createEl('div', { className: `result-score ${status}` }, `${r.passed}/${r.total}`));
     if (typeof r.latencyMs === 'number' && r.latencyMs > 0) {
-      row.appendChild(createEl('div', { className: 'result-latency', style: { fontSize: '12px', color: 'var(--text-gray)', minWidth: '60px', textAlign: 'right' } }, `${(r.latencyMs / 1000).toFixed(1)}s`));
+      row.appendChild(createEl('div', { className: 'result-latency' }, `${(r.latencyMs / 1000).toFixed(1)}s`));
+    } else {
+      row.appendChild(createEl('div', { className: 'result-latency' }, ''));
     }
     row.appendChild(statusPill(status));
-    row.addEventListener('click', () => showResultDetail(r.case));
-    return row;
-  }));
+
+    row.addEventListener('click', () => {
+      toggleAccordion(container, r.case, r, row);
+    });
+    children.push(row);
+  });
+
+  container.replaceChildren(...children);
+}
+
+function toggleAccordion(container, caseName, result, rowEl) {
+  // Close existing accordion if any
+  const existing = container.querySelector('.accordion-detail');
+  const wasOpen = existing && existing.dataset.case === caseName;
+  if (existing) existing.remove();
+
+  if (wasOpen) {
+    state.expandedCase = null;
+    return;
+  }
+
+  state.expandedCase = caseName;
+  const detail = buildAccordionDetail(caseName, result);
+  detail.dataset.case = caseName;
+  rowEl.after(detail);
+}
+
+function buildAccordionDetail(caseName, result) {
+  const caseDef = state.caseMap[caseName];
+  const el = createEl('div', { className: 'accordion-detail' });
+
+  // Assertions
+  const assertSection = createEl('div', { className: 'detail-section' });
+  assertSection.appendChild(createEl('h3', {}, `Assertions (${result.passed}/${result.total})`));
+  result.scoreResults.forEach(sr => {
+    const row = createEl('div', { className: 'assertion-row' });
+    row.appendChild(createEl('div', { className: `assertion-icon ${sr.pass ? 'pass' : 'fail'}` }, sr.pass ? '\u2713' : '\u2717'));
+    const info = createEl('div');
+    info.appendChild(createEl('div', { className: 'assertion-type' }, sr.assertion.type + (sr.assertion.tool ? ` \u2192 ${sr.assertion.tool}` : '')));
+    info.appendChild(createEl('div', { className: 'assertion-reason' }, sr.reason));
+    if (sr.assertion.pattern) {
+      const pat = createEl('div', { style: { fontSize: '11px', color: 'var(--slate-400)', marginTop: '2px' } });
+      pat.textContent = `pattern: ${sr.assertion.pattern}`;
+      info.appendChild(pat);
+    }
+    row.appendChild(info);
+    assertSection.appendChild(row);
+  });
+  el.appendChild(assertSection);
+
+  // Response
+  const respSection = createEl('div', { className: 'detail-section' });
+  respSection.appendChild(createEl('h3', {}, 'LLM Response'));
+  respSection.appendChild(createEl('div', { className: 'response-box', textContent: result.response || '(no response captured)' }));
+  el.appendChild(respSection);
+
+  // Vault Changes
+  if (result.vaultDiff) {
+    const vaultSection = createEl('div', { className: 'detail-section' });
+    vaultSection.appendChild(createEl('h3', {}, 'Vault Changes'));
+    const vaultDiff = createEl('div', { className: 'vault-diff' });
+    ['created', 'modified', 'deleted'].forEach(key => {
+      const item = createEl('div', { className: `vault-diff-item ${key}` });
+      item.appendChild(createEl('span', { className: 'count' }, String(result.vaultDiff[key])));
+      item.appendChild(document.createTextNode(` ${key}`));
+      vaultDiff.appendChild(item);
+    });
+    vaultSection.appendChild(vaultDiff);
+    el.appendChild(vaultSection);
+  }
+
+  // Judge Results
+  if (result.judgeResults) {
+    const judgeSection = createEl('div', { className: 'detail-section' });
+    judgeSection.appendChild(createEl('h3', {}, 'Judge Evaluation'));
+    Object.entries(result.judgeResults).forEach(([key, jr]) => {
+      const row = createEl('div', { className: 'assertion-row' });
+      row.appendChild(createEl('div', { className: `assertion-icon ${jr.pass ? 'pass' : 'fail'}` }, jr.pass ? '\u2713' : '\u2717'));
+      const info = createEl('div');
+      info.appendChild(createEl('div', { className: 'assertion-type' }, key));
+      info.appendChild(createEl('div', { className: 'assertion-reason' }, jr.reason || ''));
+      row.appendChild(info);
+      judgeSection.appendChild(row);
+    });
+    el.appendChild(judgeSection);
+  }
+
+  return el;
 }
 
 // === Filters ===
@@ -270,11 +350,7 @@ function setupFilters() {
 
     const search = searchFilter.value.toLowerCase();
     if (search) {
-      results = results.filter(r => {
-        const c = state.caseMap[r.case];
-        return r.case.toLowerCase().includes(search) ||
-          (c && c.description.toLowerCase().includes(search));
-      });
+      results = results.filter(r => r.case.toLowerCase().includes(search));
     }
 
     renderResultsList(results);
@@ -285,143 +361,143 @@ function setupFilters() {
   searchFilter.addEventListener('input', applyFilters);
 }
 
-// === Detail View ===
-function showResultDetail(caseName, runData) {
-  const run = runData || state.latest;
-  const result = run.results.find(r => r.case === caseName);
-  if (!result) return;
-
-  const caseDef = state.caseMap[caseName];
-  const status = statusOf(result.passRate);
-  const container = document.getElementById('result-detail');
-  container.replaceChildren();
-
-  // Back button
-  const backBtn = createEl('button', { className: 'detail-back' }, '\u2190 Back to overview');
-  backBtn.addEventListener('click', () => showView('overview'));
-  container.appendChild(backBtn);
-
-  // Header
-  const header = createEl('div', { className: 'detail-header' });
-  const headerLeft = createEl('div');
-  headerLeft.appendChild(createEl('h1', { className: 'detail-title' }, caseName));
-  headerLeft.appendChild(createEl('p', { style: { color: 'var(--text-gray)', marginTop: '4px' } }, caseDef ? caseDef.description : ''));
-  const meta = createEl('div', { className: 'detail-meta' });
-  if (caseDef) meta.appendChild(difficultyPill(caseDef.difficulty));
-  meta.appendChild(statusPill(status));
-  if (caseDef && caseDef.tags) caseDef.tags.forEach(t => meta.appendChild(tagPill(t)));
-  headerLeft.appendChild(meta);
-  header.appendChild(headerLeft);
-  const bigScore = createEl('div', { className: `stat-value ${status}` }, pct(result.passRate));
-  bigScore.style.fontSize = '48px';
-  header.appendChild(bigScore);
-  container.appendChild(header);
-
-  // Latency
-  if (typeof result.latencyMs === 'number' && result.latencyMs > 0) {
-    const latencySection = createEl('div', { className: 'detail-section' });
-    const latencyGrid = createEl('div', { className: 'stats-grid' });
-    latencyGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
-    latencyGrid.appendChild(buildStatCard('Total Latency', `${(result.latencyMs / 1000).toFixed(1)}s`, result.latencyMs < 15000 ? 'pass' : 'partial', `${result.latencyMs}ms`));
-    latencyGrid.appendChild(buildStatCard('MCP Tool Calls', String(result.mcpLogCount || 0), 'neutral', 'captured via eval logging'));
-    latencySection.appendChild(latencyGrid);
-    container.appendChild(latencySection);
+// === Speed Tab ===
+function renderSpeed() {
+  const run = state.latest;
+  if (!run) {
+    document.getElementById('view-speed').replaceChildren(
+      createEl('h1', {}, 'Speed'),
+      createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No results yet')])
+    );
+    return;
   }
 
-  // Assertions
-  const assertSection = createEl('div', { className: 'detail-section' });
-  assertSection.appendChild(createEl('h3', {}, `Assertions (${result.passed}/${result.total})`));
-  result.scoreResults.forEach(sr => {
-    const row = createEl('div', { className: 'assertion-row' });
-    row.appendChild(createEl('div', { className: `assertion-icon ${sr.pass ? 'pass' : 'fail'}` }, sr.pass ? '\u2713' : '\u2717'));
-    const info = createEl('div');
-    info.appendChild(createEl('div', { className: 'assertion-type' }, sr.assertion.type + (sr.assertion.tool ? ` \u2192 ${sr.assertion.tool}` : '')));
-    info.appendChild(createEl('div', { className: 'assertion-reason' }, sr.reason));
-    if (sr.assertion.pattern) {
-      const pat = createEl('div', { style: { fontSize: '12px', color: 'var(--text-light)', marginTop: '2px', fontFamily: 'monospace' } });
-      pat.textContent = `pattern: ${sr.assertion.pattern}`;
-      info.appendChild(pat);
-    }
-    row.appendChild(info);
-    assertSection.appendChild(row);
-  });
-  container.appendChild(assertSection);
+  const speedResults = run.results.filter(r => isSpeedCase(r.case));
 
-  // Test Input
-  if (caseDef) {
-    const inputSection = createEl('div', { className: 'detail-section' });
-    inputSection.appendChild(createEl('h3', {}, 'Test Input'));
-    const inputText = caseDef.input || (caseDef.steps ? caseDef.steps.map((s, i) => `Step ${i + 1}: ${s.input}`).join('\n') : '');
-    inputSection.appendChild(createEl('div', { className: 'response-box', textContent: inputText }));
-    container.appendChild(inputSection);
+  if (!speedResults.length) {
+    document.getElementById('speed-stats').replaceChildren();
+    document.getElementById('speed-chart').replaceChildren(
+      createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No speed cases found')])
+    );
+    document.getElementById('speed-results').replaceChildren();
+    return;
   }
 
-  // LLM Response
-  const respSection = createEl('div', { className: 'detail-section' });
-  respSection.appendChild(createEl('h3', {}, 'LLM Response'));
-  respSection.appendChild(createEl('div', { className: 'response-box', textContent: result.response || '(no response captured)' }));
-  container.appendChild(respSection);
+  const latencies = speedResults
+    .filter(r => typeof r.latencyMs === 'number' && r.latencyMs > 0)
+    .map(r => r.latencyMs);
+  const avg = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
+  const max = latencies.length ? Math.max(...latencies) : null;
+  const min = latencies.length ? Math.min(...latencies) : null;
 
-  // Vault Changes
-  const vaultSection = createEl('div', { className: 'detail-section' });
-  vaultSection.appendChild(createEl('h3', {}, 'Vault Changes'));
-  const vaultDiff = createEl('div', { className: 'vault-diff' });
-  ['created', 'modified', 'deleted'].forEach(key => {
-    const item = createEl('div', { className: `vault-diff-item ${key}` });
-    item.appendChild(createEl('span', { className: 'count' }, String(result.vaultDiff[key])));
-    item.appendChild(document.createTextNode(` ${key}`));
-    vaultDiff.appendChild(item);
-  });
-  vaultSection.appendChild(vaultDiff);
-  container.appendChild(vaultSection);
+  // Stats
+  document.getElementById('speed-stats').replaceChildren(
+    buildStatCard('Avg Latency', avg ? `${(avg / 1000).toFixed(1)}s` : '\u2014', avg && avg < 15000 ? 'pass' : avg ? 'partial' : 'neutral', `${latencies.length} cases`),
+    buildStatCard('Fastest', min ? `${(min / 1000).toFixed(1)}s` : '\u2014', 'pass', ''),
+    buildStatCard('Slowest', max ? `${(max / 1000).toFixed(1)}s` : '\u2014', max && max > 20000 ? 'fail' : 'partial', ''),
+  );
 
-  // Judge Results
-  if (result.judgeResults) {
-    const judgeSection = createEl('div', { className: 'detail-section' });
-    judgeSection.appendChild(createEl('h3', {}, 'Judge Evaluation'));
-    Object.entries(result.judgeResults).forEach(([key, jr]) => {
-      const row = createEl('div', { className: 'assertion-row' });
-      row.appendChild(createEl('div', { className: `assertion-icon ${jr.pass ? 'pass' : 'fail'}` }, jr.pass ? '\u2713' : '\u2717'));
-      const info = createEl('div');
-      info.appendChild(createEl('div', { className: 'assertion-type' }, key));
-      info.appendChild(createEl('div', { className: 'assertion-reason' }, jr.reason || ''));
-      row.appendChild(info);
-      judgeSection.appendChild(row);
+  // Bar chart
+  const maxLatency = Math.max(...latencies, 1);
+
+  // Check for baseline speed data
+  let baselineSpeedMap = {};
+  if (state.baseline) {
+    state.baseline.results.forEach(r => {
+      if (isSpeedCase(r.case) && typeof r.latencyMs === 'number') {
+        baselineSpeedMap[r.case] = r.latencyMs;
+      }
     });
-    container.appendChild(judgeSection);
   }
 
-  // Case Definition
-  if (caseDef) {
-    const defSection = createEl('div', { className: 'detail-section' });
-    defSection.appendChild(createEl('h3', {}, 'Case Definition'));
-    const defBox = createEl('div', { className: 'response-box' });
-    defBox.style.fontFamily = "'SF Mono', 'Fira Code', monospace";
-    defBox.style.fontSize = '13px';
-    defBox.textContent = JSON.stringify(caseDef, null, 2);
-    defSection.appendChild(defBox);
-    container.appendChild(defSection);
+  const chartEl = document.getElementById('speed-chart');
+  chartEl.replaceChildren();
+  chartEl.appendChild(createEl('h3', { style: { fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: 'var(--slate-700)' } }, 'Latency by Case'));
+
+  if (Object.keys(baselineSpeedMap).length > 0) {
+    const legend = createEl('div', { style: { display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '11px', color: 'var(--slate-400)' } });
+    legend.appendChild(createEl('span', {}, 'Latest (bar)'));
+    legend.appendChild(createEl('span', {}, 'Baseline (line)'));
+    chartEl.appendChild(legend);
   }
 
-  showView('results');
+  const bars = createEl('div', { className: 'speed-bars' });
+  speedResults.forEach(r => {
+    const latency = r.latencyMs || 0;
+    const pctWidth = maxLatency ? (latency / maxLatency) * 100 : 0;
+    const speedClass = latency < 10000 ? 'fast' : latency < 20000 ? 'medium' : 'slow';
+
+    const row = createEl('div', { className: 'speed-bar-row' });
+    row.appendChild(createEl('div', { className: 'speed-bar-label', textContent: r.case }));
+
+    const track = createEl('div', { className: 'speed-bar-track' });
+    const fill = createEl('div', { className: `speed-bar-fill ${speedClass}` });
+    fill.style.width = `${pctWidth}%`;
+    track.appendChild(fill);
+
+    // Baseline marker
+    const baselineMs = baselineSpeedMap[r.case];
+    if (baselineMs) {
+      const baselinePct = (baselineMs / maxLatency) * 100;
+      const marker = createEl('div', { className: 'speed-bar-baseline' });
+      marker.style.left = `${baselinePct}%`;
+      marker.title = `Baseline: ${(baselineMs / 1000).toFixed(1)}s`;
+      track.appendChild(marker);
+    }
+
+    row.appendChild(track);
+    row.appendChild(createEl('div', { className: 'speed-bar-value' }, latency ? `${(latency / 1000).toFixed(1)}s` : '\u2014'));
+    bars.appendChild(row);
+  });
+  chartEl.appendChild(bars);
+
+  // Results list for speed cases
+  const speedList = document.getElementById('speed-results');
+  const children = [];
+  speedResults.forEach(r => {
+    const caseDef = state.caseMap[r.case];
+    const diff = caseDef ? caseDef.difficulty : '?';
+    const status = statusOf(r.passRate);
+
+    const row = createEl('div', { className: 'result-row', 'data-case': r.case });
+    row.appendChild(createEl('div', { className: `result-icon ${status}` }, statusIcon(r.passRate)));
+    const info = createEl('div');
+    info.appendChild(createEl('div', { className: 'result-name' }, r.case));
+    row.appendChild(info);
+    row.appendChild(difficultyPill(diff));
+    row.appendChild(createEl('div', { className: `result-score ${status}` }, `${r.passed}/${r.total}`));
+    row.appendChild(createEl('div', { className: 'result-latency' }, typeof r.latencyMs === 'number' ? `${(r.latencyMs / 1000).toFixed(1)}s` : '\u2014'));
+    row.appendChild(statusPill(status));
+
+    row.addEventListener('click', () => {
+      toggleAccordion(speedList, r.case, r, row);
+    });
+    children.push(row);
+  });
+  speedList.replaceChildren(...children);
 }
 
 // === History ===
 function renderHistory() {
   const runs = state.history;
   if (!runs.length) {
-    const el = document.getElementById('view-history');
-    el.replaceChildren(createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No history yet')]));
+    document.getElementById('history-chart').replaceChildren(
+      createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No history yet')])
+    );
+    document.getElementById('history-list').replaceChildren();
     return;
   }
 
   // Bar chart
   const chartContainer = document.getElementById('history-chart');
   chartContainer.replaceChildren();
-  chartContainer.appendChild(createEl('h3', { style: { marginBottom: '16px' } }, 'Pass Rate Over Time'));
+  chartContainer.appendChild(createEl('h3', { style: { fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: 'var(--slate-700)' } }, 'Pass Rate Over Time'));
+
   const barsEl = createEl('div', { className: 'chart-bars' });
+  const runDetailContainer = createEl('div', { id: 'history-run-detail-container' });
+
   runs.slice().reverse().forEach(r => {
-    const h = Math.max(4, r.passRate * 150);
+    const h = Math.max(4, r.passRate * 120);
     const wrapper = createEl('div', { className: 'chart-bar-wrapper', 'data-run-id': r.id });
     wrapper.appendChild(createEl('div', { className: 'chart-value' }, pct(r.passRate)));
     const bar = createEl('div', { className: 'chart-bar' });
@@ -432,13 +508,14 @@ function renderHistory() {
     wrapper.appendChild(createEl('div', { className: 'chart-label' }, shortDate(r.timestamp)));
     wrapper.addEventListener('click', async () => {
       const runData = await api(`run/${r.id}`);
-      showRunDetail(runData);
+      showHistoryRunDetail(runData, runDetailContainer);
     });
     barsEl.appendChild(wrapper);
   });
   chartContainer.appendChild(barsEl);
+  chartContainer.after(runDetailContainer);
 
-  // List
+  // Run list
   const listEl = document.getElementById('history-list');
   listEl.replaceChildren(...runs.map(r => {
     const row = createEl('div', { className: 'history-row', 'data-run-id': r.id });
@@ -446,66 +523,80 @@ function renderHistory() {
     info.appendChild(createEl('div', { className: 'run-label' }, r.id));
     info.appendChild(createEl('div', { className: 'run-date' }, formatDate(r.timestamp)));
     row.appendChild(info);
-    row.appendChild(createEl('div', {}, `${r.caseCount} cases`));
+    row.appendChild(createEl('div', { style: { fontSize: '12px', color: 'var(--slate-500)' } }, `${r.caseCount} cases`));
     row.appendChild(createEl('div', { className: `result-score ${statusOf(r.passRate)}` }, `${r.totalPassed}/${r.totalAssertions}`));
     row.appendChild(statusPill(statusOf(r.passRate)));
     row.addEventListener('click', async () => {
       const runData = await api(`run/${r.id}`);
-      showRunDetail(runData);
+      const container = document.getElementById('history-run-detail-container');
+      showHistoryRunDetail(runData, container);
+      container.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     return row;
   }));
 }
 
-function showRunDetail(runData) {
-  const container = document.getElementById('result-detail');
-  container.replaceChildren();
+function showHistoryRunDetail(runData, container) {
+  // If same run is already expanded, close it
+  if (state.expandedRun === runData.id) {
+    container.replaceChildren();
+    state.expandedRun = null;
+    return;
+  }
+
+  state.expandedRun = runData.id;
 
   const totalPassed = runData.results.reduce((s, r) => s + r.passed, 0);
   const totalAssertions = runData.results.reduce((s, r) => s + r.total, 0);
   const rate = totalAssertions ? totalPassed / totalAssertions : 0;
 
-  const backBtn = createEl('button', { className: 'detail-back' }, '\u2190 Back to history');
-  backBtn.addEventListener('click', () => showView('history'));
-  container.appendChild(backBtn);
+  const detail = createEl('div', { className: 'history-run-detail' });
 
+  // Header with close
   const header = createEl('div', { className: 'detail-header' });
-  const headerLeft = createEl('div');
-  headerLeft.appendChild(createEl('h1', { className: 'detail-title' }, runData.id));
-  headerLeft.appendChild(createEl('p', { style: { color: 'var(--text-gray)', marginTop: '4px' } }, formatDate(runData.timestamp)));
-  header.appendChild(headerLeft);
-  const bigScore = createEl('div', { className: `stat-value ${statusOf(rate)}` }, pct(rate));
-  bigScore.style.fontSize = '48px';
-  header.appendChild(bigScore);
-  container.appendChild(header);
+  const titleRow = createEl('div');
+  titleRow.appendChild(createEl('div', { className: 'detail-title', textContent: runData.id }));
+  titleRow.appendChild(createEl('div', { style: { fontSize: '12px', color: 'var(--slate-400)', marginTop: '2px' } }, formatDate(runData.timestamp)));
+  header.appendChild(titleRow);
 
-  const statsGrid = createEl('div', { className: 'stats-grid' });
-  statsGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-  statsGrid.appendChild(buildStatCard('Cases', String(runData.results.length), 'neutral', ''));
-  statsGrid.appendChild(buildStatCard('Assertions', `${totalPassed}/${totalAssertions}`, statusOf(rate), ''));
-  statsGrid.appendChild(buildStatCard('Pass Rate', pct(rate), statusOf(rate), ''));
-  container.appendChild(statsGrid);
+  const headerRight = createEl('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } });
+  headerRight.appendChild(createEl('div', { className: `stat-value ${statusOf(rate)}`, style: { fontSize: '24px' } }, pct(rate)));
+  const closeBtn = createEl('button', { className: 'close-btn' }, 'Close');
+  closeBtn.addEventListener('click', () => {
+    container.replaceChildren();
+    state.expandedRun = null;
+  });
+  headerRight.appendChild(closeBtn);
+  header.appendChild(headerRight);
+  detail.appendChild(header);
 
+  // Results as accordion
   const resultsList = createEl('div', { className: 'results-list' });
   runData.results.forEach(r => {
     const caseDef = state.caseMap[r.case];
     const diff = caseDef ? caseDef.difficulty : '?';
     const status = statusOf(r.passRate);
-    const row = createEl('div', { className: 'result-row' });
+
+    const row = createEl('div', { className: 'result-row', 'data-case': r.case });
     row.appendChild(createEl('div', { className: `result-icon ${status}` }, statusIcon(r.passRate)));
     const info = createEl('div');
     info.appendChild(createEl('div', { className: 'result-name' }, r.case));
-    info.appendChild(createEl('div', { className: 'result-desc' }, caseDef ? caseDef.description : ''));
     row.appendChild(info);
     row.appendChild(difficultyPill(diff));
     row.appendChild(createEl('div', { className: `result-score ${status}` }, `${r.passed}/${r.total}`));
+    if (typeof r.latencyMs === 'number' && r.latencyMs > 0) {
+      row.appendChild(createEl('div', { className: 'result-latency' }, `${(r.latencyMs / 1000).toFixed(1)}s`));
+    } else {
+      row.appendChild(createEl('div', { className: 'result-latency' }, ''));
+    }
     row.appendChild(statusPill(status));
-    row.addEventListener('click', () => showResultDetail(r.case, runData));
+    row.addEventListener('click', () => {
+      toggleAccordion(resultsList, r.case, r, row);
+    });
     resultsList.appendChild(row);
   });
-  container.appendChild(resultsList);
-
-  showView('results');
+  detail.appendChild(resultsList);
+  container.replaceChildren(detail);
 }
 
 // === Compare ===
@@ -514,15 +605,13 @@ function renderCompareSelectors() {
   const selectA = document.getElementById('compare-a');
   const selectB = document.getElementById('compare-b');
 
-  // Clear existing
   selectA.replaceChildren();
   selectB.replaceChildren();
 
   if (state.latest) {
     const totalP = state.latest.results.reduce((s, r) => s + r.passed, 0);
     const totalA = state.latest.results.reduce((s, r) => s + r.total, 0);
-    const opt = createEl('option', { value: 'latest' }, `latest (${pct(totalA ? totalP / totalA : 0)})`);
-    selectA.appendChild(opt);
+    selectA.appendChild(createEl('option', { value: 'latest' }, `latest (${pct(totalA ? totalP / totalA : 0)})`));
   }
   if (state.baseline) {
     selectB.appendChild(createEl('option', { value: 'baseline' }, 'baseline'));
@@ -585,9 +674,7 @@ async function doCompare() {
   const tbody = createEl('tbody');
   rows.forEach(r => {
     const tr = createEl('tr');
-    const tdCase = createEl('td');
-    tdCase.appendChild(createEl('strong', {}, r.case));
-    tr.appendChild(tdCase);
+    tr.appendChild(createEl('td', {}, createEl('strong', {}, r.case)));
     const tdDiff = createEl('td');
     tdDiff.appendChild(r.caseDef ? difficultyPill(r.caseDef.difficulty) : document.createTextNode('\u2014'));
     tr.appendChild(tdDiff);
@@ -608,35 +695,10 @@ async function doCompare() {
   container.replaceChildren(table);
 }
 
-// === Rubrics ===
-async function renderRubrics() {
-  try {
-    const rubrics = await api('rubrics');
-    const container = document.getElementById('rubrics-content');
-    if (!rubrics) {
-      container.replaceChildren(createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'No rubrics found')]));
-      return;
-    }
-
-    container.replaceChildren(...Object.entries(rubrics).map(([key, val]) => {
-      const card = createEl('div', { className: 'rubric-card' });
-      card.appendChild(createEl('h2', {}, key));
-      const prompt = createEl('div', { className: 'rubric-prompt' });
-      prompt.textContent = typeof val === 'string' ? val : JSON.stringify(val, null, 2);
-      card.appendChild(prompt);
-      return card;
-    }));
-  } catch {
-    const container = document.getElementById('rubrics-content');
-    container.replaceChildren(createEl('div', { className: 'empty-state' }, [createEl('h2', {}, 'Could not load rubrics')]));
-  }
-}
-
 // === Boot ===
 init().catch(err => {
   console.error('Dashboard init failed:', err);
-  const main = document.querySelector('.main');
-  main.replaceChildren(
+  document.querySelector('.main').replaceChildren(
     createEl('div', { className: 'empty-state' }, [
       createEl('h2', {}, 'Failed to load'),
       createEl('p', {}, err.message),
