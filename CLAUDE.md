@@ -10,15 +10,22 @@
 ## Custom ZeroClaw Build
 
 Limbo uses a custom ZeroClaw image with extra cargo features (`rag-pdf`).
-The image lives at `ghcr.io/tomasward1/zeroclaw:v0.5.3-custom`.
+The image tag follows the pattern `ghcr.io/tomasward1/zeroclaw:<version>-custom`.
 
 **Rebuild ZeroClaw** (only when changing features or version):
 ```bash
-./scripts/build-zeroclaw.sh              # default: v0.5.3 + rag-pdf
+./scripts/build-zeroclaw.sh              # default version + rag-pdf
 ./scripts/build-zeroclaw.sh v0.6.3       # upgrade version
 ./scripts/build-zeroclaw.sh v0.5.3 "rag-pdf,browser-native"  # add features
 ```
-Builds multi-platform (amd64+arm64) and pushes to GHCR. Requires `docker login ghcr.io`.
+
+The script builds multi-platform (amd64+arm64) and pushes to GHCR automatically. Requires `docker login ghcr.io`.
+
+**Critical rules when bumping ZeroClaw:**
+- The Dockerfile MUST use the custom image (`ghcr.io/tomasward1/zeroclaw:<version>-custom`), never the official one — we need `rag-pdf`.
+- Always build and push the custom image BEFORE pushing the Dockerfile change — CI pulls from GHCR.
+- The image must include both `linux/amd64` and `linux/arm64` — CI runs on amd64, local dev is arm64.
+- When a new ZeroClaw version adds workspace members, the build script may need patching (see Patch 3 in the script).
 
 ## Dev Secrets
 

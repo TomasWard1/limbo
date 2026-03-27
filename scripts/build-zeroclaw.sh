@@ -26,14 +26,27 @@ sed -i.bak 's/cargo build --release --locked/cargo build --release/g' "$TMPDIR/D
 # matching Limbo's node:22-slim (Bookworm) runtime.
 sed -i.bak 's|FROM rust:1.94-slim@sha256:[a-f0-9]*|FROM rust:1.94-slim-bookworm|g' "$TMPDIR/Dockerfile"
 
+# Patch 3: remove apps/tauri from workspace members — we only need the server binary,
+# and the Dockerfile doesn't COPY that directory (added in v0.6.3).
+sed -i.bak 's|"apps/tauri"||g; s|, ,|,|g; s|, ]|]|g' "$TMPDIR/Cargo.toml"
+
 echo "==> Building with features: ${FEATURES}"
-docker build \
+
+# Ensure a multi-platform capable builder exists (docker-container driver).
+if ! docker buildx inspect limbo-multiplatform &>/dev/null; then
+  docker buildx create --name limbo-multiplatform --driver docker-container
+fi
+
+docker buildx build \
+  --builder limbo-multiplatform \
+  --platform linux/amd64,linux/arm64 \
   --build-arg ZEROCLAW_CARGO_FEATURES="$FEATURES" \
   --target release \
   -t "$TAG" \
+  --push \
   "$TMPDIR"
 
 echo ""
-echo "==> Done: $TAG"
+echo "==> Done: $TAG (pushed to GHCR)"
 echo "    Update your Dockerfile:"
 echo "    FROM $TAG AS zeroclaw"

@@ -15,14 +15,14 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   mcp-server-check:
     name: MCP Server
