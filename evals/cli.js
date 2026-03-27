@@ -27,14 +27,23 @@ const VAULT_SEED = path.join(EVALS_DIR, 'vault-seed');
 // ── Message sending ─────────────────────────────────────────────────────────
 
 function sendMessage(message, container) {
-  // zeroclaw agent needs credentials in env — docker exec doesn't inherit
-  // the entrypoint's exports, so we read the secret and pass it explicitly.
-  const proc = spawnSync('docker', [
-    'exec',
-    '-e', 'ANTHROPIC_OAUTH_TOKEN=' + readContainerSecret(container, 'llm_api_key'),
-    container, 'zeroclaw', 'agent',
+  const runtimeConfig = readZeroClawConfig(container);
+  const dockerArgs = ['exec'];
+
+  // Anthropic OAuth still needs the token exported explicitly for docker exec.
+  if (runtimeConfig.provider === 'anthropic') {
+    dockerArgs.push('-e', 'ANTHROPIC_OAUTH_TOKEN=' + readContainerSecret(container, 'llm_api_key'));
+  }
+
+  dockerArgs.push(
+    container,
+    'zeroclaw', 'agent',
+    '--provider', runtimeConfig.provider,
+    '--model', runtimeConfig.model,
     '--message', message,
-  ], { encoding: 'utf8', timeout: 130000 });
+  );
+
+  const proc = spawnSync('docker', dockerArgs, { encoding: 'utf8', timeout: 130000 });
 
   if (proc.error) throw proc.error;
   if (proc.status !== 0) {
@@ -154,15 +163,21 @@ function parseStatusField(output, label) {
   return match ? match[1].trim() : null;
 }
 
-function readRuntimeReasoning(container) {
+function readZeroClawConfig(container) {
   try {
     const cfg = execFileSync('docker', [
       'exec', container, 'cat', '/home/limbo/.zeroclaw/config.toml',
     ], { encoding: 'utf8', timeout: 10000 });
-    const match = cfg.match(/reasoning_effort\s*=\s*"([^"]+)"/);
-    return match ? match[1].trim() : null;
+    const providerMatch = cfg.match(/default_provider\s*=\s*"([^"]+)"/);
+    const modelMatch = cfg.match(/default_model\s*=\s*"([^"]+)"/);
+    const reasoningMatch = cfg.match(/reasoning_effort\s*=\s*"([^"]+)"/);
+    return {
+      provider: providerMatch ? providerMatch[1].trim() : null,
+      model: modelMatch ? modelMatch[1].trim() : null,
+      reasoningEffort: reasoningMatch ? reasoningMatch[1].trim() : null,
+    };
   } catch {
-    return null;
+    return { provider: null, model: null, reasoningEffort: null };
   }
 }
 
@@ -182,9 +197,10 @@ function readJSON(filePath, fallback) {
 
 async function readRuntimeMeta(container) {
   const envEval = parseEnvFile(path.join(EVALS_DIR, '.env.eval'));
-  let provider = process.env.MODEL_PROVIDER || envEval.MODEL_PROVIDER || null;
-  let model = process.env.MODEL_NAME || envEval.MODEL_NAME || null;
-  let reasoningEffort = process.env.RUNTIME_REASONING_EFFORT || envEval.RUNTIME_REASONING_EFFORT || null;
+  const runtimeConfig = readZeroClawConfig(container);
+  let provider = runtimeConfig.provider || process.env.MODEL_PROVIDER || envEval.MODEL_PROVIDER || null;
+  let model = runtimeConfig.model || process.env.MODEL_NAME || envEval.MODEL_NAME || null;
+  let reasoningEffort = runtimeConfig.reasoningEffort || process.env.RUNTIME_REASONING_EFFORT || envEval.RUNTIME_REASONING_EFFORT || null;
   let authMode = process.env.AUTH_MODE || envEval.AUTH_MODE || null;
   let zeroclawVersion = null;
 
@@ -196,8 +212,6 @@ async function readRuntimeMeta(container) {
     model = parseStatusField(status, 'Model') || model;
     zeroclawVersion = parseStatusField(status, 'Version') || zeroclawVersion;
   } catch {}
-
-  reasoningEffort = readRuntimeReasoning(container) || reasoningEffort;
 
   const meta = {
     provider,
