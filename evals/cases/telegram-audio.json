@@ -1,0 +1,19 @@
+{
+  "name": "telegram-audio",
+  "description": "User sends a voice message via Telegram — agent transcribes and responds without error",
+  "steps": [
+    {
+      "type": "telegram_manual",
+      "prompt": "Mandá un audio/voice message al bot de eval en Telegram (decí algo claro, ej: 'hola, esto es una prueba')",
+      "timeout_ms": 90000,
+      "assertions": [
+        { "type": "response_no_error" },
+        { "type": "response_matches", "pattern": "(?i).{10,}" }
+      ]
+    }
+  ],
+  "runs": 1,
+  "pass_threshold": 1.0,
+  "tags": ["telegram", "audio", "voice", "manual"],
+  "difficulty": "medium"
+}
