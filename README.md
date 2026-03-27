@@ -208,6 +208,7 @@ Managed by `limbo start`, stored in `~/.limbo/.env`.
 | `AUTH_MODE` | `api-key` | `api-key` or `subscription` |
 | `MODEL_PROVIDER` | `anthropic` | `anthropic`, `openai`, `openai-codex`, or `openrouter` |
 | `MODEL_NAME` | `claude-sonnet-4-6` | Model to use |
+| `RUNTIME_REASONING_EFFORT` | `medium` | ZeroClaw `runtime.reasoning_effort` override |
 | `TELEGRAM_ENABLED` | `false` | Enable Telegram integration |
 | `VOICE_ENABLED` | `false` | Enable Groq voice transcription |
 | `WEB_SEARCH_ENABLED` | `false` | Enable Brave web search |
