@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs/promises');
 const fsSync = require('fs');
 
-const { snapshot, diff } = require('./lib/vault-diff');
+const { snapshot, diff, snapshotAll, diffAll } = require('./lib/vault-diff');
 // mcp-log.js is no longer used — MCP logs are parsed from sendMessage output
 const { score } = require('./lib/scorer');
 const { judge } = require('./lib/judge');
@@ -116,6 +116,94 @@ function extractSearchTime(mcpLogs) {
   return totalMs || null;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Get MCP eval logs from docker container logs since a given timestamp.
+ */
+function getContainerMcpLogs(container, sinceIso) {
+  const result = spawnSync('docker', [
+    'logs', '--since', sinceIso, container,
+  ], { encoding: 'utf8', timeout: 10000 });
+
+  const allOutput = (result.stdout || '') + '\n' + (result.stderr || '');
+  const mcpLogs = [];
+  const responseLines = [];
+
+  for (const line of allOutput.split('\n')) {
+    const stripped = stripAnsi(line);
+    if (stripped.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(stripped);
+        if (parsed.type === 'tool_call' || parsed.type === 'tool_result') {
+          mcpLogs.push(parsed);
+          continue;
+        }
+      } catch {}
+    }
+    // Capture non-log lines as potential response text
+    if (/^\d{4}-\d{2}-\d{2}T/.test(stripped)) continue;
+    if (/^zeroclaw::/.test(stripped)) continue;
+    if (/^\s*(WARN|INFO|ERROR)\s/.test(stripped)) continue;
+    if (/^\[limbo-vault\]/.test(stripped)) continue;
+    if (stripped.trim()) responseLines.push(stripped);
+  }
+
+  return { mcpLogs, responseText: responseLines.join('\n').trim() };
+}
+
+/**
+ * Poll for Telegram processing completion.
+ * Watches vault for new files and docker logs for MCP activity.
+ * Returns { vaultDiff, allFilesDiff, mcpLogs, responseText } or null on timeout.
+ */
+async function waitForTelegramProcessing(container, vaultDir, beforeSnapshot, beforeAllSnapshot, sinceIso, timeoutMs = 90000) {
+  const pollMs = 3000;
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    await sleep(pollMs);
+
+    // Check vault for new .md notes
+    const afterSnapshot = snapshot(vaultDir);
+    const vaultDiff = diff(beforeSnapshot, afterSnapshot);
+
+    // Check vault for new files (including assets/)
+    const afterAll = snapshotAll(vaultDir);
+    const allFilesDiff = diffAll(beforeAllSnapshot, afterAll);
+
+    // Check docker logs for MCP activity
+    const { mcpLogs, responseText } = getContainerMcpLogs(container, sinceIso);
+
+    // Consider processing complete if we see tool results OR new vault files
+    const hasToolResults = mcpLogs.some((l) => l.type === 'tool_result');
+    const hasNewFiles = allFilesDiff.created.length > 0 || vaultDiff.created.length > 0;
+
+    if (hasToolResults || hasNewFiles) {
+      // Wait a bit more for any final writes
+      await sleep(2000);
+      // Re-snapshot for final state
+      const finalSnapshot = snapshot(vaultDir);
+      const finalAll = snapshotAll(vaultDir);
+      const finalLogs = getContainerMcpLogs(container, sinceIso);
+      return {
+        vaultDiff: diff(beforeSnapshot, finalSnapshot),
+        allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
+        mcpLogs: finalLogs.mcpLogs,
+        responseText: finalLogs.responseText,
+      };
+    }
+
+    const elapsed = Math.round((Date.now() - start) / 1000);
+    process.stdout.write(`\r  Waiting... ${elapsed}s / ${timeoutMs / 1000}s`);
+  }
+
+  process.stdout.write('\n');
+  return null; // timeout
+}
+
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
 }
@@ -153,6 +241,15 @@ async function resetVault() {
     await fs.cp(path.join(pristineDir, 'maps'), mapsDir, { recursive: true });
   } catch {
     await fs.mkdir(mapsDir, { recursive: true });
+  }
+
+  // Restore assets/ from pristine (or create empty)
+  const assetsDir = path.join(VAULT_SEED, 'assets');
+  await fs.rm(assetsDir, { recursive: true, force: true });
+  try {
+    await fs.cp(path.join(pristineDir, 'assets'), assetsDir, { recursive: true });
+  } catch {
+    await fs.mkdir(assetsDir, { recursive: true });
   }
 }
 
@@ -219,39 +316,100 @@ async function cmdRun(args) {
           const step = steps[s];
           const stepLabel = steps.length > 1 ? ` [step ${s + 1}/${steps.length}]` : '';
 
-          // Snapshot before
-          const before = snapshot(VAULT_SEED);
-          const cronsBefore = listCronJobs(CONTAINER);
+          if (step.type === 'telegram_manual') {
+            // Snapshot before (both .md and all files)
+            const before = snapshot(VAULT_SEED);
+            const beforeAll = snapshotAll(VAULT_SEED);
+            const sinceIso = new Date().toISOString();
 
-          // Send message
-          console.log(`  Sending${stepLabel}: "${step.input}"`);
-          const startMs = Date.now();
-          const { text: response, mcpLogs } = sendMessage(step.input, CONTAINER);
-          const latencyMs = Date.now() - startMs;
-          lastResponse = response;
-          console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
-          console.log(`  Latency: ${latencyMs}ms`);
+            // Prompt user
+            console.log(`\n  >>> ACTION REQUIRED: ${step.prompt}`);
+            if (step.fixture_hint) {
+              console.log(`      Hint: ${step.fixture_hint}`);
+            }
+            console.log(`      Waiting up to ${(step.timeout_ms || 90000) / 1000}s...\n`);
 
-          // Snapshot after
-          const after = snapshot(VAULT_SEED);
-          const vaultDiff = diff(before, after);
-          lastVaultDiff = vaultDiff;
+            const result = await waitForTelegramProcessing(
+              CONTAINER, VAULT_SEED, before, beforeAll, sinceIso, step.timeout_ms || 90000
+            );
 
-          // Cron diff — new jobs created during this step
-          const cronsAfter = listCronJobs(CONTAINER);
-          const beforeIds = new Set(cronsBefore.map(j => j.id));
-          const cronJobs = cronsAfter.filter(j => !beforeIds.has(j.id));
+            if (!result) {
+              console.log('  TIMEOUT — no processing detected');
+              const failResults = step.assertions.map((a) => ({
+                assertion: a, pass: false, reason: 'Timeout waiting for Telegram processing',
+              }));
+              allScoreResults = allScoreResults.concat(failResults);
+              continue;
+            }
 
-          totalMcpLogs += mcpLogs.length;
-          allMcpLogs = allMcpLogs.concat(mcpLogs);
-          totalLatencyMs += latencyMs;
+            console.log(`  Processing detected!`);
+            console.log(`    MCP logs: ${result.mcpLogs.length}`);
+            console.log(`    New files: ${result.allFilesDiff.created.map((f) => f.path).join(', ') || 'none'}`);
+            console.log(`    New notes: ${result.vaultDiff.created.map((f) => f.path).join(', ') || 'none'}`);
+            if (result.responseText) {
+              console.log(`    Response: "${result.responseText.slice(0, 120)}..."`);
+            }
 
-          // Score assertions for this step
-          const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs });
-          allScoreResults = allScoreResults.concat(stepScores);
+            // Merge allFilesDiff into vaultDiff for assertion compatibility
+            const mergedVaultDiff = {
+              created: [...result.vaultDiff.created, ...result.allFilesDiff.created],
+              modified: result.vaultDiff.modified || [],
+              deleted: [...(result.vaultDiff.deleted || []), ...result.allFilesDiff.deleted],
+            };
 
-          const passed = stepScores.filter(r => r.pass).length;
-          console.log(`  Score${stepLabel}: ${passed}/${stepScores.length} assertions passed`);
+            lastResponse = result.responseText;
+            lastVaultDiff = mergedVaultDiff;
+            totalMcpLogs += result.mcpLogs.length;
+            allMcpLogs = allMcpLogs.concat(result.mcpLogs);
+            const telegramLatencyMs = Date.now() - new Date(sinceIso).getTime();
+            totalLatencyMs += telegramLatencyMs;
+
+            const stepScores = score(step.assertions, {
+              response: result.responseText,
+              mcpLogs: result.mcpLogs,
+              vaultDiff: mergedVaultDiff,
+              cronJobs: [],
+              latencyMs: telegramLatencyMs,
+            });
+            allScoreResults = allScoreResults.concat(stepScores);
+            const passed = stepScores.filter((r) => r.pass).length;
+            console.log(`  Score${stepLabel}: ${passed}/${stepScores.length} assertions passed`);
+
+          } else {
+            // Snapshot before
+            const before = snapshot(VAULT_SEED);
+            const cronsBefore = listCronJobs(CONTAINER);
+
+            // Send message
+            console.log(`  Sending${stepLabel}: "${step.input}"`);
+            const startMs = Date.now();
+            const { text: response, mcpLogs } = sendMessage(step.input, CONTAINER);
+            const latencyMs = Date.now() - startMs;
+            lastResponse = response;
+            console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
+            console.log(`  Latency: ${latencyMs}ms`);
+
+            // Snapshot after
+            const after = snapshot(VAULT_SEED);
+            const vaultDiff = diff(before, after);
+            lastVaultDiff = vaultDiff;
+
+            // Cron diff — new jobs created during this step
+            const cronsAfter = listCronJobs(CONTAINER);
+            const beforeIds = new Set(cronsBefore.map(j => j.id));
+            const cronJobs = cronsAfter.filter(j => !beforeIds.has(j.id));
+
+            totalMcpLogs += mcpLogs.length;
+            allMcpLogs = allMcpLogs.concat(mcpLogs);
+            totalLatencyMs += latencyMs;
+
+            // Score assertions for this step
+            const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs });
+            allScoreResults = allScoreResults.concat(stepScores);
+
+            const passed = stepScores.filter(r => r.pass).length;
+            console.log(`  Score${stepLabel}: ${passed}/${stepScores.length} assertions passed`);
+          }
         }
 
         const passed = allScoreResults.filter(r => r.pass).length;
@@ -477,6 +635,7 @@ Examples:
   limbo-eval run --case create-reminder
   limbo-eval run --difficulty medium
   limbo-eval run --tag vault_write_note --judge
+  limbo-eval run --tag manual              # run only manual Telegram tests
   limbo-eval compare --strict
   limbo-eval promote
   limbo-eval report`);
