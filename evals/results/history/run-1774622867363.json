@@ -1,6 +1,6 @@
 {
-  "id": "run-1774624683868",
-  "timestamp": "2026-03-27T15:22:53.691Z",
+  "id": "run-1774622867363",
+  "timestamp": "2026-03-27T14:52:06.395Z",
   "results": [
     {
       "case": "create-reminder",
@@ -27,21 +27,21 @@
         }
       ],
       "judgeResults": null,
-      "response": "Listo. Te recuerdo mañana **28 de marzo a las 9:00 AM UTC** que tenés que llamar al banco.",
+      "response": "Listo. Te recuerdo mañana **28 de marzo a las 9:00 AM UTC** que tienes que llamar al banco.",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 0,
-      "latencyMs": 7624,
-      "timestamp": "2026-03-27T15:18:11.996Z"
+      "latencyMs": 7093,
+      "timestamp": "2026-03-27T14:47:54.962Z"
     },
     {
       "case": "get-file",
       "run": 1,
-      "passRate": 1,
-      "passed": 2,
+      "passRate": 0.5,
+      "passed": 1,
       "total": 2,
       "scoreResults": [
         {
@@ -49,8 +49,8 @@
             "type": "tool_called",
             "tool": "vault_get_file"
           },
-          "pass": true,
-          "reason": "Tool \"vault_get_file\" was called"
+          "pass": false,
+          "reason": "Tool \"vault_get_file\" was NOT called"
         },
         {
           "assertion": {
@@ -62,15 +62,15 @@
         }
       ],
       "judgeResults": null,
-      "response": "No encontré ninguna nota con el ID `eval-seed-logo` en el vault. ¿Puede ser que el ID sea diferente? Puedo buscarlo por palabras clave si querés.",
+      "response": "No existe ninguna nota con el ID `eval-seed-logo` en el vault.\n\n¿Puede que el nombre sea diferente? Puedo hacer una búsqueda si me das más contexto sobre de qué trata la nota.",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 2,
-      "latencyMs": 8007,
-      "timestamp": "2026-03-27T15:18:20.697Z"
+      "latencyMs": 8630,
+      "timestamp": "2026-03-27T14:48:04.290Z"
     },
     {
       "case": "hard-ambiguous-request",
@@ -89,21 +89,21 @@
         }
       ],
       "judgeResults": null,
-      "response": "Parece que el mensaje llegó sin contenido adjunto — solo el texto \"Guardate esto para después\" sin ninguna información adicional.\n\n¿Qué querés que guarde?",
+      "response": "Parece que el mensaje llegó sin contenido adjunto — solo el texto \"Guardate esto para después\".\n\n¿Qué querés que guarde?",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 0,
-      "latencyMs": 20779,
-      "timestamp": "2026-03-27T15:18:41.997Z"
+      "latencyMs": 6650,
+      "timestamp": "2026-03-27T14:48:11.464Z"
     },
     {
       "case": "hard-complex-note",
       "run": 1,
-      "passRate": 1,
-      "passed": 6,
+      "passRate": 0.3333333333333333,
+      "passed": 2,
       "total": 6,
       "scoreResults": [
         {
@@ -129,50 +129,50 @@
             "type": "vault_note_created",
             "pattern": "(?i)laura"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)laura/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)laura/i: Invalid group"
         },
         {
           "assertion": {
             "type": "vault_note_created",
             "pattern": "(?i)kubernetes|k8s"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)kubernetes|k8s/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)kubernetes|k8s/i: Invalid group"
         },
         {
           "assertion": {
             "type": "vault_note_created",
             "pattern": "(?i)(no vale la pena|not worth|scale)"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)(no vale la pena|not worth|scale)/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)(no vale la pena|not worth|scale)/i: Invalid group"
         },
         {
           "assertion": {
             "type": "vault_note_created",
             "pattern": "(?i)(revisar|review|números|numbers|semana)"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)(revisar|review|números|numbers|semana)/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)(revisar|review|números|numbers|semana)/i: Invalid group"
         }
       ],
       "judgeResults": null,
-      "response": "Guardado en dos notas:\n\n- `persona-laura` — Laura como contacto, con su posición sobre Kubernetes.\n- `decision-kubernetes-migracion` — El debate abierto, posiciones de cada uno, y el pendiente de revisar números la semana que viene.\n\n¿Querés que te recuerde la revisión en algún día específico de la semana?",
+      "response": "Guardado. Dos notas creadas:\n\n- `persona-laura` — contacto, con su posición sobre Kubernetes.\n- `decision-kubernetes-2026-03-26` — el debate abierto, con ambas posiciones y el pendiente de revisar números la semana que viene.\n\n¿Querés que te recuerde la reunión con Laura para algún día en particular?",
       "vaultDiff": {
-        "created": 2,
+        "created": 3,
         "modified": 0,
         "deleted": 0
       },
-      "mcpLogCount": 8,
-      "latencyMs": 22169,
-      "timestamp": "2026-03-27T15:19:04.714Z"
+      "mcpLogCount": 10,
+      "latencyMs": 25009,
+      "timestamp": "2026-03-27T14:48:37.002Z"
     },
     {
       "case": "hard-synthesize-knowledge",
       "run": 1,
-      "passRate": 0.875,
-      "passed": 7,
+      "passRate": 0.625,
+      "passed": 5,
       "total": 8,
       "scoreResults": [
         {
@@ -188,8 +188,8 @@
             "type": "vault_note_created",
             "pattern": "(?i)mart[ií]n"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)mart[ií]n/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)mart[ií]n/i: Invalid group"
         },
         {
           "assertion": {
@@ -204,8 +204,8 @@
             "type": "vault_note_created",
             "pattern": "(?i)sof[ií]a"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)sof[ií]a/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)sof[ií]a/i: Invalid group"
         },
         {
           "assertion": {
@@ -241,15 +241,15 @@
         }
       ],
       "judgeResults": null,
-      "response": "El vault no tiene notas guardadas sobre personas todavía. Veo que en el contexto de esta conversación mencionaste a **Sofía** (data scientist en Globant, la conocés del secundario) — pero eso aún no fue guardado en el vault.\n\n¿Quiero guardarlo ahora?",
+      "response": "El vault no tiene notas sobre personas guardadas todavía. Veo que en esta misma conversación me contaste sobre **Sofía** — data scientist en Globant, la conocés del secundario — pero aún no la guardé. ¿Quiero hacerlo ahora?",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 12,
-      "latencyMs": 32790,
-      "timestamp": "2026-03-27T15:19:38.751Z"
+      "latencyMs": 37414,
+      "timestamp": "2026-03-27T14:49:15.658Z"
     },
     {
       "case": "medium-file-retrieval-implicit",
@@ -284,21 +284,21 @@
         }
       ],
       "judgeResults": null,
-      "response": "No tengo ningún logo guardado en el vault. Si querés, mandámelo y lo guardo.",
+      "response": "No tengo ningún logo guardado en el vault. Las notas solo almacenan texto (markdown), no imágenes ni archivos binarios.\n\nSi querés, podés guardar un enlace al logo o una descripción de él, y lo registro como nota.",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 2,
-      "latencyMs": 5840,
-      "timestamp": "2026-03-27T15:19:45.124Z"
+      "latencyMs": 7864,
+      "timestamp": "2026-03-27T14:49:24.067Z"
     },
     {
       "case": "medium-note-type-inference",
       "run": 1,
-      "passRate": 1,
-      "passed": 5,
+      "passRate": 0.6,
+      "passed": 3,
       "total": 5,
       "scoreResults": [
         {
@@ -324,16 +324,16 @@
             "type": "vault_note_created",
             "pattern": "(?i)postgresql|postgres"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)postgresql|postgres/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)postgresql|postgres/i: Invalid group"
         },
         {
           "assertion": {
             "type": "vault_note_created",
             "pattern": "(?i)mongodb|mongo"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)mongodb|mongo/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)mongodb|mongo/i: Invalid group"
         },
         {
           "assertion": {
@@ -345,21 +345,21 @@
         }
       ],
       "judgeResults": null,
-      "response": "Guardado como `decision-postgresql-sobre-mongodb-2026-03-27`. ¿Querés agregar el motivo de la decisión?",
+      "response": "Guardado como `decision-postgresql-vs-mongodb-2026-03-27`. ¿Querés agregar el motivo de la elección?",
       "vaultDiff": {
         "created": 1,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 4,
-      "latencyMs": 16546,
-      "timestamp": "2026-03-27T15:20:02.194Z"
+      "latencyMs": 14632,
+      "timestamp": "2026-03-27T14:49:39.240Z"
     },
     {
       "case": "medium-person-multiple-facts",
       "run": 1,
-      "passRate": 1,
-      "passed": 5,
+      "passRate": 0.4,
+      "passed": 2,
       "total": 5,
       "scoreResults": [
         {
@@ -385,24 +385,24 @@
             "type": "vault_note_created",
             "pattern": "(?i)carlos"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)carlos/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)carlos/i: Invalid group"
         },
         {
           "assertion": {
             "type": "vault_note_created",
             "pattern": "(?i)ingeniero|engineer"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)ingeniero|engineer/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)ingeniero|engineer/i: Invalid group"
         },
         {
           "assertion": {
             "type": "vault_note_created",
             "pattern": "(?i)c[oó]rdoba"
           },
-          "pass": true,
-          "reason": "A created vault note matched /(?i)c[oó]rdoba/i"
+          "pass": false,
+          "reason": "Error evaluating assertion: Invalid regular expression: /(?i)c[oó]rdoba/i: Invalid group"
         }
       ],
       "judgeResults": null,
@@ -413,8 +413,8 @@
         "deleted": 0
       },
       "mcpLogCount": 4,
-      "latencyMs": 11382,
-      "timestamp": "2026-03-27T15:20:14.161Z"
+      "latencyMs": 11820,
+      "timestamp": "2026-03-27T14:49:51.578Z"
     },
     {
       "case": "medium-search-implicit",
@@ -441,15 +441,15 @@
         }
       ],
       "judgeResults": null,
-      "response": "El vault no tiene notas guardadas sobre personas en tech. Tengo contexto de esta conversación de lo que mencionaste antes:\n\n- **Martín** — diseñador UX, trabaja en Mercado Libre\n- **Laura** — discutieron migrar a Kubernetes; ella cree que no vale la pena para el scale actual, vos creés que sí; quedaron en revisar los números la semana que viene\n\nPero nada de esto está guardado en el vault todavía. ¿Quieres que lo guarde?",
+      "response": "El vault no tiene notas guardadas sobre personas en tech. Lo que mencionaste en esta conversación:\n\n- **Martín** — diseñador UX, trabaja en Mercado Libre.\n- **Laura** — discutiste con ella la migración a Kubernetes; ella opina que no vale la pena para el scale actual, vos creés que sí. Quedaron en revisar los números la semana que viene.\n\nPero ninguna de esas cosas está guardada en el vault todavía. ¿Quiero que las guarde ahora?",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 6,
-      "latencyMs": 13469,
-      "timestamp": "2026-03-27T15:20:28.191Z"
+      "latencyMs": 13146,
+      "timestamp": "2026-03-27T14:50:05.270Z"
     },
     {
       "case": "multi-step-remember-and-search",
@@ -494,15 +494,15 @@
         }
       ],
       "judgeResults": null,
-      "response": "Esto es lo que sé sobre Alice:\n\n- **Empresa:** Google\n- **Rol:** ML Engineer",
+      "response": "Esto es lo que sé sobre Alice:\n\n- Trabaja en **Google** como **ML engineer**.\n\n¿Hay algo más que quieras agregar sobre ella?",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
-      "mcpLogCount": 8,
-      "latencyMs": 25332,
-      "timestamp": "2026-03-27T15:20:54.425Z"
+      "mcpLogCount": 6,
+      "latencyMs": 19987,
+      "timestamp": "2026-03-27T14:50:26.142Z"
     },
     {
       "case": "read-note-by-id",
@@ -529,15 +529,15 @@
         }
       ],
       "judgeResults": null,
-      "response": "**eval-seed-birthday**\n\n```\nid: eval-seed-birthday\ntitle: Tomas birthday\ndescription: Tomas was born on March 15\ntype: fact\ncreated: 2026-01-01\n```\n\nTomas was born on March 15. He celebrates every year with asado.",
+      "response": "```\n---\nid: eval-seed-birthday\ntitle: \"Tomas birthday\"\ndescription: \"Tomas was born on March 15\"\ntype: fact\nschema_version: 1\ncreated: \"2026-01-01\"\n---\n\nTomas was born on March 15. He celebrates every year with asado.\n```",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 2,
-      "latencyMs": 7607,
-      "timestamp": "2026-03-27T15:21:02.571Z"
+      "latencyMs": 7331,
+      "timestamp": "2026-03-27T14:50:33.991Z"
     },
     {
       "case": "remember-fact",
@@ -582,15 +582,15 @@
         }
       ],
       "judgeResults": null,
-      "response": "Guardado como `alergia-mani`.",
+      "response": "Guardado como `alergia-mani`. Lo tengo en cuenta.",
       "vaultDiff": {
         "created": 1,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 4,
-      "latencyMs": 11779,
-      "timestamp": "2026-03-27T15:21:14.880Z"
+      "latencyMs": 14279,
+      "timestamp": "2026-03-27T14:50:48.780Z"
     },
     {
       "case": "reminder-timezone",
@@ -617,21 +617,21 @@
         }
       ],
       "judgeResults": null,
-      "response": "Listo. Te recuerdo hoy a las **23:00 UTC** que tenés que tomar la pastilla.",
+      "response": "Listo. Te aviso hoy a las **23:00 UTC** para tomar la pastilla.",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 0,
-      "latencyMs": 6895,
-      "timestamp": "2026-03-27T15:21:22.298Z"
+      "latencyMs": 6031,
+      "timestamp": "2026-03-27T14:50:55.315Z"
     },
     {
       "case": "search-existing-note",
       "run": 1,
-      "passRate": 1,
-      "passed": 3,
+      "passRate": 0.6666666666666666,
+      "passed": 2,
       "total": 3,
       "scoreResults": [
         {
@@ -647,8 +647,8 @@
             "type": "response_matches",
             "pattern": "(?i)(march 15|15 de marzo|marzo)"
           },
-          "pass": true,
-          "reason": "Response matched /(?i)(march 15|15 de marzo|marzo)/"
+          "pass": false,
+          "reason": "Response did NOT match /(?i)(march 15|15 de marzo|marzo)/"
         },
         {
           "assertion": {
@@ -660,21 +660,21 @@
         }
       ],
       "judgeResults": null,
-      "response": "El cumpleaños de Tomas es el **15 de marzo**. (`eval-seed-birthday`)",
+      "response": "No tengo nada guardado sobre el cumpleaños de Tomas. Si me lo decís, lo guardo.",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
-      "mcpLogCount": 4,
-      "latencyMs": 8300,
-      "timestamp": "2026-03-27T15:21:31.311Z"
+      "mcpLogCount": 2,
+      "latencyMs": 8977,
+      "timestamp": "2026-03-27T14:51:05.006Z"
     },
     {
       "case": "speed-search-broad",
       "run": 1,
-      "passRate": 1,
-      "passed": 3,
+      "passRate": 0.6666666666666666,
+      "passed": 2,
       "total": 3,
       "scoreResults": [
         {
@@ -688,10 +688,10 @@
         {
           "assertion": {
             "type": "response_matches",
-            "pattern": "(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)"
+            "pattern": "(?i)(carlos|sofia|lucas|maria)"
           },
-          "pass": true,
-          "reason": "Response matched /(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)/"
+          "pass": false,
+          "reason": "Response did NOT match /(?i)(carlos|sofia|lucas|maria)/"
         },
         {
           "assertion": {
@@ -699,19 +699,19 @@
             "max_ms": 45000
           },
           "pass": true,
-          "reason": "Latency 13241ms <= 45000ms"
+          "reason": "Latency 11473ms <= 45000ms"
         }
       ],
       "judgeResults": null,
-      "response": "No hay ninguna persona guardada en el vault todavía. La nota sobre Sofía (data scientist en Globant) aparece en el historial de mensajes pero no llegó a guardarse — ¿querés que la guarde ahora?",
+      "response": "No tengo ninguna persona guardada en el vault. La nota de Sofía (data scientist en Globant) no fue persistida en sesiones anteriores.\n\n¿Querés que la guarde ahora?",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
-      "mcpLogCount": 6,
-      "latencyMs": 13241,
-      "timestamp": "2026-03-27T15:21:45.099Z"
+      "mcpLogCount": 4,
+      "latencyMs": 11473,
+      "timestamp": "2026-03-27T14:51:17.020Z"
     },
     {
       "case": "speed-search-simple",
@@ -742,19 +742,19 @@
             "max_ms": 30000
           },
           "pass": true,
-          "reason": "Latency 16904ms <= 30000ms"
+          "reason": "Latency 5993ms <= 30000ms"
         }
       ],
       "judgeResults": null,
-      "response": "No tengo nada guardado sobre Carlos en el vault todavía.\n\nVeo que en el historial de contexto mencionaste que tu viejo se llama Carlos, es ingeniero y vive en Córdoba. ¿Querés que lo guarde?",
+      "response": "No tengo nada guardado sobre Carlos todavía. Pero en tu mensaje anterior me contaste que tu viejo se llama Carlos, es ingeniero y vive en Córdoba — ¿querés que lo guarde en el vault?",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 2,
-      "latencyMs": 16904,
-      "timestamp": "2026-03-27T15:22:02.515Z"
+      "latencyMs": 5993,
+      "timestamp": "2026-03-27T14:51:23.560Z"
     },
     {
       "case": "speed-write-and-search",
@@ -777,7 +777,7 @@
             "max_ms": 30000
           },
           "pass": true,
-          "reason": "Latency 11123ms <= 30000ms"
+          "reason": "Latency 11647ms <= 30000ms"
         },
         {
           "assertion": {
@@ -801,19 +801,19 @@
             "max_ms": 30000
           },
           "pass": true,
-          "reason": "Latency 8120ms <= 30000ms"
+          "reason": "Latency 6259ms <= 30000ms"
         }
       ],
       "judgeResults": null,
-      "response": "Hoy almorzaste con **Pedro** en la parrilla de Palermo. Me lo contaste antes en esta misma conversación, aunque todavía no está guardado en el vault. ¿Querés que lo guarde?",
+      "response": "Hoy almorzaste con **Pedro** en la parrilla de Palermo. Me lo contaste vos mismo hace un momento, aunque aún no está guardado en el vault. ¿Querés que lo guarde?",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 6,
-      "latencyMs": 19243,
-      "timestamp": "2026-03-27T15:22:22.669Z"
+      "latencyMs": 17906,
+      "timestamp": "2026-03-27T14:51:42.287Z"
     },
     {
       "case": "store-file-awareness",
@@ -840,15 +840,15 @@
         }
       ],
       "judgeResults": null,
-      "response": "Sí, podés guardar archivos. Funciona así:\n\n**Qué tipos acepta:**\n- Imágenes (JPG, PNG, etc.)\n- PDFs\n- Documentos\n- Cualquier archivo hasta **10MB**\n\n**Cómo hacerlo:**\nSimplemente mandame el archivo por Telegram. Yo lo guardo en el vault junto con una nota vinculada que describe el contenido y el contexto. Después podés pedirme que lo recupere cuando quieras.\n\n**Qué guardo junto al archivo:**\n- El archivo en sí (en `vault/assets/`)\n- Una nota con título, descripción y contexto de por qué lo guard",
+      "response": "No puedo guardar archivos directamente — no tengo sistema de archivos accesible para vos.\n\nLo que sí puedo hacer es **guardar información como notas en mi vault**:\n\n- **Hechos, ideas, decisiones** → las capturo como notas atómicas\n- **Personas** → nombre, rol, empresa, contexto\n- **Proyectos** → estado, decisiones, próximos pasos\n- **Recordatorios** → te aviso en el momento que pidas\n\nTodo persiste entre conversaciones. Si querés guardar el *contenido* de un archivo (texto, código, una lista), p",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 0,
-      "latencyMs": 10497,
-      "timestamp": "2026-03-27T15:22:33.706Z"
+      "latencyMs": 6684,
+      "timestamp": "2026-03-27T14:51:49.475Z"
     },
     {
       "case": "update-map",
@@ -885,21 +885,21 @@
         }
       ],
       "judgeResults": null,
-      "response": "Listo. `eval-seed-birthday` agregada al mapa `personal-map` bajo la sección **Datos Personales**.",
+      "response": "Listo. `eval-seed-birthday` agregada al mapa `personal-map` en la sección **Datos Personales**.",
       "vaultDiff": {
         "created": 1,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 2,
-      "latencyMs": 13855,
-      "timestamp": "2026-03-27T15:22:48.052Z"
+      "latencyMs": 10008,
+      "timestamp": "2026-03-27T14:51:59.999Z"
     },
     {
       "case": "web-search",
       "run": 1,
-      "passRate": 1,
-      "passed": 2,
+      "passRate": 0.5,
+      "passed": 1,
       "total": 2,
       "scoreResults": [
         {
@@ -913,22 +913,22 @@
         {
           "assertion": {
             "type": "response_matches",
-            "pattern": "(\\d+\\.\\d+|LTS|Current|latest|última|actual)"
+            "pattern": "\\d+\\.\\d+"
           },
-          "pass": true,
-          "reason": "Response matched /(\\d+\\.\\d+|LTS|Current|latest|última|actual)/"
+          "pass": false,
+          "reason": "Response did NOT match /\\d+\\.\\d+/"
         }
       ],
       "judgeResults": null,
-      "response": "No tengo acceso a internet, así que no puedo consultarlo en tiempo real.\n\nLo que sí sé es que al corte de mi entrenamiento, **Node.js 22** era la versión LTS activa y **Node.js 23** la versión current. Pero para confirmar la última versión exacta, podés consultarlo directamente en:\n\n👉 [nodejs.org/en/download](https://nodejs.org/en/download)\n\n¿Querés que guarde un recordatorio para que lo revises?",
+      "response": "No tengo acceso a internet. No puedo hacer búsquedas web ni consultar sitios externos.\n\nPara ver la última versión de Node.js, podés ir directamente a [nodejs.org](https://nodejs.org) o correr `node --version` si ya lo tenés instalado.\n\n¿Querés que guarde un recordatorio para que lo chequees más tarde?",
       "vaultDiff": {
         "created": 0,
         "modified": 0,
         "deleted": 0
       },
       "mcpLogCount": 0,
-      "latencyMs": 5134,
-      "timestamp": "2026-03-27T15:22:53.691Z"
+      "latencyMs": 5866,
+      "timestamp": "2026-03-27T14:52:06.395Z"
     }
   ]
 }
