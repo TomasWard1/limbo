@@ -24,8 +24,22 @@
     <!-- Overview -->
     <section id="view-overview" class="view active">
       <div class="overview-header">
-        <h1>Latest Run</h1>
+        <h1>Accuracy</h1>
         <p class="run-id" id="overview-run-id"></p>
+      </div>
+      <div class="toolbar-grid">
+        <label class="control-group">
+          <span>Model Profile</span>
+          <select id="profile-select"></select>
+        </label>
+        <label class="control-group">
+          <span>Accuracy Run</span>
+          <select id="overview-run-select"></select>
+        </label>
+        <label class="control-group">
+          <span>Accuracy Baseline</span>
+          <select id="overview-baseline-select"></select>
+        </label>
       </div>
       <div class="stats-grid" id="overview-stats"></div>
       <div class="difficulty-grid" id="overview-difficulty"></div>
@@ -51,7 +65,17 @@
     <!-- Speed -->
     <section id="view-speed" class="view">
       <h1>Speed — vault_search Performance</h1>
-      <p class="section-sub">Only cases tagged with "speed" or "vault_search"</p>
+      <p class="section-sub" id="speed-run-id">Only cases tagged with "speed" or "vault_search"</p>
+      <div class="toolbar-grid">
+        <label class="control-group">
+          <span>Speed Run</span>
+          <select id="speed-run-select"></select>
+        </label>
+        <label class="control-group">
+          <span>Speed Baseline</span>
+          <select id="speed-baseline-select"></select>
+        </label>
+      </div>
       <div class="stats-grid" id="speed-stats"></div>
       <div class="speed-chart-container" id="speed-chart"></div>
       <div class="section-title">Speed Cases</div>
