@@ -11,7 +11,7 @@ services:
       - ./vault-seed:/data/vault
       - limbo-eval-data:/data
       - limbo-eval-zc:/home/limbo/.zeroclaw
-      - ~/.limbo-dev/config.env:/data/config/.env:ro
+      - ./config.eval.env:/data/config/.env:ro
     secrets:
       - llm_api_key
       - gateway_token
