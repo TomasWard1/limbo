@@ -168,6 +168,44 @@ describe('cron_created', () => {
   });
 });
 
+// ── latency_under ───────────────────────────────────────────────────────────
+
+describe('latency_under', () => {
+  it('passes when latency is under max', () => {
+    const results = score(
+      [{ type: 'latency_under', max_ms: 5000 }],
+      { response: '', mcpLogs: [], vaultDiff: baseDiff, cronJobs: [], latencyMs: 3000 }
+    );
+    assert.equal(results[0].pass, true);
+  });
+
+  it('fails when latency exceeds max', () => {
+    const results = score(
+      [{ type: 'latency_under', max_ms: 1000 }],
+      { response: '', mcpLogs: [], vaultDiff: baseDiff, cronJobs: [], latencyMs: 3000 }
+    );
+    assert.equal(results[0].pass, false);
+  });
+
+  it('passes when latency equals max exactly', () => {
+    const results = score(
+      [{ type: 'latency_under', max_ms: 3000 }],
+      { response: '', mcpLogs: [], vaultDiff: baseDiff, cronJobs: [], latencyMs: 3000 }
+    );
+    assert.equal(results[0].pass, true);
+  });
+
+  it('fails when latencyMs is missing', () => {
+    const results = score(
+      [{ type: 'latency_under', max_ms: 5000 }],
+      { response: '', mcpLogs: [], vaultDiff: baseDiff, cronJobs: [] }
+    );
+    assert.equal(results[0].pass, false);
+  });
+});
+
+// ── unknown type ────────────────────────────────────────────────────────────
+
 describe('unknown assertion type', () => {
   it('fails with reason', () => {
     const results = score(

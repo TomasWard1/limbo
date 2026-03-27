@@ -195,6 +195,7 @@ async function cmdRun(args) {
         let lastResponse = '';
         let lastVaultDiff = { created: [], modified: [], deleted: [] };
         let totalMcpLogs = 0;
+        let totalLatencyMs = 0;
 
         for (let s = 0; s < steps.length; s++) {
           const step = steps[s];
@@ -206,9 +207,12 @@ async function cmdRun(args) {
 
           // Send message
           console.log(`  Sending${stepLabel}: "${step.input}"`);
+          const startMs = Date.now();
           const { text: response, mcpLogs } = sendMessage(step.input, CONTAINER);
+          const latencyMs = Date.now() - startMs;
           lastResponse = response;
           console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
+          console.log(`  Latency: ${latencyMs}ms`);
 
           // Snapshot after
           const after = snapshot(VAULT_SEED);
@@ -221,9 +225,10 @@ async function cmdRun(args) {
           const cronJobs = cronsAfter.filter(j => !beforeIds.has(j.id));
 
           totalMcpLogs += mcpLogs.length;
+          totalLatencyMs += latencyMs;
 
           // Score assertions for this step
-          const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs });
+          const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs });
           allScoreResults = allScoreResults.concat(stepScores);
 
           const passed = stepScores.filter(r => r.pass).length;
@@ -273,6 +278,7 @@ async function cmdRun(args) {
             deleted: lastVaultDiff.deleted.length,
           },
           mcpLogCount: totalMcpLogs,
+          latencyMs: totalLatencyMs,
           timestamp: new Date().toISOString(),
         });
       } catch (err) {
