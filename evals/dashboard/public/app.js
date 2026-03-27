@@ -214,9 +214,7 @@ function formatRunOption(run) {
 
 function renderNavMeta() {
   const navMeta = document.getElementById('nav-meta');
-  navMeta.replaceChildren(
-    metaBadge(getSelectedProfileLabel())
-  );
+  navMeta.replaceChildren();
 }
 
 function setupNav() {
@@ -621,11 +619,6 @@ async function doCompare() {
     return 0;
   });
 
-  const header = createEl('div', { className: 'compare-meta' }, [
-    metaBadge(`A: ${runA.meta.profileLabel} \u00B7 ${runA.kind} \u00B7 ${runA.id}`),
-    metaBadge(`B: ${runB.meta.profileLabel} \u00B7 ${runB.kind} \u00B7 ${runB.id}`),
-  ]);
-
   // Accuracy table
   const accTitle = createEl('div', { className: 'section-title', style: { marginTop: '16px' } }, 'Accuracy Comparison');
   const table = createEl('table', { className: 'compare-table' });
@@ -659,7 +652,7 @@ async function doCompare() {
 
   // Speed comparison table (only speed cases with searchTimeMs)
   const speedRows = rows.filter(r => r.isSpeed && (r.searchA !== null || r.searchB !== null));
-  const elements = [header, accTitle, table];
+  const elements = [accTitle, table];
 
   if (speedRows.length) {
     const speedTitle = createEl('div', { className: 'section-title', style: { marginTop: '24px' } }, 'Speed Comparison (searchTimeMs)');
