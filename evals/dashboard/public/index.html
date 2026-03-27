@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Limbo Eval Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand">
+      <span class="nav-logo">L</span>
+      <span class="nav-title">Limbo Eval</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-view="overview">Overview</button>
+      <button class="nav-tab" data-view="results">Results</button>
+      <button class="nav-tab" data-view="history">History</button>
+      <button class="nav-tab" data-view="compare">Compare</button>
+      <button class="nav-tab" data-view="rubrics">Rubrics</button>
+    </div>
+    <div class="nav-meta" id="nav-meta"></div>
+  </nav>
+
+  <main class="main">
+    <!-- Overview -->
+    <section id="view-overview" class="view active">
+      <div class="overview-header">
+        <h1>Latest Run</h1>
+        <p class="run-id" id="overview-run-id"></p>
+      </div>
+      <div class="stats-grid" id="overview-stats"></div>
+      <div class="difficulty-grid" id="overview-difficulty"></div>
+      <div class="section-title">Results by Case</div>
+      <div class="filters">
+        <select id="filter-difficulty">
+          <option value="">All difficulties</option>
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+        <select id="filter-status">
+          <option value="">All statuses</option>
+          <option value="pass">Passed</option>
+          <option value="fail">Failed</option>
+          <option value="partial">Partial</option>
+        </select>
+        <input type="text" id="filter-search" placeholder="Search cases...">
+      </div>
+      <div class="results-list" id="overview-results"></div>
+    </section>
+
+    <!-- Individual Result -->
+    <section id="view-results" class="view">
+      <div id="result-detail"></div>
+    </section>
+
+    <!-- History -->
+    <section id="view-history" class="view">
+      <h1>Run History</h1>
+      <div class="history-chart" id="history-chart"></div>
+      <div class="history-list" id="history-list"></div>
+    </section>
+
+    <!-- Compare -->
+    <section id="view-compare" class="view">
+      <h1>Compare Runs</h1>
+      <div class="compare-selectors">
+        <div class="compare-col">
+          <label>Run A</label>
+          <select id="compare-a"></select>
+        </div>
+        <div class="compare-col">
+          <label>Run B</label>
+          <select id="compare-b"></select>
+        </div>
+        <button class="btn-primary" id="compare-btn">Compare</button>
+      </div>
+      <div id="compare-results"></div>
+    </section>
+
+    <!-- Rubrics -->
+    <section id="view-rubrics" class="view">
+      <h1>Judge Rubrics</h1>
+      <div id="rubrics-content"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
