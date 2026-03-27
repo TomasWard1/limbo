@@ -37,11 +37,11 @@ function score(assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs }
 /**
  * Build a RegExp, extracting inline (?i) flag into the JS 'i' flag.
  */
-function buildRegex(pattern) {
-  let flags = '';
+function buildRegex(pattern, defaultFlags) {
+  let flags = defaultFlags || '';
   let p = pattern;
   if (p.startsWith('(?i)')) {
-    flags = 'i';
+    flags = flags.includes('i') ? flags : flags + 'i';
     p = p.slice(4);
   }
   return new RegExp(p, flags);
@@ -61,7 +61,7 @@ function checkToolCalled(assertion, mcpLogs) {
 }
 
 function checkParamMatch(assertion, mcpLogs) {
-  const regex = new RegExp(assertion.pattern);
+  const regex = buildRegex(assertion.pattern);
   const match = mcpLogs.some(
     (log) =>
       log.tool === assertion.tool &&
@@ -91,7 +91,7 @@ function checkResponseMatches(assertion, response) {
 }
 
 function checkVaultNoteCreated(assertion, vaultDiff) {
-  const regex = new RegExp(assertion.pattern, 'i');
+  const regex = buildRegex(assertion.pattern, 'i');
   const found = (vaultDiff.created || []).some(
     (f) => regex.test(f.path) || regex.test(f.content || '')
   );
@@ -109,7 +109,7 @@ function checkVaultFileExists(assertion, vaultDiff) {
   if (!pattern) {
     return { assertion, pass: false, reason: 'vault_file_exists requires "pattern" or "path"' };
   }
-  const regex = new RegExp(pattern, 'i');
+  const regex = buildRegex(pattern, 'i');
   // Check both created and modified files
   const allFiles = [...(vaultDiff.created || []), ...(vaultDiff.modified || [])];
   const found = allFiles.some((f) => regex.test(f.path));
@@ -127,12 +127,12 @@ function checkCronCreated(assertion, cronJobs) {
   if (!pattern) {
     return { assertion, pass: false, reason: 'cron_created requires "pattern"' };
   }
-  const regex = new RegExp(pattern, 'i');
+  const regex = buildRegex(pattern, 'i');
   const found = cronJobs.some((job) => regex.test(job.prompt || '') || regex.test(job.raw || ''));
 
   // Optional timezone check
   if (found && assertion.timezone) {
-    const tzRegex = new RegExp(assertion.timezone, 'i');
+    const tzRegex = buildRegex(assertion.timezone, 'i');
     const tzMatch = cronJobs.some((job) => tzRegex.test(job.raw || ''));
     if (!tzMatch) {
       return {

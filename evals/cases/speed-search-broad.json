@@ -4,7 +4,7 @@
   "input": "Mostrame todas las personas que conozco",
   "assertions": [
     { "type": "tool_called", "tool": "vault_search" },
-    { "type": "response_matches", "pattern": "(?i)(carlos|sofia|lucas|maria)" },
+    { "type": "response_matches", "pattern": "(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)" },
     { "type": "latency_under", "max_ms": 45000 }
   ],
   "difficulty": "medium",

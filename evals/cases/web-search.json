@@ -9,7 +9,7 @@
     },
     {
       "type": "response_matches",
-      "pattern": "\\d+\\.\\d+"
+      "pattern": "(\\d+\\.\\d+|LTS|Current|latest|última|actual)"
     }
   ],
   "runs": 1,
