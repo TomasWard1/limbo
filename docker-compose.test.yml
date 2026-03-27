@@ -12,6 +12,11 @@ services:
     volumes:
       - limbo-test-data:/data
       - limbo-test-state:/home/limbo/.zeroclaw
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     tmpfs:
       - /tmp:size=100M
 
