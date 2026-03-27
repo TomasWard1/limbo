@@ -34,6 +34,12 @@ function buildFrontmatter(note) {
   if (note.source) {
     lines.push(`source: ${note.source}`);
   }
+  if (note.asset_path) {
+    lines.push(`asset_path: "${escapeYaml(note.asset_path)}"`);
+  }
+  if (note.asset_type) {
+    lines.push(`asset_type: "${escapeYaml(note.asset_type)}"`);
+  }
   if (note.topics && note.topics.length > 0) {
     lines.push("topics:");
     for (const topic of note.topics) {

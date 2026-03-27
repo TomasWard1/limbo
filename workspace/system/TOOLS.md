@@ -1,6 +1,6 @@
 # Vault Tools & Processing Rules
 
-You have 4 vault tools via MCP. ZeroClaw invokes these natively — call them by name.
+You have 6 vault tools via MCP. ZeroClaw invokes these natively — call them by name.
 
 **⚠️ ALL user information goes to the vault via these tools. Always.**
 
@@ -25,6 +25,20 @@ For recall questions ("what do you know about X?"):
 3. `vault_read` on top results if snippets aren't enough
 4. Synthesize and respond — cite note IDs when quoting
 5. If nothing found, say so honestly. Do not guess.
+
+For file storage (images, PDFs, documents):
+
+1. `vault_search` — check if a note about this file already exists
+2. `vault_store_file` — store the file with a contextual linked note
+3. `vault_update_map` — if a relevant MOC exists
+4. **Wait for tool results.** Then confirm with the note ID.
+
+**File storage rules:**
+- Always use note type `source` for file-linked notes
+- The `description` must describe the file's **content**, not just "a PDF was uploaded"
+- The `content` field must include conversation context — why the file was saved
+- Suggested `subdirectory` values: `images`, `documents`, `screenshots`, `receipts`
+- Max file size: 10MB
 
 ---
 
@@ -107,3 +121,37 @@ Use when: you've written a note that belongs to a MOC, or user asks to organize.
 - Creates map file and/or section if they don't exist
 - Always append — never overwrite existing entries
 - Use descriptive section names: "Ideas", "People", "Open Questions"
+
+## vault_store_file
+
+Use when: user sends a file (image, PDF, document) to save in the vault.
+
+```json
+{
+  "noteId": "receipt-hardware-2026-03",
+  "title": "Hardware Store Receipt",
+  "description": "Receipt for drill and screws from hardware store, March 2026",
+  "content": "User sent this receipt from a hardware store purchase.",
+  "filename": "receipt.pdf",
+  "fileData": "<base64>",
+  "subdirectory": "documents",
+  "source": "telegram"
+}
+```
+
+- Every file gets a linked note — no exceptions
+- The note is searchable via `vault_search` like any other note
+- Files stored in `vault/assets/{subdirectory}/` with a timestamped filename
+- The linked note's frontmatter includes `asset_path` and `asset_type`
+
+## vault_get_file
+
+Use when: user asks to see or retrieve a previously stored file.
+
+```json
+{ "noteId": "receipt-hardware-2026-03" }
+```
+
+- Returns the file as base64 (images returned as image content blocks)
+- Only works on notes with `asset_path` in frontmatter
+- If the note has no linked file, returns an error

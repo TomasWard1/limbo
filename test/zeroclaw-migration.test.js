@@ -184,9 +184,9 @@ test('entrypoint.sh renders config.toml from template via envsubst', () => {
 
 // ─── 7. Migration version bumped correctly ──────────────────────────────────
 
-test('migration index has CURRENT_DATA_VERSION = 3', () => {
+test('migration index has CURRENT_DATA_VERSION = 4', () => {
   const idx = read('migrations/index.js');
-  assert.ok(idx.includes('CURRENT_DATA_VERSION = 3'));
+  assert.ok(idx.includes('CURRENT_DATA_VERSION = 4'));
 });
 
 test('migration 003-zeroclaw-migration.js exists', () => {
