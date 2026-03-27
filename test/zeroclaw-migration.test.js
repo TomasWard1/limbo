@@ -74,7 +74,7 @@ test('config.toml.template does NOT contain unsupported sections', () => {
 
 test('config.toml.template uses envsubst variables', () => {
   const toml = read('config.toml.template');
-  const vars = ['${MODEL_PROVIDER}', '${MODEL_NAME}', '${LIMBO_PORT}'];
+  const vars = ['${MODEL_PROVIDER}', '${MODEL_NAME}', '${LIMBO_PORT}', '${RUNTIME_REASONING_EFFORT}'];
   for (const v of vars) {
     assert.ok(toml.includes(v), `Missing envsubst variable: ${v}`);
   }

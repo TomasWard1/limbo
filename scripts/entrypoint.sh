@@ -40,6 +40,7 @@ LLM_API_KEY="${_secret_llm:-${LLM_API_KEY:-}}"
 # ── Defaults ─────────────────────────────────────────────────────────────────
 MODEL_PROVIDER="${MODEL_PROVIDER:-anthropic}"
 MODEL_NAME="${MODEL_NAME:-claude-opus-4-6}"
+RUNTIME_REASONING_EFFORT="${RUNTIME_REASONING_EFFORT:-medium}"
 TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
 TELEGRAM_BOT_TOKEN="${_secret_telegram:-${TELEGRAM_BOT_TOKEN:-}}"
 VOICE_ENABLED="${VOICE_ENABLED:-false}"
@@ -214,8 +215,8 @@ else
   fi
 
   log "INFO  Generating ZeroClaw config from template"
-  export MODEL_PROVIDER MODEL_NAME LIMBO_PORT
-  envsubst '$MODEL_PROVIDER $MODEL_NAME $LIMBO_PORT' \
+  export MODEL_PROVIDER MODEL_NAME LIMBO_PORT RUNTIME_REASONING_EFFORT
+  envsubst '$MODEL_PROVIDER $MODEL_NAME $LIMBO_PORT $RUNTIME_REASONING_EFFORT' \
     < /app/config.toml.template > "$ZEROCLAW_CONFIG_PATH"
 
   # Telegram: channel is enabled by section presence, not a boolean flag.
