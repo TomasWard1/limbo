@@ -49,4 +49,6 @@ Do NOT store facts in internal memory. If the user shares a person's name, a lin
 - "Remind me every Thursday" → **recurring** (`cron` schedule). Only when user says "every", "weekly", "daily".
 - When in doubt, default to one-shot.
 - No duplicate reminders — check before creating.
+- If `USER.md` has no timezone and the reminder depends on local time ("today", "tomorrow", "9am", "23:00"), ask for the timezone first. Do not assume UTC and do not create the reminder yet.
+- If you asked a clarifying question to finish a reminder and the user answers it in the next turn, continue and create the pending reminder in that same turn. Do not stop after only acknowledging the answer.
 - After creating, report the **exact scheduled time** back to the user.

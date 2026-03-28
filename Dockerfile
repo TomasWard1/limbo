@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+ARG ZEROCLAW_IMAGE=ghcr.io/tomasward1/zeroclaw:v0.6.3-custom
 # ──────────────────────────────────────────────
 # Stage 1: deps — install MCP server dependencies
 # ──────────────────────────────────────────────
@@ -22,8 +23,9 @@ RUN cd mcp-server \
 # Stage 2: ZeroClaw binary
 # Custom build: v0.6.3 + rag-pdf feature enabled.
 # Build with: ./scripts/build-zeroclaw.sh v0.6.3
+# Override with: --build-arg ZEROCLAW_IMAGE=zeroclaw:codex-openai-parity-fast-local
 # ──────────────────────────────────────────────
-FROM ghcr.io/tomasward1/zeroclaw:v0.6.3-custom AS zeroclaw
+FROM ${ZEROCLAW_IMAGE} AS zeroclaw
 
 # ──────────────────────────────────────────────
 # Stage 3: final runtime image

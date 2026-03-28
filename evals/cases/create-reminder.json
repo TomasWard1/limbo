@@ -1,22 +1,43 @@
 {
   "name": "create-reminder",
-  "description": "User asks Limbo to set a reminder — should create a cron job, not a vault note",
-  "input": "Recordame mañana a las 9am que tengo que llamar al banco",
-  "assertions": [
+  "description": "First reminder flow should ask for missing timezone, persist it to USER.md, then create the reminder using that timezone",
+  "steps": [
     {
-      "type": "cron_created",
-      "pattern": "banco|bank"
+      "input": "Recordame mañana a las 9am que tengo que llamar al banco",
+      "assertions": [
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(timezone|huso horario|zona horaria)"
+        }
+      ]
     },
     {
-      "type": "response_matches",
-      "pattern": "(?i)(reminder|recordatorio|avisarte|cron|programado|mañana)"
+      "input": "Estoy en America/Buenos_Aires",
+      "assertions": [
+        {
+          "type": "cron_created",
+          "pattern": "banco|bank",
+          "timezone": "America/Buenos_Aires",
+          "local_hour": 9,
+          "local_minute": 0
+        },
+        {
+          "type": "user_profile_matches",
+          "pattern": "Timezone:\\*\\*\\s*America/Buenos_Aires"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(reminder|recordatorio|avisarte|programado|mañana)"
+        }
+      ]
     }
   ],
   "runs": 1,
   "pass_threshold": 1.0,
   "tags": [
     "cron",
-    "reminder"
+    "reminder",
+    "timezone"
   ],
   "difficulty": "easy"
 }

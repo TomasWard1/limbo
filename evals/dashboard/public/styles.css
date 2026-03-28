@@ -446,6 +446,9 @@ h1, h2, h3, h4 {
 }
 
 .assertion-row:last-child { border-bottom: none; }
+.assertion-row.compact {
+  padding: 6px 0;
+}
 
 .assertion-icon {
   flex-shrink: 0;
@@ -485,6 +488,86 @@ h1, h2, h3, h4 {
   color: var(--slate-600);
   line-height: 1.6;
   white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail-note {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--slate-400);
+}
+
+.transcript-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step-card {
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-sm);
+  background: var(--slate-50);
+  padding: 12px;
+}
+
+.step-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.step-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--slate-700);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.step-meta {
+  font-size: 11px;
+  color: var(--slate-400);
+}
+
+.transcript-turn + .transcript-turn,
+.tool-trace-list,
+.step-assertions {
+  margin-top: 10px;
+}
+
+.transcript-speaker {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--slate-400);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+}
+
+.tool-trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-trace-row {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 180px) 1fr;
+  gap: 8px;
+  align-items: start;
+  font-size: 11px;
+  color: var(--slate-500);
+}
+
+.tool-trace-tool {
+  font-weight: 700;
+  color: var(--slate-700);
+}
+
+.tool-trace-detail {
   word-break: break-word;
 }
 
