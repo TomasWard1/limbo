@@ -131,9 +131,11 @@ test('Dockerfile copies config.toml.template', () => {
 
 // ─── 5. docker-compose.yml uses ZeroClaw volumes and healthcheck ────────────
 
-test('docker-compose.yml uses limbo-zeroclaw-state volume', () => {
+test('docker-compose.yml uses bind mount for zeroclaw-state', () => {
   const dc = read('docker-compose.yml');
-  assert.ok(dc.includes('limbo-zeroclaw-state'));
+  assert.ok(dc.includes('zeroclaw-state'), 'Must include zeroclaw-state bind mount');
+  assert.ok(dc.includes('.zeroclaw'), 'Bind mount must target .zeroclaw directory');
+  assert.ok(!dc.includes('limbo-zeroclaw-state'), 'Must not use named volume — bind mount expected');
   assert.ok(!dc.includes('limbo-openclaw-state'), 'Must not reference old openclaw volume');
 });
 
