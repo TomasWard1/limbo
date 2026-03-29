@@ -7,7 +7,7 @@
  * @param {{ response: string, mcpLogs: Array, vaultDiff: object }} data
  * @returns {Array<{ assertion: object, pass: boolean, reason: string }>}
  */
-function score(assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs }) {
+function score(assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs, userProfile }) {
   return assertions.map((assertion) => {
     try {
       switch (assertion.type) {
@@ -25,6 +25,8 @@ function score(assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs }
           return checkCronCreated(assertion, cronJobs || []);
         case 'latency_under':
           return checkLatencyUnder(assertion, latencyMs);
+        case 'user_profile_matches':
+          return checkUserProfileMatches(assertion, userProfile);
         default:
           return { assertion, pass: false, reason: `Unknown assertion type: ${assertion.type}` };
       }
@@ -134,6 +136,18 @@ function checkCronCreated(assertion, cronJobs) {
   if (found && assertion.timezone) {
     const tzRegex = buildRegex(assertion.timezone, 'i');
     const tzMatch = cronJobs.some((job) => tzRegex.test(job.raw || ''));
+    if (!tzMatch && assertion.local_hour != null) {
+      const localMatch = cronJobs.some((job) =>
+        cronMatchesLocalTime(job, assertion.timezone, assertion.local_hour, assertion.local_minute || 0)
+      );
+      if (localMatch) {
+        return {
+          assertion,
+          pass: true,
+          reason: `Cron matched "${pattern}" and resolves to ${assertion.local_hour}:${String(assertion.local_minute || 0).padStart(2, '0')} in ${assertion.timezone}`,
+        };
+      }
+    }
     if (!tzMatch) {
       return {
         assertion,
@@ -152,6 +166,25 @@ function checkCronCreated(assertion, cronJobs) {
   };
 }
 
+function cronMatchesLocalTime(job, timezone, expectedHour, expectedMinute) {
+  const raw = job?.raw || job?.schedule || '';
+  const match = raw.match(/at:\s*([0-9T:\-.]+Z)/i);
+  if (!match) return false;
+
+  const dt = new Date(match[1]);
+  if (Number.isNaN(dt.getTime())) return false;
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(dt);
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value);
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value);
+  return hour === expectedHour && minute === expectedMinute;
+}
+
 function checkLatencyUnder(assertion, latencyMs) {
   const maxMs = assertion.max_ms;
   if (!maxMs || typeof latencyMs !== 'number') {
@@ -164,6 +197,22 @@ function checkLatencyUnder(assertion, latencyMs) {
     reason: pass
       ? `Latency ${latencyMs}ms <= ${maxMs}ms`
       : `Latency ${latencyMs}ms EXCEEDED ${maxMs}ms`,
+  };
+}
+
+function checkUserProfileMatches(assertion, userProfile) {
+  const pattern = assertion.pattern;
+  if (!pattern) {
+    return { assertion, pass: false, reason: 'user_profile_matches requires "pattern"' };
+  }
+  const regex = buildRegex(pattern, 'i');
+  const pass = regex.test(userProfile || '');
+  return {
+    assertion,
+    pass,
+    reason: pass
+      ? `USER.md matched /${pattern}/i`
+      : `USER.md did NOT match /${pattern}/i`,
   };
 }
 

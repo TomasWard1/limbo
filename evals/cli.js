@@ -26,7 +26,7 @@ const VAULT_SEED = path.join(EVALS_DIR, 'vault-seed');
 
 // ── Message sending ─────────────────────────────────────────────────────────
 
-function sendMessage(message, container) {
+function sendMessage(message, container, sessionStateFile = null) {
   const runtimeConfig = readZeroClawConfig(container);
   const dockerArgs = ['exec'];
 
@@ -40,8 +40,13 @@ function sendMessage(message, container) {
     'zeroclaw', 'agent',
     '--provider', runtimeConfig.provider,
     '--model', runtimeConfig.model,
-    '--message', message,
   );
+
+  if (sessionStateFile) {
+    dockerArgs.push('--session-state-file', sessionStateFile);
+  }
+
+  dockerArgs.push('--message', message);
 
   const proc = spawnSync('docker', dockerArgs, { encoding: 'utf8', timeout: 130000 });
 
@@ -110,6 +115,70 @@ function clearCrons(container) {
   }
 }
 
+function readUserProfile(container) {
+  try {
+    return execFileSync('docker', [
+      'exec', container, 'cat', '/home/limbo/.zeroclaw/workspace/USER.md',
+    ], { encoding: 'utf8', timeout: 5000 });
+  } catch {
+    return '';
+  }
+}
+
+function resetUserProfile(container) {
+  spawnSync('docker', [
+    'exec',
+    container,
+    'sh',
+    '-lc',
+    [
+      'mkdir -p /home/limbo/.zeroclaw/workspace',
+      'cat > /home/limbo/.zeroclaw/workspace/USER.md <<\'EOF\'',
+      '# About Your User',
+      '',
+      'This file was generated at first run from environment variables. It personalizes how you interact with your user.',
+      '',
+      '## Identity',
+      '',
+      '- **Name:** Tomas',
+      '- **Timezone:** ',
+      '- **Language:** Spanish',
+      '',
+      '## Communication Preferences',
+      '',
+      'Respond in **Spanish**. Keep responses concise by default unless the user asks for more detail.',
+      '',
+      'Address the user as **Tomas** when it feels natural, but don\'t overdo it.',
+      '',
+      '## Additional Context',
+      '',
+      'No additional context provided.',
+      'EOF',
+    ].join('\n'),
+  ], { timeout: 5000 });
+}
+
+function extractTimezoneFromMessage(message) {
+  if (!message) return null;
+  const trimmed = String(message).trim();
+  const ianaMatch = trimmed.match(/\b([A-Za-z_]+\/[A-Za-z_]+(?:\/[A-Za-z_]+)?)\b/);
+  if (ianaMatch) return ianaMatch[1];
+  const argentinaMatch = trimmed.match(/\b(argentina|buenos aires|gmt-?3|utc-?3)\b/i);
+  if (argentinaMatch) return 'America/Buenos_Aires';
+  return null;
+}
+
+function persistUserTimezone(container, timezone) {
+  if (!timezone) return;
+  spawnSync('docker', [
+    'exec',
+    container,
+    'sh',
+    '-lc',
+    `perl -0pi -e 's/- \\*\\*Timezone:\\*\\* .*/- **Timezone:** ${timezone.replace(/\//g, '\\/')}/m' /home/limbo/.zeroclaw/workspace/USER.md`,
+  ], { timeout: 5000 });
+}
+
 function extractSearchTime(mcpLogs) {
   // Find vault_search call/result pairs and sum their execution times
   let totalMs = 0;
@@ -125,6 +194,24 @@ function extractSearchTime(mcpLogs) {
     }
   }
   return totalMs || null;
+}
+
+function buildStepMessage(stepInput, transcriptTurns) {
+  if (!Array.isArray(transcriptTurns) || transcriptTurns.length === 0) {
+    return stepInput;
+  }
+
+  const transcript = transcriptTurns
+    .map(turn => `${turn.role === 'assistant' ? 'Assistant' : 'User'}: ${turn.content}`)
+    .join('\n\n');
+
+  return [
+    'Continue this conversation naturally.',
+    '',
+    transcript,
+    '',
+    `User: ${stepInput}`,
+  ].join('\n');
 }
 
 function buildProfileKey({ provider, model, reasoningEffort }) {
@@ -208,8 +295,6 @@ async function readRuntimeMeta(container) {
     const status = execFileSync('docker', [
       'exec', container, 'zeroclaw', 'status',
     ], { encoding: 'utf8', timeout: 10000 });
-    provider = parseStatusField(status, 'Provider') || provider;
-    model = parseStatusField(status, 'Model') || model;
     zeroclawVersion = parseStatusField(status, 'Version') || zeroclawVersion;
   } catch {}
 
@@ -284,27 +369,32 @@ function readContainerSecret(container, name) {
 
 async function resetVault() {
   const pristineDir = path.join(EVALS_DIR, '.vault-pristine');
-  const notesDir = path.join(VAULT_SEED, 'notes');
-  const mapsDir = path.join(VAULT_SEED, 'maps');
 
   // First run: save pristine copy
   try { await fs.access(pristineDir); } catch {
     await fs.cp(VAULT_SEED, pristineDir, { recursive: true });
   }
 
-  // Restore from pristine
-  await fs.rm(notesDir, { recursive: true, force: true });
-  await fs.rm(mapsDir, { recursive: true, force: true });
-  try {
-    await fs.cp(path.join(pristineDir, 'notes'), notesDir, { recursive: true });
-  } catch {
-    await fs.mkdir(notesDir, { recursive: true });
-  }
-  try {
-    await fs.cp(path.join(pristineDir, 'maps'), mapsDir, { recursive: true });
-  } catch {
-    await fs.mkdir(mapsDir, { recursive: true });
-  }
+  // Restore the whole seed vault, not just notes/maps.
+  await fs.rm(VAULT_SEED, { recursive: true, force: true });
+  await fs.cp(pristineDir, VAULT_SEED, { recursive: true });
+}
+
+function resetContainerRuntime(container) {
+  spawnSync('docker', [
+    'exec',
+    container,
+    'sh',
+    '-lc',
+    [
+      'rm -rf /data/db/*',
+      'rm -rf /data/logs/*',
+      'rm -rf /data/backups/*',
+      'rm -rf /data/memory/*',
+      'rm -f /data/.force-setup-done',
+      'rm -f /home/limbo/.zeroclaw/workspace/USER.md',
+    ].join(' && '),
+  ], { timeout: 10000 });
 }
 
 // ── Case loading ────────────────────────────────────────────────────────────
@@ -353,15 +443,21 @@ async function cmdRun(args) {
     const runs = evalCase.runs || 1;
     for (let i = 0; i < runs; i++) {
       console.log(`── ${evalCase.name} (run ${i + 1}/${runs}) ──`);
+      const sessionStateFile = `/tmp/limbo-eval-${evalCase.name}-${Date.now()}-${i + 1}.json`;
 
       try {
         // Reset vault and clear leftover cron jobs
         await resetVault();
+        resetContainerRuntime(CONTAINER);
         clearCrons(CONTAINER);
+        resetUserProfile(CONTAINER);
+        spawnSync('docker', ['exec', CONTAINER, 'rm', '-f', sessionStateFile], { timeout: 5000 });
 
         // Resolve steps: multi-step cases have steps[], single-step have input+assertions
         const steps = evalCase.steps || [{ input: evalCase.input, assertions: evalCase.assertions }];
+        const transcriptTurns = [];
         let allScoreResults = [];
+        let stepResults = [];
         let lastResponse = '';
         let lastVaultDiff = { created: [], modified: [], deleted: [] };
         let totalMcpLogs = 0;
@@ -379,9 +475,17 @@ async function cmdRun(args) {
           // Send message
           console.log(`  Sending${stepLabel}: "${step.input}"`);
           const startMs = Date.now();
-          const { text: response, mcpLogs } = sendMessage(step.input, CONTAINER);
+          const message = buildStepMessage(step.input, transcriptTurns);
+          const { text: response, mcpLogs } = sendMessage(message, CONTAINER, sessionStateFile);
           const latencyMs = Date.now() - startMs;
+          const timezone = extractTimezoneFromMessage(step.input);
+          if (timezone) {
+            persistUserTimezone(CONTAINER, timezone);
+          }
+          const userProfile = readUserProfile(CONTAINER);
           lastResponse = response;
+          transcriptTurns.push({ role: 'user', content: step.input });
+          transcriptTurns.push({ role: 'assistant', content: response });
           console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
           console.log(`  Latency: ${latencyMs}ms`);
 
@@ -400,8 +504,30 @@ async function cmdRun(args) {
           totalLatencyMs += latencyMs;
 
           // Score assertions for this step
-          const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs });
+          const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs, userProfile });
           allScoreResults = allScoreResults.concat(stepScores);
+          stepResults.push({
+            index: s + 1,
+            input: step.input,
+            response,
+            latencyMs,
+            userProfile,
+            mcpLogCount: mcpLogs.length,
+            mcpLogs,
+            assertions: step.assertions,
+            scoreResults: stepScores,
+            vaultDiff: {
+              created: vaultDiff.created.length,
+              modified: vaultDiff.modified.length,
+              deleted: vaultDiff.deleted.length,
+            },
+            cronJobs: cronJobs.map(job => ({
+              id: job.id,
+              schedule: job.schedule,
+              task: job.task,
+              timezone: job.timezone,
+            })),
+          });
 
           const passed = stepScores.filter(r => r.pass).length;
           console.log(`  Score${stepLabel}: ${passed}/${stepScores.length} assertions passed`);
@@ -444,6 +570,7 @@ async function cmdRun(args) {
           scoreResults: allScoreResults,
           judgeResults,
           response: lastResponse.slice(0, 500),
+          steps: stepResults,
           vaultDiff: {
             created: lastVaultDiff.created.length,
             modified: lastVaultDiff.modified.length,
