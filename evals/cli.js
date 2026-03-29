@@ -161,47 +161,62 @@ function getContainerMcpLogs(container, sinceIso) {
  */
 async function waitForTelegramProcessing(container, vaultDir, beforeSnapshot, beforeAllSnapshot, sinceIso, timeoutMs = 90000) {
   const pollMs = 3000;
+  const quietMs = 10000; // wait for 10s of no new activity before considering done
   const start = Date.now();
+  let lastActivityAt = null;
+  let lastLogCount = 0;
 
   while (Date.now() - start < timeoutMs) {
     await sleep(pollMs);
 
-    // Check vault for new .md notes
-    const afterSnapshot = snapshot(vaultDir);
-    const vaultDiff = diff(beforeSnapshot, afterSnapshot);
-
-    // Check vault for new files (including assets/)
-    const afterAll = snapshotAll(vaultDir);
-    const allFilesDiff = diffAll(beforeAllSnapshot, afterAll);
-
     // Check docker logs for MCP activity
     const { mcpLogs, responseText } = getContainerMcpLogs(container, sinceIso);
+    const hasActivity = mcpLogs.length > 0;
 
-    // Consider processing complete if we see tool results OR new vault files
-    const hasToolResults = mcpLogs.some((l) => l.type === 'tool_result');
-    const hasNewFiles = allFilesDiff.created.length > 0 || vaultDiff.created.length > 0;
-
-    if (hasToolResults || hasNewFiles) {
-      // Wait a bit more for any final writes
-      await sleep(2000);
-      // Re-snapshot for final state
-      const finalSnapshot = snapshot(vaultDir);
-      const finalAll = snapshotAll(vaultDir);
-      const finalLogs = getContainerMcpLogs(container, sinceIso);
-      return {
-        vaultDiff: diff(beforeSnapshot, finalSnapshot),
-        allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
-        mcpLogs: finalLogs.mcpLogs,
-        responseText: finalLogs.responseText,
-      };
+    // Track when activity changes (new tool calls/results appear)
+    if (mcpLogs.length > lastLogCount) {
+      lastActivityAt = Date.now();
+      lastLogCount = mcpLogs.length;
     }
 
     const elapsed = Math.round((Date.now() - start) / 1000);
-    process.stdout.write(`\r  Waiting... ${elapsed}s / ${timeoutMs / 1000}s`);
+
+    if (hasActivity && lastActivityAt) {
+      const quietElapsed = Date.now() - lastActivityAt;
+      process.stdout.write(`\r  Processing... ${elapsed}s (${mcpLogs.length} MCP logs, quiet ${Math.round(quietElapsed / 1000)}s/${quietMs / 1000}s)`);
+
+      // Only return after a quiet period with no new activity
+      if (quietElapsed >= quietMs) {
+        process.stdout.write('\n');
+        const finalSnapshot = snapshot(vaultDir);
+        const finalAll = snapshotAll(vaultDir);
+        const finalLogs = getContainerMcpLogs(container, sinceIso);
+        return {
+          vaultDiff: diff(beforeSnapshot, finalSnapshot),
+          allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
+          mcpLogs: finalLogs.mcpLogs,
+          responseText: finalLogs.responseText,
+        };
+      }
+    } else {
+      process.stdout.write(`\r  Waiting... ${elapsed}s / ${timeoutMs / 1000}s`);
+    }
   }
 
+  // Timeout — return partial results if we got any activity
   process.stdout.write('\n');
-  return null; // timeout
+  if (lastLogCount > 0) {
+    const finalSnapshot = snapshot(vaultDir);
+    const finalAll = snapshotAll(vaultDir);
+    const finalLogs = getContainerMcpLogs(container, sinceIso);
+    return {
+      vaultDiff: diff(beforeSnapshot, finalSnapshot),
+      allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
+      mcpLogs: finalLogs.mcpLogs,
+      responseText: finalLogs.responseText,
+    };
+  }
+  return null;
 }
 
 function stripAnsi(str) {
