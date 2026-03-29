@@ -127,4 +127,15 @@ describe('FTS5 module', () => {
     const results = fts.searchNotes('"hello" OR (world*)');
     assert.ok(Array.isArray(results), 'should return array even with special chars');
   });
+
+  // 9. indexedIds returns all indexed note IDs
+  it('indexedIds returns Set of all note IDs', () => {
+    fts.upsertNote('alpha', 'Alpha', 'Content A.', null);
+    fts.upsertNote('beta', 'Beta', 'Content B.', 'sub');
+    const ids = fts.indexedIds();
+    assert.ok(ids instanceof Set, 'should return a Set');
+    assert.strictEqual(ids.size, 2);
+    assert.ok(ids.has('alpha'));
+    assert.ok(ids.has('beta'));
+  });
 });
