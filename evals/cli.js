@@ -161,61 +161,66 @@ function getContainerMcpLogs(container, sinceIso) {
  */
 async function waitForTelegramProcessing(container, vaultDir, beforeSnapshot, beforeAllSnapshot, sinceIso, timeoutMs = 90000) {
   const pollMs = 3000;
-  const quietMs = 10000; // wait for 10s of no new activity before considering done
   const start = Date.now();
-  let lastActivityAt = null;
-  let lastLogCount = 0;
+  let sawProcessing = false;
 
   while (Date.now() - start < timeoutMs) {
     await sleep(pollMs);
 
-    // Check docker logs for MCP activity
-    const { mcpLogs, responseText } = getContainerMcpLogs(container, sinceIso);
-    const hasActivity = mcpLogs.length > 0;
-
-    // Track when activity changes (new tool calls/results appear)
-    if (mcpLogs.length > lastLogCount) {
-      lastActivityAt = Date.now();
-      lastLogCount = mcpLogs.length;
-    }
+    // Get all container output since we started
+    const logResult = spawnSync('docker', [
+      'logs', '--since', sinceIso, container,
+    ], { encoding: 'utf8', timeout: 10000 });
+    const allOutput = (logResult.stdout || '') + '\n' + (logResult.stderr || '');
 
     const elapsed = Math.round((Date.now() - start) / 1000);
 
-    if (hasActivity && lastActivityAt) {
-      const quietElapsed = Date.now() - lastActivityAt;
-      process.stdout.write(`\r  Processing... ${elapsed}s (${mcpLogs.length} MCP logs, quiet ${Math.round(quietElapsed / 1000)}s/${quietMs / 1000}s)`);
+    // Check for "⏳ Processing" — means bot received the message
+    if (!sawProcessing && allOutput.includes('Processing message')) {
+      sawProcessing = true;
+      process.stdout.write(`\r  Message received, processing... ${elapsed}s`);
+    }
 
-      // Only return after a quiet period with no new activity
-      if (quietElapsed >= quietMs) {
-        process.stdout.write('\n');
-        const finalSnapshot = snapshot(vaultDir);
-        const finalAll = snapshotAll(vaultDir);
-        const finalLogs = getContainerMcpLogs(container, sinceIso);
-        return {
-          vaultDiff: diff(beforeSnapshot, finalSnapshot),
-          allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
-          mcpLogs: finalLogs.mcpLogs,
-          responseText: finalLogs.responseText,
-        };
-      }
+    // Check for "🤖 Reply" — means agent finished (success or error)
+    const replyMatch = allOutput.match(/Reply \((\d+)ms\):/);
+    if (replyMatch) {
+      process.stdout.write(`\r  Reply received (${replyMatch[1]}ms), collecting results...\n`);
+      // Give vault a moment to flush writes
+      await sleep(2000);
+
+      const { mcpLogs, responseText } = getContainerMcpLogs(container, sinceIso);
+      const finalSnapshot = snapshot(vaultDir);
+      const finalAll = snapshotAll(vaultDir);
+      return {
+        vaultDiff: diff(beforeSnapshot, finalSnapshot),
+        allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
+        mcpLogs,
+        responseText,
+      };
+    }
+
+    // Check for "❌ LLM error" — agent failed
+    if (allOutput.includes('LLM error')) {
+      process.stdout.write(`\r  Agent error detected at ${elapsed}s\n`);
+      const { mcpLogs, responseText } = getContainerMcpLogs(container, sinceIso);
+      const finalSnapshot = snapshot(vaultDir);
+      const finalAll = snapshotAll(vaultDir);
+      return {
+        vaultDiff: diff(beforeSnapshot, finalSnapshot),
+        allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
+        mcpLogs,
+        responseText: responseText || 'LLM error',
+      };
+    }
+
+    if (sawProcessing) {
+      process.stdout.write(`\r  Processing... ${elapsed}s / ${timeoutMs / 1000}s`);
     } else {
       process.stdout.write(`\r  Waiting... ${elapsed}s / ${timeoutMs / 1000}s`);
     }
   }
 
-  // Timeout — return partial results if we got any activity
   process.stdout.write('\n');
-  if (lastLogCount > 0) {
-    const finalSnapshot = snapshot(vaultDir);
-    const finalAll = snapshotAll(vaultDir);
-    const finalLogs = getContainerMcpLogs(container, sinceIso);
-    return {
-      vaultDiff: diff(beforeSnapshot, finalSnapshot),
-      allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
-      mcpLogs: finalLogs.mcpLogs,
-      responseText: finalLogs.responseText,
-    };
-  }
   return null;
 }
 

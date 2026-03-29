@@ -126,6 +126,22 @@ Use when: you've written a note that belongs to a MOC, or user asks to organize.
 
 Use when: user sends a file (image, PDF, document) to save in the vault.
 
+**Preferred: use `filePath`** to copy a local file (e.g. from Telegram downloads). The filename is derived automatically and the source file is deleted after a successful copy.
+
+```json
+{
+  "noteId": "receipt-hardware-2026-03",
+  "title": "Hardware Store Receipt",
+  "description": "Receipt for drill and screws from hardware store, March 2026",
+  "content": "User sent this receipt from a hardware store purchase.",
+  "filePath": "/home/limbo/.zeroclaw/workspace/telegram_files/receipt.pdf",
+  "subdirectory": "documents",
+  "source": "telegram"
+}
+```
+
+**Fallback: use `filename` + `fileData`** when the file is not on the local filesystem:
+
 ```json
 {
   "noteId": "receipt-hardware-2026-03",
@@ -143,6 +159,7 @@ Use when: user sends a file (image, PDF, document) to save in the vault.
 - The note is searchable via `vault_search` like any other note
 - Files stored in `vault/assets/{subdirectory}/` with a timestamped filename
 - The linked note's frontmatter includes `asset_path` and `asset_type`
+- When using `filePath`, the source file is **deleted** after successful copy to vault
 
 ## vault_get_file
 

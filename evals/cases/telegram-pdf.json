@@ -5,7 +5,7 @@
     {
       "type": "telegram_manual",
       "prompt": "Mandá un PDF al bot de eval en Telegram (cualquier PDF sirve)",
-      "timeout_ms": 90000,
+      "timeout_ms": 180000,
       "assertions": [
         { "type": "tool_called", "tool": "vault_store_file" },
         { "type": "vault_file_exists", "pattern": "assets/.*\\.pdf$" },
