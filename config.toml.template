@@ -24,3 +24,4 @@ enabled = true
 name = "limbo-vault"
 command = "node"
 args = ["/app/mcp-server/index.js"]
+env = { ZEROCLAW_STATE_DIR = "${ZEROCLAW_STATE_DIR}", ZEROCLAW_WORKSPACE_DIR = "${ZEROCLAW_STATE_DIR}/workspace" }

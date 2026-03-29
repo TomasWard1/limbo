@@ -215,8 +215,8 @@ else
   fi
 
   log "INFO  Generating ZeroClaw config from template"
-  export MODEL_PROVIDER MODEL_NAME LIMBO_PORT RUNTIME_REASONING_EFFORT
-  envsubst '$MODEL_PROVIDER $MODEL_NAME $LIMBO_PORT $RUNTIME_REASONING_EFFORT' \
+  export MODEL_PROVIDER MODEL_NAME LIMBO_PORT RUNTIME_REASONING_EFFORT ZEROCLAW_STATE_DIR
+  envsubst '$MODEL_PROVIDER $MODEL_NAME $LIMBO_PORT $RUNTIME_REASONING_EFFORT $ZEROCLAW_STATE_DIR' \
     < /app/config.toml.template > "$ZEROCLAW_CONFIG_PATH"
 
   # Telegram: channel is enabled by section presence, not a boolean flag.

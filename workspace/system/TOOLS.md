@@ -1,8 +1,8 @@
-# Vault Tools & Processing Rules
+# Tools & Processing Rules
 
-You have 6 vault tools via MCP. ZeroClaw invokes these natively — call them by name.
+You have 8 tools via MCP. ZeroClaw invokes these natively — call them by name.
 
-**⚠️ ALL user information goes to the vault via these tools. Always.**
+**⚠️ ALL user information goes to the vault via vault tools. Always.**
 
 ---
 
@@ -64,6 +64,7 @@ Use when: you found a note via search and need its full content.
 
 - `noteId` is the filename without `.md`
 - Returns raw markdown including YAML frontmatter
+- For workspace files (USER.md, SOUL.md, etc.), use `workspace_read` instead
 
 ## vault_write_note
 
@@ -155,3 +156,51 @@ Use when: user asks to see or retrieve a previously stored file.
 - Returns the file as base64 (images returned as image content blocks)
 - Only works on notes with `asset_path` in frontmatter
 - If the note has no linked file, returns an error
+
+---
+
+## Workspace Files (Your Personality)
+
+You have files that define who you are and how you interact. These live in your workspace directory and persist across restarts.
+
+### Your files
+
+| File | Purpose | Writable? |
+|------|---------|-----------|
+| **USER.md** | Your user's name, timezone, language, preferences | ✅ Yes |
+| **SOUL.md** | How you think, your voice, your disposition | ✅ Yes |
+| **IDENTITY.md** | Who you are — Limbo's role and capabilities | ✅ Yes |
+| AGENTS.md | Cardinal rules and processing rules | ❌ System (reset on boot) |
+| TOOLS.md | This file — tool reference | ❌ System (reset on boot) |
+
+### workspace_read
+
+Use when: you need to check your current personality files before updating, or when the user asks about your configuration.
+
+```json
+{ "filename": "USER.md" }
+```
+
+- Reads any `.md` file in your workspace
+- Always read before writing — you need to see the current state
+
+### workspace_write
+
+Use when: you learn new information about the user (timezone, language, name, preferences) or when asked to adjust your personality.
+
+```json
+{
+  "filename": "USER.md",
+  "content": "# About Your User\n\n..."
+}
+```
+
+- Only `USER.md`, `SOUL.md`, and `IDENTITY.md` are writable
+- Replaces the entire file — always read first, then write the full updated content
+- System files (AGENTS.md, TOOLS.md) are read-only and reset from the image on every container boot
+
+### When to update workspace files
+
+- **USER.md** — Update when you learn the user's name, timezone, language, or preferences. This is the most commonly updated file. When the user tells you their timezone or corrects their name, update it immediately.
+- **SOUL.md** — Update when the user gives you feedback about your voice or behavior that should persist. Rare — only when explicitly asked.
+- **IDENTITY.md** — Update when the user wants to expand or change your role. Very rare.
