@@ -15,6 +15,7 @@ const readline = require('readline');
 
 const LIMBO_DIR = path.join(os.homedir(), '.limbo');
 const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
+const ZEROCLAW_STATE_DIR = path.join(LIMBO_DIR, 'zeroclaw-state');
 const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
@@ -158,7 +159,7 @@ function composeContent() {
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
-      - limbo-zeroclaw-state:/home/limbo/.zeroclaw
+      - ${ZEROCLAW_STATE_DIR}:/home/limbo/.zeroclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -193,7 +194,6 @@ secrets:
 
 volumes:
   limbo-data:
-  limbo-zeroclaw-state:
 `;
 }
 
@@ -220,7 +220,7 @@ function composeContentHardened() {
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
-      - limbo-zeroclaw-state:/home/limbo/.zeroclaw
+      - ${ZEROCLAW_STATE_DIR}:/home/limbo/.zeroclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -286,7 +286,6 @@ secrets:
 
 volumes:
   limbo-data:
-  limbo-zeroclaw-state:
 `;
 }
 
@@ -1022,10 +1021,51 @@ async function collectConfig(existingEnv = {}) {
   };
 }
 
+// Migrate zeroclaw state from old named volume (limbo_limbo-zeroclaw-state or
+// limbo-zeroclaw-state) to the new bind-mount directory at ZEROCLAW_STATE_DIR.
+// Only runs if the bind-mount dir is empty and the named volume exists.
+function migrateZeroclawStateVolume() {
+  // Skip if bind-mount dir already has content
+  try {
+    const entries = fs.readdirSync(ZEROCLAW_STATE_DIR);
+    if (entries.length > 0) return;
+  } catch { return; }
+
+  // Check whether the old named volume exists (Docker may prefix with project name)
+  const candidateVolumes = ['limbo_limbo-zeroclaw-state', 'limbo-zeroclaw-state'];
+  let foundVolume = null;
+  try {
+    const result = spawnSync('docker', ['volume', 'ls', '--format', '{{.Name}}'], { encoding: 'utf8', stdio: 'pipe' });
+    if (result.status === 0) {
+      const existing = result.stdout.split('\n').map(s => s.trim());
+      foundVolume = candidateVolumes.find(v => existing.includes(v)) || null;
+    }
+  } catch { /* docker not available yet */ }
+
+  if (!foundVolume) return;
+
+  log(`Migrating ZeroClaw state from volume "${foundVolume}" to ${ZEROCLAW_STATE_DIR} ...`);
+  const migrate = spawnSync('docker', [
+    'run', '--rm',
+    '-v', `${foundVolume}:/src:ro`,
+    '-v', `${ZEROCLAW_STATE_DIR}:/dst`,
+    'alpine',
+    'sh', '-c', 'cp -a /src/. /dst/',
+  ], { stdio: 'pipe' });
+
+  if (migrate.status === 0) {
+    log('Migration complete. Old volume data is preserved and can be removed with: docker volume rm ' + foundVolume);
+  } else {
+    warn('Migration from old volume failed — continuing with empty state. Run `limbo start` again after verifying Docker is available.');
+  }
+}
+
 function ensureComposeFile(hardened = false) {
   fs.mkdirSync(LIMBO_DIR, { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'maps'), { recursive: true });
+  fs.mkdirSync(ZEROCLAW_STATE_DIR, { recursive: true });
+  migrateZeroclawStateVolume();
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
   // Ensure secret files exist (Docker Compose secrets require the files to be present)
   for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
