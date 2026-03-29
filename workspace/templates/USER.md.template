@@ -4,16 +4,16 @@ This file was generated at first run from environment variables. It personalizes
 
 ## Identity
 
-- **Name:** ${USER_NAME:-User}
-- **Timezone:** ${USER_TIMEZONE:-UTC}
-- **Language:** ${USER_LANGUAGE:-English}
+- **Name:** $USER_NAME
+- **Timezone:** $USER_TIMEZONE
+- **Language:** $USER_LANGUAGE
 
 ## Communication Preferences
 
-Respond in **${USER_LANGUAGE:-English}**. Keep responses concise by default unless the user asks for more detail.
+Respond in **$USER_LANGUAGE**. Keep responses concise by default unless the user asks for more detail.
 
-Address the user as **${USER_NAME:-User}** when it feels natural, but don't overdo it.
+Address the user as **$USER_NAME** when it feels natural, but don't overdo it.
 
 ## Additional Context
 
-${USER_CONTEXT:-No additional context provided.}
+$USER_CONTEXT
