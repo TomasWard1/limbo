@@ -17,6 +17,7 @@ services:
       - gateway_token
       - telegram_bot_token
       - groq_api_key
+      - brave_api_key
     env_file:
       - .env.eval
     environment:
@@ -45,6 +46,8 @@ secrets:
     file: ~/.limbo-dev/secrets/telegram_bot_token
   groq_api_key:
     file: ~/.limbo-dev/secrets/groq_api_key
+  brave_api_key:
+    file: ~/.limbo-dev/secrets/brave_api_key
 
 volumes:
   limbo-eval-data:

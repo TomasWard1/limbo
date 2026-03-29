@@ -13,22 +13,26 @@
       <span class="nav-title">Limbo Eval</span>
     </div>
     <div class="nav-tabs">
-      <button class="nav-tab active" data-view="overview">Overview</button>
+      <button class="nav-tab active" data-view="accuracy">Accuracy</button>
       <button class="nav-tab" data-view="speed">Speed</button>
+      <button class="nav-tab" data-view="compare">Compare</button>
       <button class="nav-tab" data-view="history">History</button>
     </div>
-    <div class="nav-meta" id="nav-meta"></div>
+    <div class="nav-controls">
+      <select id="profile-select"></select>
+    </div>
+    <div id="nav-meta"></div>
   </nav>
 
   <main class="main">
-    <!-- Overview -->
-    <section id="view-overview" class="view active">
+    <!-- Accuracy -->
+    <section id="view-accuracy" class="view active">
       <div class="overview-header">
-        <h1>Latest Run</h1>
-        <p class="run-id" id="overview-run-id"></p>
+        <h1>Accuracy</h1>
+        <p class="run-id" id="accuracy-run-id"></p>
       </div>
-      <div class="stats-grid" id="overview-stats"></div>
-      <div class="difficulty-grid" id="overview-difficulty"></div>
+      <div class="stats-grid" id="accuracy-stats"></div>
+      <div class="difficulty-grid" id="accuracy-difficulty"></div>
       <div class="section-title">Results by Case</div>
       <div class="filters">
         <select id="filter-difficulty">
@@ -45,30 +49,34 @@
         </select>
         <input type="text" id="filter-search" placeholder="Search cases...">
       </div>
-      <div class="results-list" id="overview-results"></div>
+      <div class="results-list" id="accuracy-results"></div>
     </section>
 
     <!-- Speed -->
     <section id="view-speed" class="view">
       <h1>Speed — vault_search Performance</h1>
-      <p class="section-sub">Only cases tagged with "speed" or "vault_search"</p>
+      <p class="section-sub" id="speed-run-id">Cases tagged with "speed" or "vault_search"</p>
       <div class="stats-grid" id="speed-stats"></div>
       <div class="speed-chart-container" id="speed-chart"></div>
       <div class="section-title">Speed Cases</div>
       <div class="results-list" id="speed-results"></div>
     </section>
 
-    <!-- History -->
-    <section id="view-history" class="view">
-      <h1>Run History</h1>
-      <div class="history-chart" id="history-chart"></div>
-      <div class="section-title">Compare Runs</div>
+    <!-- Compare -->
+    <section id="view-compare" class="view">
+      <h1>Compare Runs</h1>
       <div class="compare-selectors" id="compare-section">
         <select id="compare-a"></select>
         <select id="compare-b"></select>
         <button class="btn-primary" id="compare-btn">Compare</button>
       </div>
       <div id="compare-results"></div>
+    </section>
+
+    <!-- History -->
+    <section id="view-history" class="view">
+      <h1>Run History</h1>
+      <div class="history-chart" id="history-chart"></div>
       <div class="section-title">All Runs</div>
       <div class="history-list" id="history-list"></div>
     </section>

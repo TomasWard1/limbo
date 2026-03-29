@@ -40,6 +40,7 @@ LLM_API_KEY="${_secret_llm:-${LLM_API_KEY:-}}"
 # ── Defaults ─────────────────────────────────────────────────────────────────
 MODEL_PROVIDER="${MODEL_PROVIDER:-anthropic}"
 MODEL_NAME="${MODEL_NAME:-claude-opus-4-6}"
+RUNTIME_REASONING_EFFORT="${RUNTIME_REASONING_EFFORT:-medium}"
 TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
 TELEGRAM_BOT_TOKEN="${_secret_telegram:-${TELEGRAM_BOT_TOKEN:-}}"
 VOICE_ENABLED="${VOICE_ENABLED:-false}"
@@ -191,6 +192,10 @@ done
 
 # USER.md: generate from template via envsubst on first run
 if [ ! -f "$ZC_WORKSPACE/USER.md" ]; then
+  USER_NAME="${USER_NAME:-User}"
+  USER_TIMEZONE="${USER_TIMEZONE:-}"
+  USER_LANGUAGE="${USER_LANGUAGE:-English}"
+  USER_CONTEXT="${USER_CONTEXT:-No additional context provided.}"
   export USER_NAME USER_TIMEZONE USER_LANGUAGE USER_CONTEXT
   envsubst '$USER_NAME $USER_TIMEZONE $USER_LANGUAGE $USER_CONTEXT' \
     < /app/workspace/templates/USER.md.template > "$ZC_WORKSPACE/USER.md"
@@ -214,8 +219,8 @@ else
   fi
 
   log "INFO  Generating ZeroClaw config from template"
-  export MODEL_PROVIDER MODEL_NAME LIMBO_PORT
-  envsubst '$MODEL_PROVIDER $MODEL_NAME $LIMBO_PORT' \
+  export MODEL_PROVIDER MODEL_NAME LIMBO_PORT RUNTIME_REASONING_EFFORT
+  envsubst '$MODEL_PROVIDER $MODEL_NAME $LIMBO_PORT $RUNTIME_REASONING_EFFORT' \
     < /app/config.toml.template > "$ZEROCLAW_CONFIG_PATH"
 
   # Telegram: channel is enabled by section presence, not a boolean flag.

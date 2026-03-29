@@ -4,6 +4,9 @@ You have 6 vault tools via MCP. ZeroClaw invokes these natively — call them by
 
 **⚠️ ALL user information goes to the vault via these tools. Always.**
 
+If `USER.md` has no timezone and a reminder request depends on local time, stop and ask for the timezone first. Do not default to UTC. Once the user tells you the timezone, use it for the reminder and treat it as durable profile information.
+If the user answers a missing reminder detail in the next turn, finish the reminder immediately in that turn. Do not only acknowledge the new detail.
+
 ---
 
 ## Processing Flow

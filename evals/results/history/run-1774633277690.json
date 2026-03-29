@@ -1,0 +1,94 @@
+{
+  "id": "run-1774633277690",
+  "timestamp": "2026-03-27T17:41:58.406Z",
+  "results": [
+    {
+      "case": "speed-search-simple",
+      "run": 1,
+      "passRate": 0.6666666666666666,
+      "passed": 2,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(carlos|ingeniero|córdoba|cordoba)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(carlos|ingeniero|córdoba|cordoba)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": false,
+          "reason": "Latency 40184ms EXCEEDED 30000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "No tengo nada guardado sobre Carlos.\n\nSi querés, contame quién es o qué tendría que recordar de él.No tengo nada guardado sobre Carlos.\n\nSi querés, decime quién es o qué querés que recuerde de él.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 6,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Carlos"
+          },
+          "timestamp": "2026-03-27T17:41:52.367Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T17:41:52.367Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "carlos"
+          },
+          "timestamp": "2026-03-27T17:41:52.369Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T17:41:52.369Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "persona-carlos|Carlos|carlos"
+          },
+          "timestamp": "2026-03-27T17:41:52.370Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T17:41:52.370Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 40184,
+      "timestamp": "2026-03-27T17:41:58.404Z"
+    }
+  ]
+}

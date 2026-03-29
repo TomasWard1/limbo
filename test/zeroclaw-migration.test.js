@@ -74,7 +74,7 @@ test('config.toml.template does NOT contain unsupported sections', () => {
 
 test('config.toml.template uses envsubst variables', () => {
   const toml = read('config.toml.template');
-  const vars = ['${MODEL_PROVIDER}', '${MODEL_NAME}', '${LIMBO_PORT}'];
+  const vars = ['${MODEL_PROVIDER}', '${MODEL_NAME}', '${LIMBO_PORT}', '${RUNTIME_REASONING_EFFORT}'];
   for (const v of vars) {
     assert.ok(toml.includes(v), `Missing envsubst variable: ${v}`);
   }
@@ -108,8 +108,13 @@ test('entrypoint.sh appends channels_config.telegram conditionally', () => {
 
 test('Dockerfile pulls ZeroClaw binary from official or custom image', () => {
   const df = read('Dockerfile');
-  assert.ok(df.match(/FROM ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+ AS zeroclaw/),
-    'Dockerfile must pull ZeroClaw from ghcr.io/zeroclaw-labs/zeroclaw or ghcr.io/tomasward1/zeroclaw');
+  assert.ok(
+    df.match(/ARG ZEROCLAW_IMAGE=ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+/) ||
+    df.match(/FROM ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+ AS zeroclaw/),
+    'Dockerfile must default to a ZeroClaw image from ghcr.io/zeroclaw-labs/zeroclaw or ghcr.io/tomasward1/zeroclaw'
+  );
+  assert.ok(df.includes('FROM ${ZEROCLAW_IMAGE} AS zeroclaw') || df.match(/FROM ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+ AS zeroclaw/),
+    'Dockerfile must build the zeroclaw stage from the configured ZeroClaw image');
   assert.ok(df.includes('COPY --from=zeroclaw /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw'));
 });
 
@@ -131,9 +136,11 @@ test('Dockerfile copies config.toml.template', () => {
 
 // ─── 5. docker-compose.yml uses ZeroClaw volumes and healthcheck ────────────
 
-test('docker-compose.yml uses limbo-zeroclaw-state volume', () => {
+test('docker-compose.yml uses bind mount for zeroclaw-state', () => {
   const dc = read('docker-compose.yml');
-  assert.ok(dc.includes('limbo-zeroclaw-state'));
+  assert.ok(dc.includes('zeroclaw-state'), 'Must include zeroclaw-state bind mount');
+  assert.ok(dc.includes('.zeroclaw'), 'Bind mount must target .zeroclaw directory');
+  assert.ok(!dc.includes('limbo-zeroclaw-state'), 'Must not use named volume — bind mount expected');
   assert.ok(!dc.includes('limbo-openclaw-state'), 'Must not reference old openclaw volume');
 });
 
@@ -182,6 +189,22 @@ test('entrypoint.sh renders config.toml from template via envsubst', () => {
   assert.ok(ep.includes('envsubst'));
 });
 
+test('USER.md template uses plain envsubst variables, not shell default expressions', () => {
+  const template = read('workspace/templates/USER.md.template');
+  assert.ok(template.includes('$USER_NAME'));
+  assert.ok(template.includes('$USER_TIMEZONE'));
+  assert.ok(template.includes('$USER_LANGUAGE'));
+  assert.ok(!template.includes('${USER_TIMEZONE:-UTC}'));
+  assert.ok(!template.includes('${USER_NAME:-User}'));
+});
+
+test('entrypoint.sh defaults USER.md fields before envsubst', () => {
+  const ep = read('scripts/entrypoint.sh');
+  assert.ok(ep.includes('USER_NAME="${USER_NAME:-User}"'));
+  assert.ok(ep.includes('USER_TIMEZONE="${USER_TIMEZONE:-}"'));
+  assert.ok(ep.includes('USER_LANGUAGE="${USER_LANGUAGE:-English}"'));
+});
+
 // ─── 7. Migration version bumped correctly ──────────────────────────────────
 
 test('migration index has CURRENT_DATA_VERSION = 4', () => {
@@ -200,6 +223,16 @@ test('migration 003 exports version 3 and up function', () => {
   // Check for function export - can be export const up or export function up
   assert.ok(mig.includes('up') && (mig.includes('export') || mig.includes('module.exports')),
     'Migration 003 must export an up function');
+});
+
+test('migration 004-fts5-search.js exists', () => {
+  assert.ok(exists('migrations/versions/004-fts5-search.js'));
+});
+
+test('migration 004 exports version 4 and up function', async () => {
+  const mod = await import(path.join(ROOT, 'migrations/versions/004-fts5-search.js'));
+  assert.strictEqual(mod.version, 4, 'Migration 004 must export version = 4');
+  assert.strictEqual(typeof mod.up, 'function', 'Migration 004 must export an up function');
 });
 
 // ─── 8. CLI filter suppresses both openclaw and zeroclaw branding ───────────

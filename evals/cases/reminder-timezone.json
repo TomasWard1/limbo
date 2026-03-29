@@ -5,7 +5,10 @@
   "assertions": [
     {
       "type": "cron_created",
-      "pattern": "pastilla|pill|medicamento"
+      "pattern": "pastilla|pill|medicamento",
+      "timezone": "America/Buenos_Aires",
+      "local_hour": 23,
+      "local_minute": 0
     },
     {
       "type": "response_matches",

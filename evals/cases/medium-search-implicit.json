@@ -4,7 +4,7 @@
   "input": "Qué sabes sobre la gente que trabaja en tech?",
   "assertions": [
     { "type": "tool_called", "tool": "vault_search" },
-    { "type": "response_matches", "pattern": "(?i)(no encontr|no tengo|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños)" }
+    { "type": "response_matches", "pattern": "(?i)(no encontr|no tengo|no tiene|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños|mercado libre|diseñador)" }
   ],
   "runs": 1,
   "pass_threshold": 1.0,

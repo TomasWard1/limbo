@@ -20,19 +20,35 @@ const CASES_DIR = path.join(EVALS_DIR, 'cases');
 const RESULTS_DIR = path.join(EVALS_DIR, 'results');
 const HISTORY_DIR = path.join(RESULTS_DIR, 'history');
 const BASELINE_PATH = path.join(RESULTS_DIR, 'baseline.json');
+const BASELINES_DIR = path.join(RESULTS_DIR, 'baselines');
+const BASELINES_INDEX_PATH = path.join(RESULTS_DIR, 'baselines-index.json');
 const VAULT_SEED = path.join(EVALS_DIR, 'vault-seed');
 
 // ── Message sending ─────────────────────────────────────────────────────────
 
-function sendMessage(message, container) {
-  // zeroclaw agent needs credentials in env — docker exec doesn't inherit
-  // the entrypoint's exports, so we read the secret and pass it explicitly.
-  const proc = spawnSync('docker', [
-    'exec',
-    '-e', 'ANTHROPIC_OAUTH_TOKEN=' + readContainerSecret(container, 'llm_api_key'),
-    container, 'zeroclaw', 'agent',
-    '--message', message,
-  ], { encoding: 'utf8', timeout: 130000 });
+function sendMessage(message, container, sessionStateFile = null) {
+  const runtimeConfig = readZeroClawConfig(container);
+  const dockerArgs = ['exec'];
+
+  // Anthropic OAuth still needs the token exported explicitly for docker exec.
+  if (runtimeConfig.provider === 'anthropic') {
+    dockerArgs.push('-e', 'ANTHROPIC_OAUTH_TOKEN=' + readContainerSecret(container, 'llm_api_key'));
+  }
+
+  dockerArgs.push(
+    container,
+    'zeroclaw', 'agent',
+    '--provider', runtimeConfig.provider,
+    '--model', runtimeConfig.model,
+  );
+
+  if (sessionStateFile) {
+    dockerArgs.push('--session-state-file', sessionStateFile);
+  }
+
+  dockerArgs.push('--message', message);
+
+  const proc = spawnSync('docker', dockerArgs, { encoding: 'utf8', timeout: 130000 });
 
   if (proc.error) throw proc.error;
   if (proc.status !== 0) {
@@ -97,6 +113,70 @@ function clearCrons(container) {
   for (const job of jobs) {
     spawnSync('docker', ['exec', container, 'zeroclaw', 'cron', 'remove', job.id], { timeout: 5000 });
   }
+}
+
+function readUserProfile(container) {
+  try {
+    return execFileSync('docker', [
+      'exec', container, 'cat', '/home/limbo/.zeroclaw/workspace/USER.md',
+    ], { encoding: 'utf8', timeout: 5000 });
+  } catch {
+    return '';
+  }
+}
+
+function resetUserProfile(container) {
+  spawnSync('docker', [
+    'exec',
+    container,
+    'sh',
+    '-lc',
+    [
+      'mkdir -p /home/limbo/.zeroclaw/workspace',
+      'cat > /home/limbo/.zeroclaw/workspace/USER.md <<\'EOF\'',
+      '# About Your User',
+      '',
+      'This file was generated at first run from environment variables. It personalizes how you interact with your user.',
+      '',
+      '## Identity',
+      '',
+      '- **Name:** Tomas',
+      '- **Timezone:** ',
+      '- **Language:** Spanish',
+      '',
+      '## Communication Preferences',
+      '',
+      'Respond in **Spanish**. Keep responses concise by default unless the user asks for more detail.',
+      '',
+      'Address the user as **Tomas** when it feels natural, but don\'t overdo it.',
+      '',
+      '## Additional Context',
+      '',
+      'No additional context provided.',
+      'EOF',
+    ].join('\n'),
+  ], { timeout: 5000 });
+}
+
+function extractTimezoneFromMessage(message) {
+  if (!message) return null;
+  const trimmed = String(message).trim();
+  const ianaMatch = trimmed.match(/\b([A-Za-z_]+\/[A-Za-z_]+(?:\/[A-Za-z_]+)?)\b/);
+  if (ianaMatch) return ianaMatch[1];
+  const argentinaMatch = trimmed.match(/\b(argentina|buenos aires|gmt-?3|utc-?3)\b/i);
+  if (argentinaMatch) return 'America/Buenos_Aires';
+  return null;
+}
+
+function persistUserTimezone(container, timezone) {
+  if (!timezone) return;
+  spawnSync('docker', [
+    'exec',
+    container,
+    'sh',
+    '-lc',
+    `perl -0pi -e 's/- \\*\\*Timezone:\\*\\* .*/- **Timezone:** ${timezone.replace(/\//g, '\\/')}/m' /home/limbo/.zeroclaw/workspace/USER.md`,
+  ], { timeout: 5000 });
 }
 
 function extractSearchTime(mcpLogs) {
@@ -224,6 +304,162 @@ async function waitForTelegramProcessing(container, vaultDir, beforeSnapshot, be
   return null;
 }
 
+function buildStepMessage(stepInput, transcriptTurns) {
+  if (!Array.isArray(transcriptTurns) || transcriptTurns.length === 0) {
+    return stepInput;
+  }
+
+  const transcript = transcriptTurns
+    .map(turn => `${turn.role === 'assistant' ? 'Assistant' : 'User'}: ${turn.content}`)
+    .join('\n\n');
+
+  return [
+    'Continue this conversation naturally.',
+    '',
+    transcript,
+    '',
+    `User: ${stepInput}`,
+  ].join('\n');
+}
+
+function buildProfileKey({ provider, model, reasoningEffort }) {
+  const raw = [provider || 'unknown', model || 'unknown', reasoningEffort || 'default'].join('__');
+  return raw.replace(/[^a-zA-Z0-9._-]+/g, '-');
+}
+
+function buildProfileLabel({ provider, model, reasoningEffort }) {
+  const modelLabel = model || 'unknown-model';
+  const effortLabel = reasoningEffort || 'default';
+  const providerLabel = provider || 'unknown-provider';
+  return `${modelLabel} · ${effortLabel} · ${providerLabel}`;
+}
+
+function parseEnvFile(filePath) {
+  try {
+    const content = fsSync.readFileSync(filePath, 'utf8');
+    const out = {};
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx === -1) continue;
+      const key = trimmed.slice(0, idx).trim();
+      const value = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
+      out[key] = value;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function parseStatusField(output, label) {
+  const match = output.match(new RegExp(`${label}:\\s*(.+)`));
+  return match ? match[1].trim() : null;
+}
+
+function readZeroClawConfig(container) {
+  try {
+    const cfg = execFileSync('docker', [
+      'exec', container, 'cat', '/home/limbo/.zeroclaw/config.toml',
+    ], { encoding: 'utf8', timeout: 10000 });
+    const providerMatch = cfg.match(/default_provider\s*=\s*"([^"]+)"/);
+    const modelMatch = cfg.match(/default_model\s*=\s*"([^"]+)"/);
+    const reasoningMatch = cfg.match(/reasoning_effort\s*=\s*"([^"]+)"/);
+    return {
+      provider: providerMatch ? providerMatch[1].trim() : null,
+      model: modelMatch ? modelMatch[1].trim() : null,
+      reasoningEffort: reasoningMatch ? reasoningMatch[1].trim() : null,
+    };
+  } catch {
+    return { provider: null, model: null, reasoningEffort: null };
+  }
+}
+
+function resolveRunKind({ tag, caseName, difficulty }) {
+  if (tag === 'speed') return 'speed';
+  if (caseName || tag || difficulty) return 'subset';
+  return 'full';
+}
+
+function readJSON(filePath, fallback) {
+  try {
+    return JSON.parse(fsSync.readFileSync(filePath, 'utf8'));
+  } catch {
+    return fallback;
+  }
+}
+
+async function readRuntimeMeta(container) {
+  const envEval = parseEnvFile(path.join(EVALS_DIR, '.env.eval'));
+  const runtimeConfig = readZeroClawConfig(container);
+  let provider = runtimeConfig.provider || process.env.MODEL_PROVIDER || envEval.MODEL_PROVIDER || null;
+  let model = runtimeConfig.model || process.env.MODEL_NAME || envEval.MODEL_NAME || null;
+  let reasoningEffort = runtimeConfig.reasoningEffort || process.env.RUNTIME_REASONING_EFFORT || envEval.RUNTIME_REASONING_EFFORT || null;
+  let authMode = process.env.AUTH_MODE || envEval.AUTH_MODE || null;
+  let zeroclawVersion = null;
+
+  try {
+    const status = execFileSync('docker', [
+      'exec', container, 'zeroclaw', 'status',
+    ], { encoding: 'utf8', timeout: 10000 });
+    zeroclawVersion = parseStatusField(status, 'Version') || zeroclawVersion;
+  } catch {}
+
+  const meta = {
+    provider,
+    model,
+    reasoningEffort,
+    authMode,
+    zeroclawVersion,
+  };
+  meta.profileKey = buildProfileKey(meta);
+  meta.profileLabel = buildProfileLabel(meta);
+  return meta;
+}
+
+async function updateBaselinesIndex(runData, baselineFile) {
+  const profileKey = runData.meta?.profileKey || buildProfileKey({});
+  const kind = runData.kind || 'full';
+  const index = readJSON(BASELINES_INDEX_PATH, {});
+  if (!index[profileKey]) index[profileKey] = {};
+  index[profileKey][kind] = {
+    id: runData.id,
+    file: path.basename(baselineFile),
+    profileKey,
+    profileLabel: runData.meta?.profileLabel || buildProfileLabel({}),
+    kind,
+    timestamp: runData.timestamp,
+  };
+  index[profileKey].any = {
+    id: runData.id,
+    file: path.basename(baselineFile),
+    profileKey,
+    profileLabel: runData.meta?.profileLabel || buildProfileLabel({}),
+    kind,
+    timestamp: runData.timestamp,
+  };
+  await fs.writeFile(BASELINES_INDEX_PATH, JSON.stringify(index, null, 2));
+}
+
+function resolveBaselineForRun(runData) {
+  const profileKey = runData.meta?.profileKey;
+  const kind = runData.kind || 'full';
+  const index = readJSON(BASELINES_INDEX_PATH, {});
+  const entry = profileKey && index[profileKey] ? (index[profileKey][kind] || index[profileKey].any) : null;
+  if (entry && entry.file) {
+    const pathForProfile = path.join(BASELINES_DIR, entry.file);
+    try {
+      return JSON.parse(fsSync.readFileSync(pathForProfile, 'utf8'));
+    } catch {}
+  }
+  try {
+    return JSON.parse(fsSync.readFileSync(BASELINE_PATH, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
 }
@@ -241,36 +477,40 @@ function readContainerSecret(container, name) {
 
 async function resetVault() {
   const pristineDir = path.join(EVALS_DIR, '.vault-pristine');
-  const notesDir = path.join(VAULT_SEED, 'notes');
-  const mapsDir = path.join(VAULT_SEED, 'maps');
 
   // First run: save pristine copy
   try { await fs.access(pristineDir); } catch {
     await fs.cp(VAULT_SEED, pristineDir, { recursive: true });
   }
 
-  // Restore from pristine
-  await fs.rm(notesDir, { recursive: true, force: true });
-  await fs.rm(mapsDir, { recursive: true, force: true });
-  try {
-    await fs.cp(path.join(pristineDir, 'notes'), notesDir, { recursive: true });
-  } catch {
-    await fs.mkdir(notesDir, { recursive: true });
-  }
-  try {
-    await fs.cp(path.join(pristineDir, 'maps'), mapsDir, { recursive: true });
-  } catch {
-    await fs.mkdir(mapsDir, { recursive: true });
-  }
+  // Restore the whole seed vault, not just notes/maps.
+  await fs.rm(VAULT_SEED, { recursive: true, force: true });
+  await fs.cp(pristineDir, VAULT_SEED, { recursive: true });
 
   // Restore assets/ from pristine (or create empty)
   const assetsDir = path.join(VAULT_SEED, 'assets');
-  await fs.rm(assetsDir, { recursive: true, force: true });
   try {
-    await fs.cp(path.join(pristineDir, 'assets'), assetsDir, { recursive: true });
+    await fs.access(assetsDir);
   } catch {
     await fs.mkdir(assetsDir, { recursive: true });
   }
+}
+
+function resetContainerRuntime(container) {
+  spawnSync('docker', [
+    'exec',
+    container,
+    'sh',
+    '-lc',
+    [
+      'rm -rf /data/db/*',
+      'rm -rf /data/logs/*',
+      'rm -rf /data/backups/*',
+      'rm -rf /data/memory/*',
+      'rm -f /data/.force-setup-done',
+      'rm -f /home/limbo/.zeroclaw/workspace/USER.md',
+    ].join(' && '),
+  ], { timeout: 10000 });
 }
 
 // ── Case loading ────────────────────────────────────────────────────────────
@@ -293,12 +533,14 @@ async function cmdRun(args) {
   const caseName = args['--case'] || null;
   const tag = args['--tag'] || null;
   const useJudge = args['--judge'] || false;
+  const difficulty = args['--difficulty'] || null;
+  const runMeta = await readRuntimeMeta(CONTAINER);
+  const runKind = resolveRunKind({ tag, caseName, difficulty });
 
   let cases = loadCases(caseName);
   if (tag) {
     cases = cases.filter(c => (c.tags || []).includes(tag));
   }
-  const difficulty = args['--difficulty'] || null;
   if (difficulty) {
     cases = cases.filter(c => c.difficulty === difficulty);
   }
@@ -317,15 +559,21 @@ async function cmdRun(args) {
     const runs = evalCase.runs || 1;
     for (let i = 0; i < runs; i++) {
       console.log(`── ${evalCase.name} (run ${i + 1}/${runs}) ──`);
+      const sessionStateFile = `/tmp/limbo-eval-${evalCase.name}-${Date.now()}-${i + 1}.json`;
 
       try {
         // Reset vault and clear leftover cron jobs
         await resetVault();
+        resetContainerRuntime(CONTAINER);
         clearCrons(CONTAINER);
+        resetUserProfile(CONTAINER);
+        spawnSync('docker', ['exec', CONTAINER, 'rm', '-f', sessionStateFile], { timeout: 5000 });
 
         // Resolve steps: multi-step cases have steps[], single-step have input+assertions
         const steps = evalCase.steps || [{ input: evalCase.input, assertions: evalCase.assertions }];
+        const transcriptTurns = [];
         let allScoreResults = [];
+        let stepResults = [];
         let lastResponse = '';
         let lastVaultDiff = { created: [], modified: [], deleted: [] };
         let totalMcpLogs = 0;
@@ -403,9 +651,17 @@ async function cmdRun(args) {
             // Send message
             console.log(`  Sending${stepLabel}: "${step.input}"`);
             const startMs = Date.now();
-            const { text: response, mcpLogs } = sendMessage(step.input, CONTAINER);
+            const message = buildStepMessage(step.input, transcriptTurns);
+            const { text: response, mcpLogs } = sendMessage(message, CONTAINER, sessionStateFile);
             const latencyMs = Date.now() - startMs;
+            const timezone = extractTimezoneFromMessage(step.input);
+            if (timezone) {
+              persistUserTimezone(CONTAINER, timezone);
+            }
+            const userProfile = readUserProfile(CONTAINER);
             lastResponse = response;
+            transcriptTurns.push({ role: 'user', content: step.input });
+            transcriptTurns.push({ role: 'assistant', content: response });
             console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
             console.log(`  Latency: ${latencyMs}ms`);
 
@@ -424,8 +680,30 @@ async function cmdRun(args) {
             totalLatencyMs += latencyMs;
 
             // Score assertions for this step
-            const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs });
+            const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs, userProfile });
             allScoreResults = allScoreResults.concat(stepScores);
+            stepResults.push({
+              index: s + 1,
+              input: step.input,
+              response,
+              latencyMs,
+              userProfile,
+              mcpLogCount: mcpLogs.length,
+              mcpLogs,
+              assertions: step.assertions,
+              scoreResults: stepScores,
+              vaultDiff: {
+                created: vaultDiff.created.length,
+                modified: vaultDiff.modified.length,
+                deleted: vaultDiff.deleted.length,
+              },
+              cronJobs: cronJobs.map(job => ({
+                id: job.id,
+                schedule: job.schedule,
+                task: job.task,
+                timezone: job.timezone,
+              })),
+            });
 
             const passed = stepScores.filter(r => r.pass).length;
             console.log(`  Score${stepLabel}: ${passed}/${stepScores.length} assertions passed`);
@@ -469,6 +747,7 @@ async function cmdRun(args) {
           scoreResults: allScoreResults,
           judgeResults,
           response: lastResponse.slice(0, 500),
+          steps: stepResults,
           vaultDiff: {
             created: lastVaultDiff.created.length,
             modified: lastVaultDiff.modified.length,
@@ -505,7 +784,19 @@ async function cmdRun(args) {
   // Save results
   const resultFile = path.join(HISTORY_DIR, `${runId}.json`);
   await fs.mkdir(HISTORY_DIR, { recursive: true });
-  const runData = { id: runId, timestamp: new Date().toISOString(), results };
+  const runData = {
+    id: runId,
+    timestamp: new Date().toISOString(),
+    meta: runMeta,
+    kind: runKind,
+    scope: {
+      case: caseName,
+      tag,
+      difficulty,
+      judge: Boolean(useJudge),
+    },
+    results,
+  };
   await fs.writeFile(resultFile, JSON.stringify(runData, null, 2));
   await fs.writeFile(path.join(RESULTS_DIR, 'latest.json'), JSON.stringify(runData, null, 2));
 
@@ -528,15 +819,13 @@ async function cmdCompare(args) {
     process.exit(1);
   }
 
-  let baseline;
-  try {
-    baseline = JSON.parse(await fs.readFile(BASELINE_PATH, 'utf8'));
-  } catch {
+  const baseline = resolveBaselineForRun(latest);
+  if (!baseline) {
     console.error('No baseline found. Run `limbo-eval promote` to create one.');
     process.exit(1);
   }
 
-  console.log(`Comparing latest run (${latest.id}) vs baseline (${baseline.id}):\n`);
+  console.log(`Comparing latest run (${latest.id}) vs baseline (${baseline.id}) for ${latest.meta?.profileLabel || 'unknown profile'}:\n`);
 
   const baseMap = new Map(baseline.results.map(r => [`${r.case}:${r.run}`, r]));
   let regressions = 0;
@@ -578,9 +867,16 @@ async function cmdPromote() {
     process.exit(1);
   }
 
-  await fs.writeFile(BASELINE_PATH, latest);
   const parsed = JSON.parse(latest);
-  console.log(`Promoted run ${parsed.id} as new baseline.`);
+  await fs.mkdir(BASELINES_DIR, { recursive: true });
+  const kind = parsed.kind || 'full';
+  const profileKey = parsed.meta?.profileKey || buildProfileKey(parsed.meta || {});
+  const baselineFile = path.join(BASELINES_DIR, `${profileKey}-${kind}.json`);
+
+  await fs.writeFile(BASELINE_PATH, latest);
+  await fs.writeFile(baselineFile, latest);
+  await updateBaselinesIndex(parsed, baselineFile);
+  console.log(`Promoted run ${parsed.id} as baseline for ${parsed.meta?.profileLabel || profileKey} (${kind}).`);
 }
 
 async function cmdReport() {
@@ -596,15 +892,16 @@ async function cmdReport() {
   }
 
   console.log('Last 10 runs:\n');
-  console.log('  Run ID                    Cases   Pass Rate');
-  console.log('  ─────────────────────────────────────────────');
+  console.log('  Run ID                    Cases   Pass Rate   Profile');
+  console.log('  ─────────────────────────────────────────────────────────────────────────');
 
   for (const file of files) {
     const data = JSON.parse(await fs.readFile(path.join(HISTORY_DIR, file), 'utf8'));
     const totalPassed = data.results.reduce((s, r) => s + r.passed, 0);
     const totalAssertions = data.results.reduce((s, r) => s + r.total, 0);
     const rate = totalAssertions > 0 ? ((totalPassed / totalAssertions) * 100).toFixed(1) : '0.0';
-    console.log(`  ${data.id.padEnd(28)} ${String(data.results.length).padEnd(8)} ${rate}%`);
+    const profileLabel = data.meta?.profileLabel || 'unknown-model';
+    console.log(`  ${data.id.padEnd(28)} ${String(data.results.length).padEnd(8)} ${String(rate + '%').padEnd(11)} ${profileLabel}`);
   }
 }
 

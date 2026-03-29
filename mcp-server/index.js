@@ -279,7 +279,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Build in-memory index before accepting connections
 const noteCount = await buildIndex();
-process.stderr.write(`[limbo-vault] Index built: ${noteCount} notes indexed\n`);
+process.stderr.write(`[limbo-vault] Index built: ${noteCount} notes (FTS5 search active)\n`);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
