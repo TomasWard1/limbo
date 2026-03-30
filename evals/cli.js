@@ -352,6 +352,21 @@ function resolveBaselineForRun(runData) {
   }
 }
 
+function resolveBaselineForCase(caseName, runNum, runData) {
+  const profileKey = runData.meta?.profileKey || buildProfileKey({});
+  // Try per-case baseline first
+  const caseFile = path.join(BASELINES_DIR, profileKey, `${caseName}.json`);
+  try {
+    return JSON.parse(fsSync.readFileSync(caseFile, 'utf8'));
+  } catch {}
+  // Fallback: extract from monolithic baseline
+  const monolithic = resolveBaselineForRun(runData);
+  if (monolithic && monolithic.results) {
+    return monolithic.results.find(r => r.case === caseName && r.run === runNum) || null;
+  }
+  return null;
+}
+
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
 }
@@ -642,23 +657,18 @@ async function cmdCompare(args) {
     process.exit(1);
   }
 
-  const baseline = resolveBaselineForRun(latest);
-  if (!baseline) {
-    console.error('No baseline found. Run `limbo-eval promote` to create one.');
-    process.exit(1);
-  }
+  const profileLabel = latest.meta?.profileLabel || 'unknown profile';
+  console.log(`Comparing latest run (${latest.id}) for ${profileLabel}:\n`);
 
-  console.log(`Comparing latest run (${latest.id}) vs baseline (${baseline.id}) for ${latest.meta?.profileLabel || 'unknown profile'}:\n`);
-
-  const baseMap = new Map(baseline.results.map(r => [`${r.case}:${r.run}`, r]));
   let regressions = 0;
   let improvements = 0;
+  let newCases = 0;
 
   for (const result of latest.results) {
-    const key = `${result.case}:${result.run}`;
-    const base = baseMap.get(key);
+    const base = resolveBaselineForCase(result.case, result.run, latest);
     if (!base) {
       console.log(`  [NEW]  ${result.case} — ${(result.passRate * 100).toFixed(0)}%`);
+      newCases++;
       continue;
     }
     const diff = result.passRate - base.passRate;
@@ -673,7 +683,7 @@ async function cmdCompare(args) {
     }
   }
 
-  console.log(`\n${improvements} improvement(s), ${regressions} regression(s)`);
+  console.log(`\n${improvements} improvement(s), ${regressions} regression(s), ${newCases} new case(s)`);
 
   if (strict && regressions > 0) {
     console.error('Strict mode: regressions detected.');
@@ -681,7 +691,9 @@ async function cmdCompare(args) {
   }
 }
 
-async function cmdPromote() {
+async function cmdPromote(args) {
+  const filterCase = args['--case'] || null;
+
   let latest;
   try {
     latest = await fs.readFile(path.join(RESULTS_DIR, 'latest.json'), 'utf8');
@@ -691,15 +703,37 @@ async function cmdPromote() {
   }
 
   const parsed = JSON.parse(latest);
-  await fs.mkdir(BASELINES_DIR, { recursive: true });
-  const kind = parsed.kind || 'full';
   const profileKey = parsed.meta?.profileKey || buildProfileKey(parsed.meta || {});
-  const baselineFile = path.join(BASELINES_DIR, `${profileKey}-${kind}.json`);
+  const profileDir = path.join(BASELINES_DIR, profileKey);
+  await fs.mkdir(profileDir, { recursive: true });
 
-  await fs.writeFile(BASELINE_PATH, latest);
-  await fs.writeFile(baselineFile, latest);
-  await updateBaselinesIndex(parsed, baselineFile);
-  console.log(`Promoted run ${parsed.id} as baseline for ${parsed.meta?.profileLabel || profileKey} (${kind}).`);
+  // Save per-case baselines
+  const results = filterCase
+    ? parsed.results.filter(r => r.case === filterCase)
+    : parsed.results;
+
+  if (results.length === 0) {
+    console.error(filterCase ? `Case "${filterCase}" not found in latest run.` : 'No results to promote.');
+    process.exit(1);
+  }
+
+  for (const result of results) {
+    const caseFile = path.join(profileDir, `${result.case}.json`);
+    await fs.writeFile(caseFile, JSON.stringify(result, null, 2));
+  }
+
+  // Also update monolithic baseline + index for backward compat (full runs only)
+  if (!filterCase) {
+    await fs.mkdir(BASELINES_DIR, { recursive: true });
+    const kind = parsed.kind || 'full';
+    const baselineFile = path.join(BASELINES_DIR, `${profileKey}-${kind}.json`);
+    await fs.writeFile(BASELINE_PATH, latest);
+    await fs.writeFile(baselineFile, latest);
+    await updateBaselinesIndex(parsed, baselineFile);
+  }
+
+  const scope = filterCase ? `case "${filterCase}"` : `${results.length} case(s)`;
+  console.log(`Promoted ${scope} from run ${parsed.id} as baseline for ${parsed.meta?.profileLabel || profileKey}.`);
 }
 
 async function cmdReport() {
@@ -770,6 +804,9 @@ Options for 'run':
 Options for 'compare':
   --strict        Exit with error code if regressions found
 
+Options for 'promote':
+  --case <name>   Promote only a specific case (default: all cases)
+
 Examples:
   limbo-eval run
   limbo-eval run --case create-reminder
@@ -777,6 +814,7 @@ Examples:
   limbo-eval run --tag vault_write_note --judge
   limbo-eval compare --strict
   limbo-eval promote
+  limbo-eval promote --case remember-fact
   limbo-eval report`);
 }
 
@@ -793,7 +831,7 @@ async function main() {
       await cmdCompare(args);
       break;
     case 'promote':
-      await cmdPromote();
+      await cmdPromote(args);
       break;
     case 'report':
       await cmdReport();
