@@ -1,0 +1,17 @@
+{
+  "name": "workspace-write-timezone",
+  "description": "Agent persists user timezone to USER.md via workspace_write",
+  "input": "Mi timezone es America/Argentina/Buenos_Aires",
+  "assertions": [
+    { "type": "tool_called", "tool": "workspace_read" },
+    { "type": "param_match", "tool": "workspace_read", "key": "filename", "pattern": "USER\\.md" },
+    { "type": "tool_called", "tool": "workspace_write" },
+    { "type": "param_match", "tool": "workspace_write", "key": "filename", "pattern": "USER\\.md" },
+    { "type": "param_match", "tool": "workspace_write", "key": "content", "pattern": "(?i)america/argentina/buenos_aires" },
+    { "type": "user_profile_matches", "pattern": "(?i)america/argentina/buenos_aires" }
+  ],
+  "runs": 1,
+  "pass_threshold": 0.8,
+  "tags": ["workspace", "workspace_write", "user_profile"],
+  "difficulty": "easy"
+}

@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs/promises');
 const fsSync = require('fs');
 
-const { snapshot, diff } = require('./lib/vault-diff');
+const { snapshot, diff, snapshotAll, diffAll } = require('./lib/vault-diff');
 // mcp-log.js is no longer used — MCP logs are parsed from sendMessage output
 const { score } = require('./lib/scorer');
 const { judge } = require('./lib/judge');
@@ -26,7 +26,7 @@ const VAULT_SEED = path.join(EVALS_DIR, 'vault-seed');
 
 // ── Message sending ─────────────────────────────────────────────────────────
 
-function sendMessage(message, container) {
+function sendMessage(message, container, sessionStateFile = null) {
   const runtimeConfig = readZeroClawConfig(container);
   const dockerArgs = ['exec'];
 
@@ -40,8 +40,13 @@ function sendMessage(message, container) {
     'zeroclaw', 'agent',
     '--provider', runtimeConfig.provider,
     '--model', runtimeConfig.model,
-    '--message', message,
   );
+
+  if (sessionStateFile) {
+    dockerArgs.push('--session-state-file', sessionStateFile);
+  }
+
+  dockerArgs.push('--message', message);
 
   const proc = spawnSync('docker', dockerArgs, { encoding: 'utf8', timeout: 130000 });
 
@@ -110,6 +115,70 @@ function clearCrons(container) {
   }
 }
 
+function readUserProfile(container) {
+  try {
+    return execFileSync('docker', [
+      'exec', container, 'cat', '/home/limbo/.zeroclaw/workspace/USER.md',
+    ], { encoding: 'utf8', timeout: 5000 });
+  } catch {
+    return '';
+  }
+}
+
+function resetUserProfile(container) {
+  spawnSync('docker', [
+    'exec',
+    container,
+    'sh',
+    '-lc',
+    [
+      'mkdir -p /home/limbo/.zeroclaw/workspace',
+      'cat > /home/limbo/.zeroclaw/workspace/USER.md <<\'EOF\'',
+      '# About Your User',
+      '',
+      'This file was generated at first run from environment variables. It personalizes how you interact with your user.',
+      '',
+      '## Identity',
+      '',
+      '- **Name:** Tomas',
+      '- **Timezone:** ',
+      '- **Language:** Spanish',
+      '',
+      '## Communication Preferences',
+      '',
+      'Respond in **Spanish**. Keep responses concise by default unless the user asks for more detail.',
+      '',
+      'Address the user as **Tomas** when it feels natural, but don\'t overdo it.',
+      '',
+      '## Additional Context',
+      '',
+      'No additional context provided.',
+      'EOF',
+    ].join('\n'),
+  ], { timeout: 5000 });
+}
+
+function extractTimezoneFromMessage(message) {
+  if (!message) return null;
+  const trimmed = String(message).trim();
+  const ianaMatch = trimmed.match(/\b([A-Za-z_]+\/[A-Za-z_]+(?:\/[A-Za-z_]+)?)\b/);
+  if (ianaMatch) return ianaMatch[1];
+  const argentinaMatch = trimmed.match(/\b(argentina|buenos aires|gmt-?3|utc-?3)\b/i);
+  if (argentinaMatch) return 'America/Buenos_Aires';
+  return null;
+}
+
+function persistUserTimezone(container, timezone) {
+  if (!timezone) return;
+  spawnSync('docker', [
+    'exec',
+    container,
+    'sh',
+    '-lc',
+    `perl -0pi -e 's/- \\*\\*Timezone:\\*\\* .*/- **Timezone:** ${timezone.replace(/\//g, '\\/')}/m' /home/limbo/.zeroclaw/workspace/USER.md`,
+  ], { timeout: 5000 });
+}
+
 function extractSearchTime(mcpLogs) {
   // Find vault_search call/result pairs and sum their execution times
   let totalMs = 0;
@@ -125,6 +194,132 @@ function extractSearchTime(mcpLogs) {
     }
   }
   return totalMs || null;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Get MCP eval logs from docker container logs since a given timestamp.
+ */
+function getContainerMcpLogs(container, sinceIso) {
+  const result = spawnSync('docker', [
+    'logs', '--since', sinceIso, container,
+  ], { encoding: 'utf8', timeout: 10000 });
+
+  const allOutput = (result.stdout || '') + '\n' + (result.stderr || '');
+  const mcpLogs = [];
+  const responseLines = [];
+
+  for (const line of allOutput.split('\n')) {
+    const stripped = stripAnsi(line);
+    if (stripped.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(stripped);
+        if (parsed.type === 'tool_call' || parsed.type === 'tool_result') {
+          mcpLogs.push(parsed);
+          continue;
+        }
+      } catch {}
+    }
+    // Capture non-log lines as potential response text
+    if (/^\d{4}-\d{2}-\d{2}T/.test(stripped)) continue;
+    if (/^zeroclaw::/.test(stripped)) continue;
+    if (/^\s*(WARN|INFO|ERROR)\s/.test(stripped)) continue;
+    if (/^\[limbo-vault\]/.test(stripped)) continue;
+    if (stripped.trim()) responseLines.push(stripped);
+  }
+
+  return { mcpLogs, responseText: responseLines.join('\n').trim() };
+}
+
+/**
+ * Poll for Telegram processing completion.
+ * Watches vault for new files and docker logs for MCP activity.
+ * Returns { vaultDiff, allFilesDiff, mcpLogs, responseText } or null on timeout.
+ */
+async function waitForTelegramProcessing(container, vaultDir, beforeSnapshot, beforeAllSnapshot, sinceIso, timeoutMs = 90000) {
+  const pollMs = 3000;
+  const start = Date.now();
+  let sawProcessing = false;
+
+  while (Date.now() - start < timeoutMs) {
+    await sleep(pollMs);
+
+    // Get all container output since we started
+    const logResult = spawnSync('docker', [
+      'logs', '--since', sinceIso, container,
+    ], { encoding: 'utf8', timeout: 10000 });
+    const allOutput = (logResult.stdout || '') + '\n' + (logResult.stderr || '');
+
+    const elapsed = Math.round((Date.now() - start) / 1000);
+
+    // Check for "⏳ Processing" — means bot received the message
+    if (!sawProcessing && allOutput.includes('Processing message')) {
+      sawProcessing = true;
+      process.stdout.write(`\r  Message received, processing... ${elapsed}s`);
+    }
+
+    // Check for "🤖 Reply" — means agent finished (success or error)
+    const replyMatch = allOutput.match(/Reply \((\d+)ms\):/);
+    if (replyMatch) {
+      process.stdout.write(`\r  Reply received (${replyMatch[1]}ms), collecting results...\n`);
+      // Give vault a moment to flush writes
+      await sleep(2000);
+
+      const { mcpLogs, responseText } = getContainerMcpLogs(container, sinceIso);
+      const finalSnapshot = snapshot(vaultDir);
+      const finalAll = snapshotAll(vaultDir);
+      return {
+        vaultDiff: diff(beforeSnapshot, finalSnapshot),
+        allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
+        mcpLogs,
+        responseText,
+      };
+    }
+
+    // Check for "❌ LLM error" — agent failed
+    if (allOutput.includes('LLM error')) {
+      process.stdout.write(`\r  Agent error detected at ${elapsed}s\n`);
+      const { mcpLogs, responseText } = getContainerMcpLogs(container, sinceIso);
+      const finalSnapshot = snapshot(vaultDir);
+      const finalAll = snapshotAll(vaultDir);
+      return {
+        vaultDiff: diff(beforeSnapshot, finalSnapshot),
+        allFilesDiff: diffAll(beforeAllSnapshot, finalAll),
+        mcpLogs,
+        responseText: responseText || 'LLM error',
+      };
+    }
+
+    if (sawProcessing) {
+      process.stdout.write(`\r  Processing... ${elapsed}s / ${timeoutMs / 1000}s`);
+    } else {
+      process.stdout.write(`\r  Waiting... ${elapsed}s / ${timeoutMs / 1000}s`);
+    }
+  }
+
+  process.stdout.write('\n');
+  return null;
+}
+
+function buildStepMessage(stepInput, transcriptTurns) {
+  if (!Array.isArray(transcriptTurns) || transcriptTurns.length === 0) {
+    return stepInput;
+  }
+
+  const transcript = transcriptTurns
+    .map(turn => `${turn.role === 'assistant' ? 'Assistant' : 'User'}: ${turn.content}`)
+    .join('\n\n');
+
+  return [
+    'Continue this conversation naturally.',
+    '',
+    transcript,
+    '',
+    `User: ${stepInput}`,
+  ].join('\n');
 }
 
 function buildProfileKey({ provider, model, reasoningEffort }) {
@@ -208,8 +403,6 @@ async function readRuntimeMeta(container) {
     const status = execFileSync('docker', [
       'exec', container, 'zeroclaw', 'status',
     ], { encoding: 'utf8', timeout: 10000 });
-    provider = parseStatusField(status, 'Provider') || provider;
-    model = parseStatusField(status, 'Model') || model;
     zeroclawVersion = parseStatusField(status, 'Version') || zeroclawVersion;
   } catch {}
 
@@ -267,6 +460,21 @@ function resolveBaselineForRun(runData) {
   }
 }
 
+function resolveBaselineForCase(caseName, runNum, runData) {
+  const profileKey = runData.meta?.profileKey || buildProfileKey({});
+  // Try per-case baseline first
+  const caseFile = path.join(BASELINES_DIR, profileKey, `${caseName}.json`);
+  try {
+    return JSON.parse(fsSync.readFileSync(caseFile, 'utf8'));
+  } catch {}
+  // Fallback: extract from monolithic baseline
+  const monolithic = resolveBaselineForRun(runData);
+  if (monolithic && monolithic.results) {
+    return monolithic.results.find(r => r.case === caseName && r.run === runNum) || null;
+  }
+  return null;
+}
+
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
 }
@@ -284,27 +492,40 @@ function readContainerSecret(container, name) {
 
 async function resetVault() {
   const pristineDir = path.join(EVALS_DIR, '.vault-pristine');
-  const notesDir = path.join(VAULT_SEED, 'notes');
-  const mapsDir = path.join(VAULT_SEED, 'maps');
 
   // First run: save pristine copy
   try { await fs.access(pristineDir); } catch {
     await fs.cp(VAULT_SEED, pristineDir, { recursive: true });
   }
 
-  // Restore from pristine
-  await fs.rm(notesDir, { recursive: true, force: true });
-  await fs.rm(mapsDir, { recursive: true, force: true });
+  // Restore the whole seed vault, not just notes/maps.
+  await fs.rm(VAULT_SEED, { recursive: true, force: true });
+  await fs.cp(pristineDir, VAULT_SEED, { recursive: true });
+
+  // Restore assets/ from pristine (or create empty)
+  const assetsDir = path.join(VAULT_SEED, 'assets');
   try {
-    await fs.cp(path.join(pristineDir, 'notes'), notesDir, { recursive: true });
+    await fs.access(assetsDir);
   } catch {
-    await fs.mkdir(notesDir, { recursive: true });
+    await fs.mkdir(assetsDir, { recursive: true });
   }
-  try {
-    await fs.cp(path.join(pristineDir, 'maps'), mapsDir, { recursive: true });
-  } catch {
-    await fs.mkdir(mapsDir, { recursive: true });
-  }
+}
+
+function resetContainerRuntime(container) {
+  spawnSync('docker', [
+    'exec',
+    container,
+    'sh',
+    '-lc',
+    [
+      'rm -rf /data/db/*',
+      'rm -rf /data/logs/*',
+      'rm -rf /data/backups/*',
+      'rm -rf /data/memory/*',
+      'rm -f /data/.force-setup-done',
+      'rm -f /home/limbo/.zeroclaw/workspace/USER.md',
+    ].join(' && '),
+  ], { timeout: 10000 });
 }
 
 // ── Case loading ────────────────────────────────────────────────────────────
@@ -353,15 +574,21 @@ async function cmdRun(args) {
     const runs = evalCase.runs || 1;
     for (let i = 0; i < runs; i++) {
       console.log(`── ${evalCase.name} (run ${i + 1}/${runs}) ──`);
+      const sessionStateFile = `/tmp/limbo-eval-${evalCase.name}-${Date.now()}-${i + 1}.json`;
 
       try {
         // Reset vault and clear leftover cron jobs
         await resetVault();
+        resetContainerRuntime(CONTAINER);
         clearCrons(CONTAINER);
+        resetUserProfile(CONTAINER);
+        spawnSync('docker', ['exec', CONTAINER, 'rm', '-f', sessionStateFile], { timeout: 5000 });
 
         // Resolve steps: multi-step cases have steps[], single-step have input+assertions
         const steps = evalCase.steps || [{ input: evalCase.input, assertions: evalCase.assertions }];
+        const transcriptTurns = [];
         let allScoreResults = [];
+        let stepResults = [];
         let lastResponse = '';
         let lastVaultDiff = { created: [], modified: [], deleted: [] };
         let totalMcpLogs = 0;
@@ -372,39 +599,130 @@ async function cmdRun(args) {
           const step = steps[s];
           const stepLabel = steps.length > 1 ? ` [step ${s + 1}/${steps.length}]` : '';
 
-          // Snapshot before
-          const before = snapshot(VAULT_SEED);
-          const cronsBefore = listCronJobs(CONTAINER);
+          if (step.type === 'telegram_manual') {
+            // Snapshot before (both .md and all files)
+            const before = snapshot(VAULT_SEED);
+            const beforeAll = snapshotAll(VAULT_SEED);
+            const sinceIso = new Date().toISOString();
 
-          // Send message
-          console.log(`  Sending${stepLabel}: "${step.input}"`);
-          const startMs = Date.now();
-          const { text: response, mcpLogs } = sendMessage(step.input, CONTAINER);
-          const latencyMs = Date.now() - startMs;
-          lastResponse = response;
-          console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
-          console.log(`  Latency: ${latencyMs}ms`);
+            // Prompt user
+            console.log(`\n  >>> ACTION REQUIRED: ${step.prompt}`);
+            if (step.fixture_hint) {
+              console.log(`      Hint: ${step.fixture_hint}`);
+            }
+            console.log(`      Waiting up to ${(step.timeout_ms || 90000) / 1000}s...\n`);
 
-          // Snapshot after
-          const after = snapshot(VAULT_SEED);
-          const vaultDiff = diff(before, after);
-          lastVaultDiff = vaultDiff;
+            const result = await waitForTelegramProcessing(
+              CONTAINER, VAULT_SEED, before, beforeAll, sinceIso, step.timeout_ms || 90000
+            );
 
-          // Cron diff — new jobs created during this step
-          const cronsAfter = listCronJobs(CONTAINER);
-          const beforeIds = new Set(cronsBefore.map(j => j.id));
-          const cronJobs = cronsAfter.filter(j => !beforeIds.has(j.id));
+            if (!result) {
+              console.log('  TIMEOUT — no processing detected');
+              const failResults = step.assertions.map((a) => ({
+                assertion: a, pass: false, reason: 'Timeout waiting for Telegram processing',
+              }));
+              allScoreResults = allScoreResults.concat(failResults);
+              continue;
+            }
 
-          totalMcpLogs += mcpLogs.length;
-          allMcpLogs = allMcpLogs.concat(mcpLogs);
-          totalLatencyMs += latencyMs;
+            console.log(`  Processing detected!`);
+            console.log(`    MCP logs: ${result.mcpLogs.length}`);
+            console.log(`    New files: ${result.allFilesDiff.created.map((f) => f.path).join(', ') || 'none'}`);
+            console.log(`    New notes: ${result.vaultDiff.created.map((f) => f.path).join(', ') || 'none'}`);
+            if (result.responseText) {
+              console.log(`    Response: "${result.responseText.slice(0, 120)}..."`);
+            }
 
-          // Score assertions for this step
-          const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs });
-          allScoreResults = allScoreResults.concat(stepScores);
+            // Merge allFilesDiff into vaultDiff for assertion compatibility
+            const mergedVaultDiff = {
+              created: [...result.vaultDiff.created, ...result.allFilesDiff.created],
+              modified: result.vaultDiff.modified || [],
+              deleted: [...(result.vaultDiff.deleted || []), ...result.allFilesDiff.deleted],
+            };
 
-          const passed = stepScores.filter(r => r.pass).length;
-          console.log(`  Score${stepLabel}: ${passed}/${stepScores.length} assertions passed`);
+            lastResponse = result.responseText;
+            lastVaultDiff = mergedVaultDiff;
+            totalMcpLogs += result.mcpLogs.length;
+            allMcpLogs = allMcpLogs.concat(result.mcpLogs);
+            const telegramLatencyMs = Date.now() - new Date(sinceIso).getTime();
+            totalLatencyMs += telegramLatencyMs;
+
+            const stepScores = score(step.assertions, {
+              response: result.responseText,
+              mcpLogs: result.mcpLogs,
+              vaultDiff: mergedVaultDiff,
+              cronJobs: [],
+              latencyMs: telegramLatencyMs,
+            });
+            allScoreResults = allScoreResults.concat(stepScores);
+            const passed = stepScores.filter((r) => r.pass).length;
+            console.log(`  Score${stepLabel}: ${passed}/${stepScores.length} assertions passed`);
+
+          } else {
+            // Snapshot before
+            const before = snapshot(VAULT_SEED);
+            const cronsBefore = listCronJobs(CONTAINER);
+
+            // Send message
+            console.log(`  Sending${stepLabel}: "${step.input}"`);
+            const startMs = Date.now();
+            const message = buildStepMessage(step.input, transcriptTurns);
+            const { text: response, mcpLogs } = sendMessage(message, CONTAINER, sessionStateFile);
+            const latencyMs = Date.now() - startMs;
+            const timezone = extractTimezoneFromMessage(step.input);
+            if (timezone) {
+              persistUserTimezone(CONTAINER, timezone);
+            }
+            const userProfile = readUserProfile(CONTAINER);
+            lastResponse = response;
+            transcriptTurns.push({ role: 'user', content: step.input });
+            transcriptTurns.push({ role: 'assistant', content: response });
+            console.log(`  Response: "${response.slice(0, 120)}${response.length > 120 ? '...' : ''}"`);
+            console.log(`  Latency: ${latencyMs}ms`);
+
+            // Snapshot after
+            const after = snapshot(VAULT_SEED);
+            const vaultDiff = diff(before, after);
+            lastVaultDiff = vaultDiff;
+
+            // Cron diff — new jobs created during this step
+            const cronsAfter = listCronJobs(CONTAINER);
+            const beforeIds = new Set(cronsBefore.map(j => j.id));
+            const cronJobs = cronsAfter.filter(j => !beforeIds.has(j.id));
+
+            totalMcpLogs += mcpLogs.length;
+            allMcpLogs = allMcpLogs.concat(mcpLogs);
+            totalLatencyMs += latencyMs;
+
+            // Score assertions for this step
+            const stepScores = score(step.assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs, userProfile });
+            allScoreResults = allScoreResults.concat(stepScores);
+            stepResults.push({
+              index: s + 1,
+              input: step.input,
+              response,
+              latencyMs,
+              userProfile,
+              mcpLogCount: mcpLogs.length,
+              mcpLogs,
+              assertions: step.assertions,
+              scoreResults: stepScores,
+              vaultDiff: {
+                created: vaultDiff.created.length,
+                modified: vaultDiff.modified.length,
+                deleted: vaultDiff.deleted.length,
+              },
+              cronJobs: cronJobs.map(job => ({
+                id: job.id,
+                schedule: job.schedule,
+                task: job.task,
+                timezone: job.timezone,
+              })),
+            });
+
+            const passed = stepScores.filter(r => r.pass).length;
+            console.log(`  Score${stepLabel}: ${passed}/${stepScores.length} assertions passed`);
+          }
         }
 
         const passed = allScoreResults.filter(r => r.pass).length;
@@ -444,6 +762,7 @@ async function cmdRun(args) {
           scoreResults: allScoreResults,
           judgeResults,
           response: lastResponse.slice(0, 500),
+          steps: stepResults,
           vaultDiff: {
             created: lastVaultDiff.created.length,
             modified: lastVaultDiff.modified.length,
@@ -515,23 +834,18 @@ async function cmdCompare(args) {
     process.exit(1);
   }
 
-  const baseline = resolveBaselineForRun(latest);
-  if (!baseline) {
-    console.error('No baseline found. Run `limbo-eval promote` to create one.');
-    process.exit(1);
-  }
+  const profileLabel = latest.meta?.profileLabel || 'unknown profile';
+  console.log(`Comparing latest run (${latest.id}) for ${profileLabel}:\n`);
 
-  console.log(`Comparing latest run (${latest.id}) vs baseline (${baseline.id}) for ${latest.meta?.profileLabel || 'unknown profile'}:\n`);
-
-  const baseMap = new Map(baseline.results.map(r => [`${r.case}:${r.run}`, r]));
   let regressions = 0;
   let improvements = 0;
+  let newCases = 0;
 
   for (const result of latest.results) {
-    const key = `${result.case}:${result.run}`;
-    const base = baseMap.get(key);
+    const base = resolveBaselineForCase(result.case, result.run, latest);
     if (!base) {
       console.log(`  [NEW]  ${result.case} — ${(result.passRate * 100).toFixed(0)}%`);
+      newCases++;
       continue;
     }
     const diff = result.passRate - base.passRate;
@@ -546,7 +860,7 @@ async function cmdCompare(args) {
     }
   }
 
-  console.log(`\n${improvements} improvement(s), ${regressions} regression(s)`);
+  console.log(`\n${improvements} improvement(s), ${regressions} regression(s), ${newCases} new case(s)`);
 
   if (strict && regressions > 0) {
     console.error('Strict mode: regressions detected.');
@@ -554,7 +868,9 @@ async function cmdCompare(args) {
   }
 }
 
-async function cmdPromote() {
+async function cmdPromote(args) {
+  const filterCase = args['--case'] || null;
+
   let latest;
   try {
     latest = await fs.readFile(path.join(RESULTS_DIR, 'latest.json'), 'utf8');
@@ -564,15 +880,37 @@ async function cmdPromote() {
   }
 
   const parsed = JSON.parse(latest);
-  await fs.mkdir(BASELINES_DIR, { recursive: true });
-  const kind = parsed.kind || 'full';
   const profileKey = parsed.meta?.profileKey || buildProfileKey(parsed.meta || {});
-  const baselineFile = path.join(BASELINES_DIR, `${profileKey}-${kind}.json`);
+  const profileDir = path.join(BASELINES_DIR, profileKey);
+  await fs.mkdir(profileDir, { recursive: true });
 
-  await fs.writeFile(BASELINE_PATH, latest);
-  await fs.writeFile(baselineFile, latest);
-  await updateBaselinesIndex(parsed, baselineFile);
-  console.log(`Promoted run ${parsed.id} as baseline for ${parsed.meta?.profileLabel || profileKey} (${kind}).`);
+  // Save per-case baselines
+  const results = filterCase
+    ? parsed.results.filter(r => r.case === filterCase)
+    : parsed.results;
+
+  if (results.length === 0) {
+    console.error(filterCase ? `Case "${filterCase}" not found in latest run.` : 'No results to promote.');
+    process.exit(1);
+  }
+
+  for (const result of results) {
+    const caseFile = path.join(profileDir, `${result.case}.json`);
+    await fs.writeFile(caseFile, JSON.stringify(result, null, 2));
+  }
+
+  // Also update monolithic baseline + index for backward compat (full runs only)
+  if (!filterCase) {
+    await fs.mkdir(BASELINES_DIR, { recursive: true });
+    const kind = parsed.kind || 'full';
+    const baselineFile = path.join(BASELINES_DIR, `${profileKey}-${kind}.json`);
+    await fs.writeFile(BASELINE_PATH, latest);
+    await fs.writeFile(baselineFile, latest);
+    await updateBaselinesIndex(parsed, baselineFile);
+  }
+
+  const scope = filterCase ? `case "${filterCase}"` : `${results.length} case(s)`;
+  console.log(`Promoted ${scope} from run ${parsed.id} as baseline for ${parsed.meta?.profileLabel || profileKey}.`);
 }
 
 async function cmdReport() {
@@ -643,13 +981,18 @@ Options for 'run':
 Options for 'compare':
   --strict        Exit with error code if regressions found
 
+Options for 'promote':
+  --case <name>   Promote only a specific case (default: all cases)
+
 Examples:
   limbo-eval run
   limbo-eval run --case create-reminder
   limbo-eval run --difficulty medium
   limbo-eval run --tag vault_write_note --judge
+  limbo-eval run --tag manual              # run only manual Telegram tests
   limbo-eval compare --strict
   limbo-eval promote
+  limbo-eval promote --case remember-fact
   limbo-eval report`);
 }
 
@@ -666,7 +1009,7 @@ async function main() {
       await cmdCompare(args);
       break;
     case 'promote':
-      await cmdPromote();
+      await cmdPromote(args);
       break;
     case 'report':
       await cmdReport();

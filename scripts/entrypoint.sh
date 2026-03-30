@@ -192,6 +192,10 @@ done
 
 # USER.md: generate from template via envsubst on first run
 if [ ! -f "$ZC_WORKSPACE/USER.md" ]; then
+  USER_NAME="${USER_NAME:-User}"
+  USER_TIMEZONE="${USER_TIMEZONE:-}"
+  USER_LANGUAGE="${USER_LANGUAGE:-English}"
+  USER_CONTEXT="${USER_CONTEXT:-No additional context provided.}"
   export USER_NAME USER_TIMEZONE USER_LANGUAGE USER_CONTEXT
   envsubst '$USER_NAME $USER_TIMEZONE $USER_LANGUAGE $USER_CONTEXT' \
     < /app/workspace/templates/USER.md.template > "$ZC_WORKSPACE/USER.md"

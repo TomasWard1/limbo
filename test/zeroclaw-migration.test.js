@@ -108,8 +108,13 @@ test('entrypoint.sh appends channels_config.telegram conditionally', () => {
 
 test('Dockerfile pulls ZeroClaw binary from official or custom image', () => {
   const df = read('Dockerfile');
-  assert.ok(df.match(/FROM ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+ AS zeroclaw/),
-    'Dockerfile must pull ZeroClaw from ghcr.io/zeroclaw-labs/zeroclaw or ghcr.io/tomasward1/zeroclaw');
+  assert.ok(
+    df.match(/ARG ZEROCLAW_IMAGE=ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+/) ||
+    df.match(/FROM ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+ AS zeroclaw/),
+    'Dockerfile must default to a ZeroClaw image from ghcr.io/zeroclaw-labs/zeroclaw or ghcr.io/tomasward1/zeroclaw'
+  );
+  assert.ok(df.includes('FROM ${ZEROCLAW_IMAGE} AS zeroclaw') || df.match(/FROM ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+ AS zeroclaw/),
+    'Dockerfile must build the zeroclaw stage from the configured ZeroClaw image');
   assert.ok(df.includes('COPY --from=zeroclaw /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw'));
 });
 
@@ -182,6 +187,22 @@ test('entrypoint.sh renders config.toml from template via envsubst', () => {
   const ep = read('scripts/entrypoint.sh');
   assert.ok(ep.includes('config.toml.template'));
   assert.ok(ep.includes('envsubst'));
+});
+
+test('USER.md template uses plain envsubst variables, not shell default expressions', () => {
+  const template = read('workspace/templates/USER.md.template');
+  assert.ok(template.includes('$USER_NAME'));
+  assert.ok(template.includes('$USER_TIMEZONE'));
+  assert.ok(template.includes('$USER_LANGUAGE'));
+  assert.ok(!template.includes('${USER_TIMEZONE:-UTC}'));
+  assert.ok(!template.includes('${USER_NAME:-User}'));
+});
+
+test('entrypoint.sh defaults USER.md fields before envsubst', () => {
+  const ep = read('scripts/entrypoint.sh');
+  assert.ok(ep.includes('USER_NAME="${USER_NAME:-User}"'));
+  assert.ok(ep.includes('USER_TIMEZONE="${USER_TIMEZONE:-}"'));
+  assert.ok(ep.includes('USER_LANGUAGE="${USER_LANGUAGE:-English}"'));
 });
 
 // ─── 7. Migration version bumped correctly ──────────────────────────────────

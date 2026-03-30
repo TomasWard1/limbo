@@ -154,6 +154,112 @@ function metaBadge(text) {
   return createEl('span', { className: 'meta-badge' }, text);
 }
 
+function formatLatencyMs(latencyMs) {
+  return typeof latencyMs === 'number' ? `${(latencyMs / 1000).toFixed(1)}s` : '—';
+}
+
+function summarizeToolParams(params) {
+  if (!params || typeof params !== 'object') return '';
+  const pairs = Object.entries(params)
+    .slice(0, 3)
+    .map(([key, value]) => {
+      const text = typeof value === 'string' ? value : JSON.stringify(value);
+      return `${key}=${text.length > 80 ? `${text.slice(0, 77)}...` : text}`;
+    });
+  return pairs.join(' · ');
+}
+
+function buildToolTrace(logs) {
+  if (!Array.isArray(logs) || !logs.length) return null;
+  const wrap = createEl('div', { className: 'tool-trace-list' });
+  logs.forEach(log => {
+    const row = createEl('div', { className: 'tool-trace-row' });
+    const typeLabel = log.type === 'tool_call' ? 'call' : log.type === 'tool_result' ? 'result' : log.type || 'log';
+    row.appendChild(metaBadge(typeLabel));
+    row.appendChild(createEl('div', { className: 'tool-trace-tool' }, log.tool || 'unknown-tool'));
+    const detailParts = [];
+    if (log.type === 'tool_result' && typeof log.success === 'boolean') {
+      detailParts.push(log.success ? 'ok' : 'error');
+    }
+    const paramsSummary = summarizeToolParams(log.params);
+    if (paramsSummary) detailParts.push(paramsSummary);
+    if (log.timestamp) detailParts.push(shortDate(log.timestamp));
+    row.appendChild(createEl('div', { className: 'tool-trace-detail' }, detailParts.join(' · ')));
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+
+function buildTranscriptSection(result) {
+  const section = createEl('div', { className: 'detail-section' });
+  const steps = Array.isArray(result.steps) ? result.steps : [];
+  const hasTranscript = steps.some(step => step.input || step.response);
+
+  section.appendChild(createEl('h3', {}, steps.length > 1 ? 'Conversation' : 'LLM Response'));
+
+  if (hasTranscript) {
+    const transcript = createEl('div', { className: 'transcript-list' });
+    steps.forEach(step => {
+      const card = createEl('div', { className: 'step-card' });
+      const header = createEl('div', { className: 'step-header' });
+      header.appendChild(createEl('div', { className: 'step-title' }, `Step ${step.index || 1}`));
+      header.appendChild(createEl('div', { className: 'step-meta' }, `${formatLatencyMs(step.latencyMs)} · ${step.scoreResults?.filter(r => r.pass).length || 0}/${step.scoreResults?.length || 0}`));
+      card.appendChild(header);
+
+      if (step.input) {
+        const userTurn = createEl('div', { className: 'transcript-turn user' });
+        userTurn.appendChild(createEl('div', { className: 'transcript-speaker' }, 'User'));
+        userTurn.appendChild(createEl('div', { className: 'response-box' }, step.input));
+        card.appendChild(userTurn);
+      }
+
+      if (step.response) {
+        const assistantTurn = createEl('div', { className: 'transcript-turn assistant' });
+        assistantTurn.appendChild(createEl('div', { className: 'transcript-speaker' }, 'Assistant'));
+        assistantTurn.appendChild(createEl('div', { className: 'response-box' }, step.response));
+        card.appendChild(assistantTurn);
+      }
+
+      const stepTrace = buildToolTrace(step.mcpLogs);
+      if (stepTrace) {
+        card.appendChild(createEl('div', { className: 'transcript-speaker' }, 'Tools'));
+        card.appendChild(stepTrace);
+      }
+
+      card.appendChild(buildStepAssertions(step));
+      transcript.appendChild(card);
+    });
+    section.appendChild(transcript);
+    return section;
+  }
+
+  section.appendChild(createEl('div', { className: 'response-box', textContent: result.response || '(no response captured)' }));
+  if (result.mcpLogs?.length) {
+    section.appendChild(createEl('div', { className: 'detail-note' }, 'Legacy run: no transcript was stored. Showing tool trace only.'));
+    const trace = buildToolTrace(result.mcpLogs);
+    if (trace) section.appendChild(trace);
+  }
+  return section;
+}
+
+function buildStepAssertions(step) {
+  const wrap = createEl('div', { className: 'step-assertions' });
+  const results = Array.isArray(step.scoreResults) ? step.scoreResults : [];
+  if (!results.length) return wrap;
+
+  wrap.appendChild(createEl('div', { className: 'transcript-speaker' }, `Assertions (${results.filter(r => r.pass).length}/${results.length})`));
+  results.forEach(sr => {
+    const row = createEl('div', { className: 'assertion-row compact' });
+    row.appendChild(createEl('div', { className: `assertion-icon ${sr.pass ? 'pass' : 'fail'}` }, sr.pass ? '\u2713' : '\u2717'));
+    const info = createEl('div');
+    info.appendChild(createEl('div', { className: 'assertion-type' }, sr.assertion.type + (sr.assertion.tool ? ` \u2192 ${sr.assertion.tool}` : '')));
+    info.appendChild(createEl('div', { className: 'assertion-reason' }, sr.reason));
+    row.appendChild(info);
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+
 function collectProfiles() {
   const map = new Map();
   const runs = [];
@@ -424,11 +530,7 @@ function buildAccordionDetail(caseName, result) {
     assertSection.appendChild(row);
   });
   el.appendChild(assertSection);
-
-  const respSection = createEl('div', { className: 'detail-section' });
-  respSection.appendChild(createEl('h3', {}, 'LLM Response'));
-  respSection.appendChild(createEl('div', { className: 'response-box', textContent: result.response || '(no response captured)' }));
-  el.appendChild(respSection);
+  el.appendChild(buildTranscriptSection(result));
 
   if (result.vaultDiff) {
     const vaultSection = createEl('div', { className: 'detail-section' });
