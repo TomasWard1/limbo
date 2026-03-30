@@ -498,16 +498,16 @@ async function resetVault() {
     await fs.cp(VAULT_SEED, pristineDir, { recursive: true });
   }
 
-  // Restore the whole seed vault, not just notes/maps.
-  await fs.rm(VAULT_SEED, { recursive: true, force: true });
-  await fs.cp(pristineDir, VAULT_SEED, { recursive: true });
-
-  // Restore assets/ from pristine (or create empty)
-  const assetsDir = path.join(VAULT_SEED, 'assets');
-  try {
-    await fs.access(assetsDir);
-  } catch {
-    await fs.mkdir(assetsDir, { recursive: true });
+  // Clean vault-seed contents without deleting the directory itself
+  // (deleting it breaks the Docker bind mount).
+  for (const entry of await fs.readdir(VAULT_SEED)) {
+    if (entry.startsWith('.')) continue;
+    await fs.rm(path.join(VAULT_SEED, entry), { recursive: true, force: true });
+  }
+  // Copy pristine contents back (includes assets/)
+  for (const entry of await fs.readdir(pristineDir)) {
+    if (entry.startsWith('.')) continue;
+    await fs.cp(path.join(pristineDir, entry), path.join(VAULT_SEED, entry), { recursive: true });
   }
 }
 

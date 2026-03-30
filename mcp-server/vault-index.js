@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from "fs/promises";
 import { join, basename, relative } from "path";
-import { initFts, upsertNote as ftsUpsert, indexedCount } from "./fts.js";
+import { initFts, upsertNote as ftsUpsert, deleteNote as ftsDelete, indexedCount, indexedIds } from "./fts.js";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const NOTES_DIR = join(VAULT_PATH, "notes");
@@ -75,13 +75,24 @@ export async function buildIndex() {
   await walkAndIndex(NOTES_DIR);
   built = true;
 
-  // Initialize FTS and backfill if needed
+  // Initialize FTS and sync with filesystem
   const searchDbPath = join(DB_PATH, "search.db");
   initFts(searchDbPath);
-  if (indexedCount() === 0 && index.size > 0) {
-    for (const [noteId, entry] of index) {
+  const ftsIds = indexedIds();
+  const memIds = new Set(index.keys());
+
+  // Upsert notes that are on disk but missing/stale in FTS
+  for (const [noteId, entry] of index) {
+    if (!ftsIds.has(noteId)) {
       const body = stripFrontmatter(entry.content);
       ftsUpsert(noteId, entry.title, body, entry.domain);
+    }
+  }
+
+  // Remove notes from FTS that no longer exist on disk
+  for (const id of ftsIds) {
+    if (!memIds.has(id)) {
+      ftsDelete(id);
     }
   }
 

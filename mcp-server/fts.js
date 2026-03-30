@@ -130,6 +130,14 @@ export function indexedCount() {
 }
 
 /**
+ * Return all indexed note IDs as a Set.
+ */
+export function indexedIds() {
+  const rows = db.prepare("SELECT note_id FROM notes_meta").all();
+  return new Set(rows.map((r) => r.note_id));
+}
+
+/**
  * Close the database connection.
  */
 export function closeFts() {
