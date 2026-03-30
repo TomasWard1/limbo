@@ -9,7 +9,7 @@
     },
     {
       "type": "response_matches",
-      "pattern": "(?i)(newsletter.*7|ollama|MCP|agents.*memory)"
+      "pattern": "(?i)(ollama|MCP|indie.?hacker|agents.*memory)"
     }
   ],
   "runs": 1,
