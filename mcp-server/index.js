@@ -12,6 +12,7 @@ import { vaultWriteNote } from "./tools/write.js";
 import { vaultUpdateMap } from "./tools/update-map.js";
 import { vaultStoreFile } from "./tools/store-file.js";
 import { vaultGetFile } from "./tools/get-file.js";
+import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
 
 const EVAL_MODE = process.env.LIMBO_EVAL === "true";
 
@@ -122,7 +123,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "vault_store_file",
       description:
-        "Store a binary file (image, PDF, document) in the vault and create a linked note with metadata. The file is saved to vault/assets/ and a markdown note is created in vault/notes/ referencing it.",
+        "Store a file (image, PDF, document) in the vault and create a linked note. Preferred: pass filePath to copy a local file (e.g. from telegram_files/). Fallback: pass filename + fileData as base64. The source file is deleted after a successful copy.",
       inputSchema: {
         type: "object",
         properties: {
@@ -130,8 +131,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           title: { type: "string", description: "Human-readable title for the linked note" },
           description: { type: "string", description: "One-sentence description of the file's content or purpose" },
           content: { type: "string", description: "Markdown body for the linked note — include context from the conversation about why this file was saved" },
-          filename: { type: "string", description: "Original filename with extension (e.g. 'photo.jpg', 'report.pdf')" },
-          fileData: { type: "string", description: "Base64-encoded file content (max 10MB)" },
+          filePath: { type: "string", description: "Absolute path to a local file to store (e.g. /home/limbo/.zeroclaw/workspace/telegram_files/doc.pdf). Preferred over fileData. Filename is derived from the path." },
+          filename: { type: "string", description: "Original filename with extension — required with fileData, optional with filePath (auto-derived)" },
+          fileData: { type: "string", description: "Base64-encoded file content (max 10MB) — fallback when filePath is not available" },
           subdirectory: { type: "string", description: "Optional subdirectory under assets/ (e.g. 'images', 'documents', 'screenshots')" },
           noteSubdirectory: { type: "string", description: "Optional subdirectory under notes/ for the linked note" },
           mimeType: { type: "string", description: "Optional MIME type (auto-detected from extension if omitted)" },
@@ -143,7 +145,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             description: "Optional: map references as wikilinks, e.g. [\"[[documents-map]]\"]",
           },
         },
-        required: ["noteId", "title", "description", "content", "filename", "fileData"],
+        required: ["noteId", "title", "description", "content"],
       },
     },
     {
@@ -159,6 +161,41 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
         },
         required: ["noteId"],
+      },
+    },
+    {
+      name: "workspace_read",
+      description:
+        "Read one of your workspace personality/config files. Use this to check your current USER.md, SOUL.md, or IDENTITY.md before updating them. Also readable: AGENTS.md, TOOLS.md, limbo-skill.md (system files — read-only).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          filename: {
+            type: "string",
+            description: "Filename to read (e.g. 'USER.md', 'SOUL.md', 'IDENTITY.md')",
+          },
+        },
+        required: ["filename"],
+      },
+    },
+    {
+      name: "workspace_write",
+      description:
+        "Update one of your writable personality files: USER.md, SOUL.md, or IDENTITY.md. Read the file first with workspace_read, then write the full updated content. System files (AGENTS.md, TOOLS.md) cannot be written — they are reset on every boot.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          filename: {
+            type: "string",
+            enum: ["USER.md", "SOUL.md", "IDENTITY.md"],
+            description: "Which file to update",
+          },
+          content: {
+            type: "string",
+            description: "Complete file content (replaces the entire file)",
+          },
+        },
+        required: ["filename", "content"],
       },
     },
   ],
@@ -253,6 +290,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ],
           };
         }
+        break;
+      }
+
+      case "workspace_read": {
+        const wsRead = await workspaceRead(args.filename);
+        result = {
+          content: [{ type: "text", text: wsRead.content }],
+        };
+        break;
+      }
+
+      case "workspace_write": {
+        const wsWrite = await workspaceWrite(args.filename, args.content);
+        result = {
+          content: [{ type: "text", text: `Updated ${wsWrite.filename} (${wsWrite.size} bytes)` }],
+        };
         break;
       }
 

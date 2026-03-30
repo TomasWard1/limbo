@@ -1,8 +1,8 @@
-# Vault Tools & Processing Rules
+# Tools & Processing Rules
 
-You have 6 vault tools via MCP. ZeroClaw invokes these natively — call them by name.
+You have 8 tools via MCP. ZeroClaw invokes these natively — call them by name.
 
-**⚠️ ALL user information goes to the vault via these tools. Always.**
+**⚠️ ALL user information goes to the vault via vault tools. Always.**
 
 If `USER.md` has no timezone and a reminder request depends on local time, stop and ask for the timezone first. Do not default to UTC. Once the user tells you the timezone, use it for the reminder and treat it as durable profile information.
 If the user answers a missing reminder detail in the next turn, finish the reminder immediately in that turn. Do not only acknowledge the new detail.
@@ -67,6 +67,7 @@ Use when: you found a note via search and need its full content.
 
 - `noteId` is the filename without `.md`
 - Returns raw markdown including YAML frontmatter
+- For workspace files (USER.md, SOUL.md, etc.), use `workspace_read` instead
 
 ## vault_write_note
 
@@ -129,6 +130,22 @@ Use when: you've written a note that belongs to a MOC, or user asks to organize.
 
 Use when: user sends a file (image, PDF, document) to save in the vault.
 
+**Preferred: use `filePath`** to copy a local file (e.g. from Telegram downloads). The filename is derived automatically and the source file is deleted after a successful copy.
+
+```json
+{
+  "noteId": "receipt-hardware-2026-03",
+  "title": "Hardware Store Receipt",
+  "description": "Receipt for drill and screws from hardware store, March 2026",
+  "content": "User sent this receipt from a hardware store purchase.",
+  "filePath": "/home/limbo/.zeroclaw/workspace/telegram_files/receipt.pdf",
+  "subdirectory": "documents",
+  "source": "telegram"
+}
+```
+
+**Fallback: use `filename` + `fileData`** when the file is not on the local filesystem:
+
 ```json
 {
   "noteId": "receipt-hardware-2026-03",
@@ -146,6 +163,7 @@ Use when: user sends a file (image, PDF, document) to save in the vault.
 - The note is searchable via `vault_search` like any other note
 - Files stored in `vault/assets/{subdirectory}/` with a timestamped filename
 - The linked note's frontmatter includes `asset_path` and `asset_type`
+- When using `filePath`, the source file is **deleted** after successful copy to vault
 
 ## vault_get_file
 
@@ -158,3 +176,51 @@ Use when: user asks to see or retrieve a previously stored file.
 - Returns the file as base64 (images returned as image content blocks)
 - Only works on notes with `asset_path` in frontmatter
 - If the note has no linked file, returns an error
+
+---
+
+## Workspace Files (Your Personality)
+
+You have files that define who you are and how you interact. These live in your workspace directory and persist across restarts.
+
+### Your files
+
+| File | Purpose | Writable? |
+|------|---------|-----------|
+| **USER.md** | Your user's name, timezone, language, preferences | ✅ Yes |
+| **SOUL.md** | How you think, your voice, your disposition | ✅ Yes |
+| **IDENTITY.md** | Who you are — Limbo's role and capabilities | ✅ Yes |
+| AGENTS.md | Cardinal rules and processing rules | ❌ System (reset on boot) |
+| TOOLS.md | This file — tool reference | ❌ System (reset on boot) |
+
+### workspace_read
+
+Use when: you need to check your current personality files before updating, or when the user asks about your configuration.
+
+```json
+{ "filename": "USER.md" }
+```
+
+- Reads any `.md` file in your workspace
+- Always read before writing — you need to see the current state
+
+### workspace_write
+
+Use when: you learn new information about the user (timezone, language, name, preferences) or when asked to adjust your personality.
+
+```json
+{
+  "filename": "USER.md",
+  "content": "# About Your User\n\n..."
+}
+```
+
+- Only `USER.md`, `SOUL.md`, and `IDENTITY.md` are writable
+- Replaces the entire file — always read first, then write the full updated content
+- System files (AGENTS.md, TOOLS.md) are read-only and reset from the image on every container boot
+
+### When to update workspace files
+
+- **USER.md** — Update when you learn the user's name, timezone, language, or preferences. This is the most commonly updated file. When the user tells you their timezone or corrects their name, update it immediately.
+- **SOUL.md** — Update when the user gives you feedback about your voice or behavior that should persist. Rare — only when explicitly asked.
+- **IDENTITY.md** — Update when the user wants to expand or change your role. Very rare.
