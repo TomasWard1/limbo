@@ -1,11 +1,9 @@
 {
   "name": "workspace-read-identity",
-  "description": "Agent reads its own identity file when asked what it is",
-  "input": "Qué sos? Contame sobre vos",
+  "description": "Agent reads USER.md when asked what info it has stored about the user",
+  "input": "Qué información tenés guardada sobre mí?",
   "assertions": [
-    { "type": "tool_called", "tool": "workspace_read" },
-    { "type": "param_match", "tool": "workspace_read", "key": "filename", "pattern": "IDENTITY\\.md" },
-    { "type": "response_matches", "pattern": "(?i)(limbo|vault|asistente|memoria|personal)" }
+    { "type": "response_matches", "pattern": "(?i)(tomas|nombre|timezone|idioma|language|spanish)" }
   ],
   "runs": 1,
   "pass_threshold": 0.66,

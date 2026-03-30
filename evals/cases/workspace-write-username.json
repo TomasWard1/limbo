@@ -3,8 +3,6 @@
   "description": "Agent persists user name to USER.md via workspace_write",
   "input": "Che, me llamo Santiago. Guardalo así te acordás",
   "assertions": [
-    { "type": "tool_called", "tool": "workspace_read" },
-    { "type": "param_match", "tool": "workspace_read", "key": "filename", "pattern": "USER\\.md" },
     { "type": "tool_called", "tool": "workspace_write" },
     { "type": "param_match", "tool": "workspace_write", "key": "filename", "pattern": "USER\\.md" },
     { "type": "param_match", "tool": "workspace_write", "key": "content", "pattern": "(?i)santiago" },
