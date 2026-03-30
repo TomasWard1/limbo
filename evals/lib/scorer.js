@@ -25,6 +25,8 @@ function score(assertions, { response, mcpLogs, vaultDiff, cronJobs, latencyMs, 
           return checkCronCreated(assertion, cronJobs || []);
         case 'latency_under':
           return checkLatencyUnder(assertion, latencyMs);
+        case 'response_no_error':
+          return checkResponseNoError(assertion, response);
         case 'user_profile_matches':
           return checkUserProfileMatches(assertion, userProfile);
         default:
@@ -197,6 +199,24 @@ function checkLatencyUnder(assertion, latencyMs) {
     reason: pass
       ? `Latency ${latencyMs}ms <= ${maxMs}ms`
       : `Latency ${latencyMs}ms EXCEEDED ${maxMs}ms`,
+  };
+}
+
+function checkResponseNoError(assertion, response) {
+  const errorPatterns = [
+    /\b(error|failed|failure|exception)\b/i,
+    /\b(could not|couldn't|cannot|can't)\s+(process|transcri|handle|receive)/i,
+    /\b(no\s+(audio|file|document|transcription))\b/i,
+    /\b(unsupported|invalid)\s+(file|format|type)/i,
+  ];
+  const matched = errorPatterns.find((rx) => rx.test(response || ''));
+  const pass = !matched;
+  return {
+    assertion,
+    pass,
+    reason: pass
+      ? 'Response does not contain error patterns'
+      : `Response contains error pattern: ${matched}`,
   };
 }
 

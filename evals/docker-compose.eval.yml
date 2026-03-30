@@ -11,11 +11,12 @@ services:
       - ./vault-seed:/data/vault
       - limbo-eval-data:/data
       - limbo-eval-zc:/home/limbo/.zeroclaw
-      - ~/.limbo-dev/config.env:/data/config/.env:ro
+      - ./config.eval.env:/data/config/.env:ro
     secrets:
       - llm_api_key
       - gateway_token
       - telegram_bot_token
+      - groq_api_key
       - brave_api_key
     env_file:
       - .env.eval
@@ -43,6 +44,8 @@ secrets:
     file: ~/.limbo-dev/secrets/gateway_token
   telegram_bot_token:
     file: ~/.limbo-dev/secrets/telegram_bot_token
+  groq_api_key:
+    file: ~/.limbo-dev/secrets/groq_api_key
   brave_api_key:
     file: ~/.limbo-dev/secrets/brave_api_key
 
