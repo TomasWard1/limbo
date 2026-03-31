@@ -70,5 +70,5 @@ export async function vaultGetFile(noteId) {
   const data = buffer.toString("base64");
   const filename = basename(fullPath);
 
-  return { data, mimeType, filename };
+  return { data, mimeType, filename, assetPath };
 }

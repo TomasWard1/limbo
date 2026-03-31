@@ -256,11 +256,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "vault_store_file": {
         const storeResult = await vaultStoreFile(args);
+        const absoluteAssetPath = `${process.env.VAULT_PATH || "/data/vault"}/${storeResult.assetPath}`;
         result = {
           content: [
             {
               type: "text",
-              text: `File stored: ${storeResult.assetPath}\nLinked note: ${storeResult.noteId} → ${storeResult.notePath}`,
+              text: `File stored successfully.\nAsset path (absolute): ${absoluteAssetPath}\nAsset path (relative): ${storeResult.assetPath}\nLinked note: ${storeResult.noteId} → ${storeResult.notePath}\n\nTo send this file to the user, reply with: [DOCUMENT:${absoluteAssetPath}]`,
             },
           ],
         };
@@ -269,23 +270,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "vault_get_file": {
         const fileResult = await vaultGetFile(args.noteId);
+        const vaultBase = process.env.VAULT_PATH || "/data/vault";
         if (fileResult.mimeType.startsWith("image/")) {
           result = {
             content: [
               { type: "image", data: fileResult.data, mimeType: fileResult.mimeType },
-              { type: "text", text: `File: ${fileResult.filename} (${fileResult.mimeType})` },
+              { type: "text", text: `File: ${fileResult.filename} (${fileResult.mimeType})\nAbsolute path: ${vaultBase}/${fileResult.assetPath}` },
             ],
           };
         } else {
+          const absolutePath = `${vaultBase}/${fileResult.assetPath}`;
           result = {
             content: [
               {
                 type: "text",
-                text: JSON.stringify({
-                  filename: fileResult.filename,
-                  mimeType: fileResult.mimeType,
-                  data: fileResult.data,
-                }),
+                text: `File retrieved: ${fileResult.filename} (${fileResult.mimeType})\nAbsolute path: ${absolutePath}\n\nTo send this file to the user, reply with: [DOCUMENT:${absolutePath}]\n\nDo NOT include the file's base64 content in your reply — use the [DOCUMENT:] prefix with the absolute path above.`,
               },
             ],
           };
