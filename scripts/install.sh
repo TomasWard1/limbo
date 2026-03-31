@@ -96,6 +96,22 @@ header "Limbo CLI"
 npm install -g limbo-ai@latest --loglevel=error 2>&1
 ok "Installed: limbo v$(limbo -v 2>/dev/null || echo 'unknown')"
 
+# ─── Install cloudflared (for setup tunnels) ────────────────────────────────
+header "Cloudflared"
+
+if command -v cloudflared &>/dev/null; then
+  ok "Already installed: $(cloudflared --version 2>&1 | head -1)"
+else
+  log "Installing cloudflared..."
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+  echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" \
+    | tee /etc/apt/sources.list.d/cloudflared.list >/dev/null
+  apt-get update -qq
+  apt-get install -y -qq cloudflared
+  ok "Installed: $(cloudflared --version 2>&1 | head -1)"
+fi
+
+
 # ─── Pre-pull Docker image ───────────────────────────────────────────────────
 header "Docker image"
 

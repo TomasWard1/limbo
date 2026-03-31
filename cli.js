@@ -1137,24 +1137,191 @@ function ensureVolumePermissions() {
   ], { stdio: 'pipe' });
 }
 
-// ─── Server detection & Cloudflare tunnel for remote wizard access ──────────
+// ─── Server detection & tunnel for remote wizard access ─────────────────────
 
 function isServerEnvironment() {
   return !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT ||
     (os.platform() === 'linux' && !process.env.DISPLAY));
 }
 
-// Creates a public HTTPS tunnel via localhost.run (SSH-based, zero install).
-// Falls back gracefully if SSH is unavailable or the service is down.
-async function createSetupTunnel(port) {
+const CF_CERT_PATH = path.join(os.homedir(), '.cloudflared', 'cert.pem');
+const CF_TUNNEL_CONFIG = path.join(LIMBO_DIR, 'tunnel-config.json');
+
+function hasCloudflared() {
+  try { execSync('cloudflared --version', { stdio: 'pipe' }); return true; } // hardcoded, safe
+  catch { return false; }
+}
+
+function isCloudflareLoggedIn() {
+  return fs.existsSync(CF_CERT_PATH);
+}
+
+// Interactive prompt: choose tunnel type
+async function promptTunnelChoice() {
+  const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+
+  console.log(`
+  ${c.bold}Setup wizard needs a public URL for your client.${c.reset}
+
+  ${c.green}1)${c.reset} Cloudflare tunnel ${c.dim}(stable URL under your domain, recommended)${c.reset}
+  ${c.green}2)${c.reset} Quick tunnel      ${c.dim}(instant, temporary URL via localhost.run)${c.reset}
+`);
+  const choice = (await ask('  Choose [1/2]: ')).trim();
+  rl.close();
+  return choice === '2' ? 'quick' : 'cloudflare';
+}
+
+// cloudflared login (interactive, opens browser or prints URL)
+async function ensureCloudflareLogin() {
+  if (isCloudflareLoggedIn()) return true;
+
+  log('Logging in to Cloudflare...');
+  log('A browser window will open (or a URL will be printed). Select your domain.\n');
+
+  const result = spawnSync('cloudflared', ['login'], { stdio: 'inherit' });
+  if (result.status !== 0 || !isCloudflareLoggedIn()) {
+    warn('Cloudflare login failed or was cancelled.');
+    return false;
+  }
+  ok('Cloudflare login successful.');
+  return true;
+}
+
+// Tunnel hostnames are always setup-<slug>.heylimbo.com
+const CF_TUNNEL_BASE_DOMAIN = 'heylimbo.com';
+
+// Create a named CF tunnel using cloudflared CLI (requires cert.pem from login)
+async function createNamedCfTunnel(port) {
+  const slug = crypto.randomBytes(4).toString('hex').slice(0, 7);
+  const tunnelName = 'limbo-setup-' + slug;
+  const hostname = 'setup-' + slug + '.' + CF_TUNNEL_BASE_DOMAIN;
+
+  try {
+    // 1. Create tunnel
+    spinnerWrite('Creating tunnel...');
+    const createResult = spawnSync('cloudflared', ['tunnel', 'create', tunnelName], {
+      stdio: 'pipe', encoding: 'utf8',
+    });
+    if (createResult.status !== 0) {
+      spinnerClear();
+      warn('Failed to create tunnel: ' + (createResult.stderr || '').trim());
+      return null;
+    }
+
+    // Extract tunnel ID from output ("Created tunnel <name> with id <uuid>")
+    const idMatch = (createResult.stdout + createResult.stderr).match(/with id ([0-9a-f-]+)/i);
+    if (!idMatch) {
+      spinnerClear();
+      warn('Could not parse tunnel ID from cloudflared output.');
+      return null;
+    }
+    const tunnelId = idMatch[1];
+
+    // 2. Route DNS
+    spinnerWrite('Configuring DNS...');
+    const dnsResult = spawnSync('cloudflared', ['tunnel', 'route', 'dns', tunnelName, hostname], {
+      stdio: 'pipe', encoding: 'utf8',
+    });
+    if (dnsResult.status !== 0) {
+      // Non-fatal: might already exist, or we can continue anyway
+      const stderr = (dnsResult.stderr || '').trim();
+      if (!stderr.includes('already exists')) {
+        warn('DNS routing warning: ' + stderr);
+      }
+    }
+
+    // 3. Write minimal config file for this tunnel
+    const cfCredPath = path.join(os.homedir(), '.cloudflared', tunnelId + '.json');
+    const tunnelConfig = path.join(LIMBO_DIR, 'tunnel-cloudflared.yml');
+    const configContent = [
+      'tunnel: ' + tunnelId,
+      'credentials-file: ' + cfCredPath,
+      'ingress:',
+      '  - hostname: ' + hostname,
+      '    service: http://localhost:' + port,
+      '  - service: http_status:404',
+      '',
+    ].join('\n');
+    fs.writeFileSync(tunnelConfig, configContent, { mode: 0o600 });
+
+    // 4. Run tunnel
+    const logFile = path.join(LIMBO_DIR, 'tunnel-setup.log');
+    const tunnelProc = spawn('cloudflared', [
+      'tunnel', '--config', tunnelConfig, 'run', tunnelName,
+    ], {
+      detached: true,
+      stdio: ['ignore', fs.openSync(logFile, 'w'), fs.openSync(logFile, 'a')],
+    });
+    tunnelProc.unref();
+
+    // Wait for connection
+    let connected = false;
+    for (let i = 0; i < 15; i++) {
+      spinnerWrite('Connecting tunnel...');
+      sleep(1000);
+      try {
+        const logs = fs.readFileSync(logFile, 'utf8');
+        if (logs.includes('Registered tunnel connection') || logs.includes('INF Registered')) {
+          connected = true;
+          break;
+        }
+      } catch {}
+    }
+    spinnerClear();
+
+    if (!connected) {
+      warn('Cloudflare tunnel did not connect in time.');
+      try { tunnelProc.kill(); } catch {}
+      spawnSync('cloudflared', ['tunnel', 'delete', '-f', tunnelName], { stdio: 'pipe' });
+      return null;
+    }
+
+    // Wait for DNS propagation (Chromium caches negative DNS lookups aggressively)
+    const https = require('https');
+    for (let i = 0; i < 15; i++) {
+      spinnerWrite('Waiting for DNS (' + (i + 1) + 's)...');
+      try {
+        await new Promise((resolve, reject) => {
+          const req = https.get('https://' + hostname + '/healthz', (res) => {
+            resolve(res.statusCode);
+          });
+          req.on('error', reject);
+          req.setTimeout(3000, () => { req.destroy(); reject(new Error('timeout')); });
+        });
+        break; // DNS resolved and tunnel responded
+      } catch {
+        sleep(1000);
+      }
+    }
+    spinnerClear();
+
+    // Save metadata for cleanup
+    const meta = { tunnelName, tunnelId, hostname, type: 'cloudflare-named' };
+    fs.writeFileSync(CF_TUNNEL_CONFIG, JSON.stringify(meta), { mode: 0o600 });
+
+    return {
+      type: 'cloudflare-named',
+      url: 'https://' + hostname,
+      pid: tunnelProc.pid,
+      logFile,
+      tunnelName,
+    };
+  } catch (err) {
+    spinnerClear();
+    warn('Cloudflare tunnel failed: ' + err.message);
+    return null;
+  }
+}
+
+// Fallback: localhost.run SSH tunnel (ephemeral, no install needed)
+async function createQuickTunnel(port) {
   try {
     const logFile = path.join(LIMBO_DIR, 'tunnel-setup.log');
-    // localhost.run provides instant HTTPS URLs via SSH reverse tunneling.
-    // No binary to install, no DNS propagation delay, no Chrome caching issues.
     const tunnelProc = spawn('ssh', [
       '-o', 'StrictHostKeyChecking=accept-new',
       '-o', 'ServerAliveInterval=30',
-      '-R', `80:localhost:${port}`,
+      '-R', '80:localhost:' + port,
       'nokey@localhost.run',
     ], {
       detached: true,
@@ -1162,7 +1329,6 @@ async function createSetupTunnel(port) {
     });
     tunnelProc.unref();
 
-    // localhost.run prints the URL almost instantly (no DNS propagation needed)
     let tunnelUrl = null;
     for (let i = 0; i < 10; i++) {
       spinnerWrite('Securing tunnel...');
@@ -1187,10 +1353,72 @@ async function createSetupTunnel(port) {
   }
 }
 
+// Interactive tunnel creation: prompts admin for choice
+async function createSetupTunnel(port) {
+  const hasCf = hasCloudflared();
+
+  // If cloudflared is available, offer the choice
+  if (hasCf) {
+    const choice = await promptTunnelChoice();
+
+    if (choice === 'cloudflare') {
+      const loggedIn = await ensureCloudflareLogin();
+      if (loggedIn) {
+        const tunnel = await createNamedCfTunnel(port);
+        if (tunnel) return tunnel;
+        warn('Falling back to quick tunnel...');
+      }
+    }
+  }
+
+  return createQuickTunnel(port);
+}
+
+// Clean up tunnel process and CF resources
 function teardownSetupTunnel(tunnel) {
   if (!tunnel) return;
   try { process.kill(tunnel.pid); } catch {}
   if (tunnel.logFile) try { fs.unlinkSync(tunnel.logFile); } catch {}
+}
+
+// Clean up leftover CF tunnels from previous runs
+function cleanupCfTunnel() {
+  try {
+    const meta = JSON.parse(fs.readFileSync(CF_TUNNEL_CONFIG, 'utf8'));
+    if (meta.tunnelName) {
+      spawnSync('cloudflared', ['tunnel', 'cleanup', meta.tunnelName], { stdio: 'pipe' });
+      spawnSync('cloudflared', ['tunnel', 'delete', '-f', meta.tunnelName], { stdio: 'pipe' });
+    }
+    fs.unlinkSync(CF_TUNNEL_CONFIG);
+    const tunnelConfig = path.join(LIMBO_DIR, 'tunnel-cloudflared.yml');
+    try { fs.unlinkSync(tunnelConfig); } catch {}
+  } catch {}
+}
+
+// Read a single env var from ~/.limbo/.env
+function loadEnvVar(name) {
+  try {
+    const content = fs.readFileSync(ENV_FILE, 'utf8');
+    const match = content.match(new RegExp('^' + name + '=(.+)$', 'm'));
+    return match ? match[1].trim() : null;
+  } catch { return null; }
+}
+
+// Append or update env vars in ~/.limbo/.env without overwriting existing ones
+function persistEnvVars(vars) {
+  try {
+    let content = '';
+    try { content = fs.readFileSync(ENV_FILE, 'utf8'); } catch {}
+    for (const [key, value] of Object.entries(vars)) {
+      const re = new RegExp('^' + key + '=.*$', 'm');
+      if (re.test(content)) {
+        content = content.replace(re, key + '=' + value);
+      } else {
+        content = content.trimEnd() + '\n' + key + '=' + value + '\n';
+      }
+    }
+    fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
+  } catch {}
 }
 
 function installGlobalAlias() {
@@ -1609,6 +1837,9 @@ function writeMinimalEnv() {
 // ─── Commands ────────────────────────────────────────────────────────────────
 
 async function cmdStart() {
+  // Clean up any leftover CF tunnel from a previous setup run
+  cleanupCfTunnel();
+
   // ── Auto-install Docker if missing ────────────────────────────────────────
   if (!hasDocker()) {
     installDocker();
@@ -1653,7 +1884,7 @@ async function cmdStart() {
   const flagApiKey = parseFlag('--api-key');
   const flagModel = parseFlag('--model');
   const flagLang = parseFlag('--language') || 'en';
-  const flagTunnelDomain = parseFlag('--tunnel-domain');
+  // CF tunnel flags parsed by createSetupTunnel() via parseFlag() — no local var needed
 
   if (flagProvider) {
     const validProviders = ['openai', 'anthropic', 'openrouter'];
@@ -1745,9 +1976,9 @@ async function cmdStart() {
   // Extract wizard URL from container logs (polls briefly, no healthcheck needed)
   const wizardUrl = extractWizardUrl();
 
-  // On servers, try to create a public tunnel (non-blocking — show localhost/SSH first)
+  // Create a public tunnel (auto on servers, or with --tunnel flag)
   let tunnel = null;
-  if (isServerEnvironment()) {
+  if (isServerEnvironment() || process.argv.includes('--tunnel')) {
     tunnel = await createSetupTunnel(PORT);
   }
 
@@ -2010,7 +2241,7 @@ ${c.bold}Flags:${c.reset}
   --api-key <key>      API key for headless install
   --model <name>       Model name (optional, uses provider default)
   --language <code>    Language: en, es (default: en)
-  --tunnel-domain <d>  Admin: use branded subdomain for setup tunnel (e.g. limbo.tomasward.com)
+  --tunnel               Force tunnel creation prompt (even on local/non-server environments)
 
 ${c.bold}Config:${c.reset}
   limbo config voice --enable --api-key gsk_xxx     Enable voice transcription
