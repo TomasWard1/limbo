@@ -1,12 +1,19 @@
 import { readdir, readFile, stat } from "fs/promises";
 import { join, basename, relative } from "path";
+import { initFts, upsertNote as ftsUpsert, deleteNote as ftsDelete, indexedCount, indexedIds } from "./fts.js";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const NOTES_DIR = join(VAULT_PATH, "notes");
+const DB_PATH = process.env.DB_PATH || "/data/db";
 
 // In-memory index: noteId → { path, title, content, domain }
 const index = new Map();
 let built = false;
+
+function stripFrontmatter(content) {
+  const match = content.match(/^---\s*\n[\s\S]*?\n---\s*\n?/);
+  return match ? content.slice(match[0].length).trim() : content;
+}
 
 function extractTitle(content) {
   const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
@@ -67,6 +74,28 @@ export async function buildIndex() {
   index.clear();
   await walkAndIndex(NOTES_DIR);
   built = true;
+
+  // Initialize FTS and sync with filesystem
+  const searchDbPath = join(DB_PATH, "search.db");
+  initFts(searchDbPath);
+  const ftsIds = indexedIds();
+  const memIds = new Set(index.keys());
+
+  // Upsert notes that are on disk but missing/stale in FTS
+  for (const [noteId, entry] of index) {
+    if (!ftsIds.has(noteId)) {
+      const body = stripFrontmatter(entry.content);
+      ftsUpsert(noteId, entry.title, body, entry.domain);
+    }
+  }
+
+  // Remove notes from FTS that no longer exist on disk
+  for (const id of ftsIds) {
+    if (!memIds.has(id)) {
+      ftsDelete(id);
+    }
+  }
+
   return index.size;
 }
 
@@ -90,38 +119,7 @@ export function getNote(noteId) {
 export function updateEntry(noteId, path, content, domain) {
   const title = extractTitle(content) || noteId;
   index.set(noteId, { path, title, content, domain });
+  const body = stripFrontmatter(content);
+  ftsUpsert(noteId, title, body, domain);
 }
 
-/**
- * Search all indexed notes by keyword. O(n) over in-memory strings — no disk I/O.
- */
-export function search(query) {
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(escaped, "gi");
-
-  const results = [];
-  for (const [noteId, entry] of index) {
-    const matches = entry.content.match(regex);
-    if (!matches) continue;
-
-    const score = matches.length;
-
-    // Extract snippet around first match
-    regex.lastIndex = 0;
-    const match = regex.exec(entry.content);
-    regex.lastIndex = 0;
-    let snippet = "";
-    if (match) {
-      const start = Math.max(0, match.index - 60);
-      const end = Math.min(entry.content.length, match.index + 150);
-      snippet = entry.content.slice(start, end).replace(/\n/g, " ").trim();
-      if (start > 0) snippet = "..." + snippet;
-      if (end < entry.content.length) snippet += "...";
-    }
-
-    results.push({ noteId, title: entry.title, snippet, score, domain: entry.domain });
-  }
-
-  results.sort((a, b) => b.score - a.score);
-  return results;
-}

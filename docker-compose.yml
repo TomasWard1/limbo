@@ -17,7 +17,7 @@ services:
     volumes:
       - limbo-data:/data
       - ./vault:/data/vault
-      - limbo-zeroclaw-state:/home/limbo/.zeroclaw
+      - ./zeroclaw-state:/home/limbo/.zeroclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -28,6 +28,11 @@ services:
       - .env
     environment:
       NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test:
         [
@@ -53,4 +58,3 @@ secrets:
 
 volumes:
   limbo-data:
-  limbo-zeroclaw-state:

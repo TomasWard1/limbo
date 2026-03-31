@@ -56,4 +56,44 @@ function diff(before, after) {
   return { created, modified, deleted };
 }
 
-module.exports = { snapshot, diff };
+/**
+ * Snapshot all file paths under a directory (including binary files in assets/).
+ * Returns Map<relativePath, { mtime }> — no content for binary files.
+ */
+function snapshotAll(baseDir) {
+  const map = new Map();
+  if (!fs.existsSync(baseDir)) return map;
+  _walkAll(baseDir, baseDir, map);
+  return map;
+}
+
+function _walkAll(dir, baseDir, map) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      _walkAll(full, baseDir, map);
+    } else if (entry.isFile()) {
+      const rel = path.relative(baseDir, full);
+      const stat = fs.statSync(full);
+      map.set(rel, { mtime: stat.mtimeMs });
+    }
+  }
+}
+
+/**
+ * Diff two snapshotAll results — only tracks created and deleted paths.
+ */
+function diffAll(before, after) {
+  const created = [];
+  const deleted = [];
+  for (const [p] of after) {
+    if (!before.has(p)) created.push({ path: p });
+  }
+  for (const [p] of before) {
+    if (!after.has(p)) deleted.push({ path: p });
+  }
+  return { created, deleted };
+}
+
+module.exports = { snapshot, diff, snapshotAll, diffAll };

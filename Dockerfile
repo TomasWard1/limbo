@@ -1,21 +1,31 @@
 # syntax=docker/dockerfile:1
+ARG ZEROCLAW_IMAGE=ghcr.io/tomasward1/zeroclaw:v0.6.5-codex-parity-custom
 # ──────────────────────────────────────────────
 # Stage 1: deps — install MCP server dependencies
 # ──────────────────────────────────────────────
 FROM node:22-slim AS deps
 
+# Build tools for native addons (better-sqlite3 requires compilation)
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 
 # Copy MCP server and install its deps
 COPY mcp-server/package.json mcp-server/package-lock.json* ./mcp-server/
-RUN cd mcp-server && npm ci --omit=dev
+RUN cd mcp-server \
+  && npm ci --omit=dev --ignore-scripts \
+  && cd node_modules/better-sqlite3 \
+  && npx node-gyp rebuild --release \
+  && cd /build \
+  && node -e "const d=require('/build/mcp-server/node_modules/better-sqlite3');const db=d(':memory:');db.close();console.log('better-sqlite3 OK')"
 
 # ──────────────────────────────────────────────
 # Stage 2: ZeroClaw binary
-# Custom build with rag-pdf feature enabled.
-# Build with: ./scripts/build-zeroclaw.sh
+# Custom build: v0.6.5 + rag-pdf + codex-parity patches (native tools, previous_response_id, WS-first).
+# Built from TomasWard1/zeroclaw fork, branch codex/codex-openai-parity-fast.
+# Override with: --build-arg ZEROCLAW_IMAGE=zeroclaw:codex-openai-parity-fast-local
 # ──────────────────────────────────────────────
-FROM ghcr.io/tomasward1/zeroclaw:v0.5.3-custom AS zeroclaw
+FROM ${ZEROCLAW_IMAGE} AS zeroclaw
 
 # ──────────────────────────────────────────────
 # Stage 3: final runtime image
@@ -32,9 +42,9 @@ COPY --from=zeroclaw /usr/local/bin/zeroclaw /usr/local/bin/zeroclaw
 # App directories
 WORKDIR /app
 
-# MCP server (code + pruned node_modules)
-COPY --from=deps /build/mcp-server/node_modules ./mcp-server/node_modules
+# MCP server: source code first, then node_modules from deps stage (overrides host binaries)
 COPY --chown=limbo:limbo mcp-server/ ./mcp-server/
+COPY --from=deps /build/mcp-server/node_modules ./mcp-server/node_modules
 
 # Setup wizard server (zero dependencies — plain Node.js HTTP server)
 COPY --chown=limbo:limbo setup-server/ /app/setup-server/

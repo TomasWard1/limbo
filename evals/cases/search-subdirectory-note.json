@@ -1,0 +1,24 @@
+{
+  "name": "search-subdirectory-note",
+  "description": "Search finds a note stored in a subdirectory (newsletter/)",
+  "input": "que ideas tengo para la newsletter 7?",
+  "assertions": [
+    {
+      "type": "tool_called",
+      "tool": "vault_search"
+    },
+    {
+      "type": "response_matches",
+      "pattern": "(?i)(ollama|MCP|indie.?hacker|agents.*memory)"
+    }
+  ],
+  "runs": 1,
+  "pass_threshold": 1.0,
+  "tags": [
+    "tool-calling",
+    "vault_search",
+    "retrieval",
+    "regression"
+  ],
+  "difficulty": "easy"
+}

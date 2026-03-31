@@ -5,6 +5,9 @@
 default_provider = "${MODEL_PROVIDER}"
 default_model = "${MODEL_NAME}"
 
+[runtime]
+reasoning_effort = "${RUNTIME_REASONING_EFFORT}"
+
 [gateway]
 host = "127.0.0.1"
 port = ${LIMBO_PORT}
@@ -21,3 +24,4 @@ enabled = true
 name = "limbo-vault"
 command = "node"
 args = ["/app/mcp-server/index.js"]
+env = { ZEROCLAW_STATE_DIR = "${ZEROCLAW_STATE_DIR}", ZEROCLAW_WORKSPACE_DIR = "${ZEROCLAW_STATE_DIR}/workspace" }
