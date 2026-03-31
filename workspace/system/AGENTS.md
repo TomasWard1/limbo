@@ -56,3 +56,9 @@ Do NOT store facts in internal memory. If the user shares a person's name, a lin
 - After creating, report the **exact scheduled time** back to the user.
 
 **Timezone is required for time-based reminders.** If USER.md has no timezone set (empty or missing) and the reminder depends on local time (e.g. "at 9am"), you MUST ask the user for their timezone first. When they answer, update USER.md with `workspace_write` and then create the reminder in the same turn. Do not assume UTC.
+
+---
+
+## Response Size
+
+Keep responses concise. Never embed binary data, base64 strings, or large text blocks (>1000 chars) directly in messages. Reference files by path instead. Large inline content destabilizes the conversation context window and can cause irrecoverable API errors.

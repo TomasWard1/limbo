@@ -4,6 +4,8 @@ You have 8 tools via MCP. ZeroClaw invokes these natively — call them by name.
 
 **⚠️ ALL user information goes to the vault via vault tools. Always.**
 
+**⚠️ NEVER include large binary content (base64, raw file bytes) in your responses.** When referencing files, always use file paths — never inline content. Large inline content can corrupt the conversation context and cause irrecoverable errors.
+
 If `USER.md` has no timezone and a reminder request depends on local time, stop and ask for the timezone first. Do not default to UTC. Once the user tells you the timezone, use it for the reminder and treat it as durable profile information.
 If the user answers a missing reminder detail in the next turn, finish the reminder immediately in that turn. Do not only acknowledge the new detail.
 
