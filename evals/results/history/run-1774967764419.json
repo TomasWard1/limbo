@@ -1,0 +1,113 @@
+{
+  "id": "run-1774967764419",
+  "timestamp": "2026-03-31T14:36:14.494Z",
+  "meta": {
+    "provider": "anthropic",
+    "model": "claude-opus-4-6",
+    "reasoningEffort": "medium",
+    "authMode": "subscription",
+    "zeroclawVersion": "0.6.5",
+    "profileKey": "anthropic__claude-opus-4-6__medium",
+    "profileLabel": "claude-opus-4-6 · medium · anthropic"
+  },
+  "kind": "subset",
+  "scope": {
+    "case": "reminder-timezone",
+    "tag": null,
+    "difficulty": null,
+    "judge": false
+  },
+  "results": [
+    {
+      "case": "reminder-timezone",
+      "run": 1,
+      "passRate": 0.5,
+      "passed": 1,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "pastilla|pill|medicamento",
+            "timezone": "America/Buenos_Aires",
+            "local_hour": 23,
+            "local_minute": 0
+          },
+          "pass": false,
+          "reason": "No cron job matched /pastilla|pill|medicamento/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Tomas, no tengo tu zona horaria configurada y la necesito para poner el reminder a las 23:00 correctas. ¿En qué timezone estás? (por ejemplo: America/Argentina/Buenos_Aires, America/Mexico_City, Europe/Madrid...)",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Poneme un reminder para hoy a las 23:00 que tengo que tomar la pastilla",
+          "response": "Tomas, no tengo tu zona horaria configurada y la necesito para poner el reminder a las 23:00 correctas. ¿En qué timezone estás? (por ejemplo: America/Argentina/Buenos_Aires, America/Mexico_City, Europe/Madrid...)",
+          "latencyMs": 8621,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "cron_created",
+              "pattern": "pastilla|pill|medicamento",
+              "timezone": "America/Buenos_Aires",
+              "local_hour": 23,
+              "local_minute": 0
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "cron_created",
+                "pattern": "pastilla|pill|medicamento",
+                "timezone": "America/Buenos_Aires",
+                "local_hour": 23,
+                "local_minute": 0
+              },
+              "pass": false,
+              "reason": "No cron job matched /pastilla|pill|medicamento/i"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 8621,
+      "timestamp": "2026-03-31T14:36:14.491Z"
+    }
+  ]
+}
