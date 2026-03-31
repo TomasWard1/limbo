@@ -281,6 +281,21 @@ log "INFO  Running migration runner"
 node /app/migrations/index.js
 log "INFO  Migrations OK"
 
+# ── Check workspace ownership ────────────────────────────────────────────────
+# ZeroClaw runs as uid=limbo but volumes persisted from older images may contain
+# files owned by a different user (e.g. node:node). Detect and warn — the
+# container can't chown without root, so we fail fast with a clear message.
+WORKSPACE_DIR="${ZEROCLAW_STATE_DIR}/workspace"
+if [ -d "$WORKSPACE_DIR" ]; then
+  bad_file="$(find "$WORKSPACE_DIR" -not -user "$(id -u)" -print -quit 2>/dev/null)"
+  if [ -n "$bad_file" ]; then
+    log "ERROR Files in $WORKSPACE_DIR are not owned by limbo (uid=$(id -u))."
+    log "ERROR Example: $(ls -ln "$bad_file" 2>/dev/null | head -1)"
+    log "ERROR Fix from host: docker exec -u root <container> chown -R $(id -u):$(id -g) $WORKSPACE_DIR"
+    log "WARN  Continuing anyway — ZeroClaw may fail to write to some files"
+  fi
+fi
+
 # ── Export state dir for ZeroClaw ─────────────────────────────────────────────
 export ZEROCLAW_STATE_DIR
 export ZEROCLAW_CONFIG_PATH
