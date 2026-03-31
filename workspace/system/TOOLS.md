@@ -1,6 +1,6 @@
 # Tools & Processing Rules
 
-You have 8 tools via MCP. ZeroClaw invokes these natively — call them by name.
+You have 8 tools via MCP and ZeroClaw's built-in scheduling tools. Call them by name.
 
 **⚠️ ALL user information goes to the vault via vault tools. Always.**
 
@@ -176,6 +176,50 @@ Use when: user asks to see or retrieve a previously stored file.
 - Returns the file as base64 (images returned as image content blocks)
 - Only works on notes with `asset_path` in frontmatter
 - If the note has no linked file, returns an error
+
+---
+
+## Scheduling & Reminders (ZeroClaw built-in)
+
+These are **native ZeroClaw tools**, not MCP. You MUST use them for any reminder or scheduling request.
+
+### schedule
+
+Use when: user asks for a **one-shot** reminder ("remind me tomorrow at 9am", "remind me Thursday").
+
+```json
+{
+  "task": "Recordatorio: llamar al banco",
+  "time": "tomorrow at 9 AM"
+}
+```
+
+- Accepts natural-language time expressions
+- Fires once, then auto-deletes
+- The `task` field is the message delivered back to the user
+
+### cron_add
+
+Use when: user asks for a **recurring** reminder ("every day at 10am", "every Monday").
+
+```json
+{
+  "schedule": "0 10 * * *",
+  "command": "Recordatorio: tomar agua"
+}
+```
+
+- `schedule` is a standard cron expression (minute hour day month weekday)
+- `command` is the message delivered back to the user
+- Returns a `job_id` for future reference
+
+### cron_list
+
+Use when: user asks what reminders they have.
+
+### cron_remove
+
+Use when: user asks to cancel a reminder. Requires `job_id` from `cron_list`.
 
 ---
 
