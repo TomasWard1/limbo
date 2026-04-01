@@ -1,10 +1,10 @@
 ---
 id: persona-maria-lopez
-title: "Maria Lopez"
-description: "Family friend, works in education"
+title: "María López"
+description: "Amiga de la familia, trabaja en educación"
 type: person
 schema_version: 1
 created: "2026-01-15"
 ---
 
-Maria Lopez is a family friend who works in education in Buenos Aires.
+María López es amiga de la familia y trabaja en educación en Buenos Aires.

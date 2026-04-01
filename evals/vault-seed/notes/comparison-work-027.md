@@ -1,10 +1,10 @@
 ---
 id: comparison-work-027
-title: "Comparison on work topic 27"
-description: "A comparison note about work matters number 27"
+title: "Comparación sobre tema de laboral 27"
+description: "Una nota de comparación sobre asuntos laborales número 27"
 type: idea
 schema_version: 1
 created: "2026-02-28"
 ---
 
-This is a comparison note about work topic number 27. It contains various details and references that make it searchable across the vault.
+Esta es una nota de comparación sobre el tema de laboral número 27. Contiene varios detalles y referencias que la hacen buscable en todo el vault.

@@ -1,11 +1,11 @@
 ---
 id: eval-seed-logo
-title: "Company logo"
-description: "Logo image stored as test asset"
+title: "Logo de la empresa"
+description: "Imagen del logo guardada como asset de prueba"
 type: source
 schema_version: 1
 created: "2026-01-01"
 asset_path: assets/eval-test-logo.png
 ---
 
-Company logo stored as PNG image.
+Logo de la empresa guardado como imagen PNG.

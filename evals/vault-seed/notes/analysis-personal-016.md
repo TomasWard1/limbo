@@ -1,10 +1,10 @@
 ---
 id: analysis-personal-016
-title: "Analysis on personal topic 16"
-description: "A analysis note about personal matters number 16"
+title: "Análisis sobre tema personal 16"
+description: "Una nota de análisis sobre asuntos personales número 16"
 type: insight
 schema_version: 1
 created: "2026-02-17"
 ---
 
-This is a analysis note about personal topic number 16. It contains various details and references that make it searchable across the vault.
+Esta es una nota de análisis sobre el tema personal número 16. Contiene varios detalles y referencias que la hacen buscable en todo el vault.

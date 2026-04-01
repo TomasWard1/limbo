@@ -549,6 +549,7 @@ async function cmdRun(args) {
   const tag = args['--tag'] || null;
   const useJudge = args['--judge'] || false;
   const difficulty = args['--difficulty'] || null;
+  const includeManual = args['--include-manual'] || false;
   const runMeta = await readRuntimeMeta(CONTAINER);
   const runKind = resolveRunKind({ tag, caseName, difficulty });
 
@@ -558,6 +559,10 @@ async function cmdRun(args) {
   }
   if (difficulty) {
     cases = cases.filter(c => c.difficulty === difficulty);
+  }
+  // Exclude manual/interactive cases unless explicitly requested
+  if (!includeManual && tag !== 'manual') {
+    cases = cases.filter(c => !(c.tags || []).includes('manual'));
   }
 
   if (cases.length === 0) {
@@ -977,6 +982,7 @@ Options for 'run':
   --tag <tag>         Run only cases with a given tag
   --difficulty <tier> Run only cases of a given difficulty (easy|medium|hard)
   --judge             Enable LLM-as-judge evaluation
+  --include-manual    Include interactive/manual cases (excluded by default)
 
 Options for 'compare':
   --strict        Exit with error code if regressions found
@@ -990,6 +996,7 @@ Examples:
   limbo-eval run --difficulty medium
   limbo-eval run --tag vault_write_note --judge
   limbo-eval run --tag manual              # run only manual Telegram tests
+  limbo-eval run --include-manual          # run all cases including manual
   limbo-eval compare --strict
   limbo-eval promote
   limbo-eval promote --case remember-fact
