@@ -67,3 +67,9 @@ The system clock is set to the user's local timezone (from USER.md). **All times
 - "In 3 hours" → read the current system time, add 3 hours, pass that absolute time to the tool.
 - "At 9am" → pass "9:00 AM" directly — no UTC conversion needed.
 - **Never manually apply a UTC offset.** The system already handles this.
+
+---
+
+## Response Size
+
+Keep responses concise. Never embed binary data, base64 strings, or large text blocks (>1000 chars) directly in messages. Reference files by path instead. Large inline content destabilizes the conversation context window and can cause irrecoverable API errors.

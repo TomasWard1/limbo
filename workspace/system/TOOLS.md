@@ -4,6 +4,8 @@ You have 8 tools via MCP and ZeroClaw's built-in scheduling tools. Call them by 
 
 **⚠️ ALL user information goes to the vault via vault tools. Always.**
 
+**⚠️ NEVER include large binary content (base64, raw file bytes) in your responses.** When referencing files, always use file paths — never inline content. Large inline content can corrupt the conversation context and cause irrecoverable errors.
+
 If `USER.md` has no timezone and a reminder request depends on local time, stop and ask for the timezone first. Do not default to UTC. Once the user tells you the timezone, use it for the reminder and treat it as durable profile information.
 If the user answers a missing reminder detail in the next turn, finish the reminder immediately in that turn. Do not only acknowledge the new detail.
 
@@ -164,6 +166,7 @@ Use when: user sends a file (image, PDF, document) to save in the vault.
 - Files stored in `vault/assets/{subdirectory}/` with a timestamped filename
 - The linked note's frontmatter includes `asset_path` and `asset_type`
 - When using `filePath`, the source file is **deleted** after successful copy to vault
+- The tool response includes the **absolute path** to the stored file — use it with `[DOCUMENT:]` if the user wants the file sent back
 
 ## vault_get_file
 
@@ -173,9 +176,32 @@ Use when: user asks to see or retrieve a previously stored file.
 { "noteId": "receipt-hardware-2026-03" }
 ```
 
-- Returns the file as base64 (images returned as image content blocks)
+- Returns the file metadata and absolute path on disk
+- Images are returned as image content blocks (displayed inline)
 - Only works on notes with `asset_path` in frontmatter
 - If the note has no linked file, returns an error
+
+---
+
+## Sending Files to the User
+
+When the user asks you to send back a stored file (PDF, document, etc.), use the `[DOCUMENT:]` reply prefix with the **absolute file path on disk**.
+
+**Correct** — use the absolute path from vault_get_file or vault_store_file:
+```
+Here's your receipt: [DOCUMENT:/data/vault/assets/documents/20260315-120000-receipt.pdf]
+```
+
+**WRONG** — never inline base64 content or use data URIs:
+```
+[DOCUMENT:data:application/pdf;base64,JVBERi0xLjQ...]   ← WILL FAIL
+```
+
+**Rules:**
+- Always use `vault_get_file` to get the absolute path, then reply with `[DOCUMENT:/absolute/path]`
+- The path must be a real file on the local filesystem — ZeroClaw sends it via the Telegram channel
+- NEVER include raw base64 data in your reply — Telegram expects a file path, not encoded content
+- For images, the tool returns an image content block automatically — no `[DOCUMENT:]` needed
 
 ---
 
