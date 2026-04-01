@@ -604,6 +604,20 @@ async function cmdRun(args) {
           const step = steps[s];
           const stepLabel = steps.length > 1 ? ` [step ${s + 1}/${steps.length}]` : '';
 
+          if (step.type === 'command') {
+            // Simulate ZeroClaw commands (e.g. /new) without sending a message
+            console.log(`  Command${stepLabel}: "${step.content}"`);
+            if (step.content === '/new') {
+              // /new clears conversation history but NOT the vault
+              spawnSync('docker', ['exec', CONTAINER, 'rm', '-f', sessionStateFile], { timeout: 5000 });
+              transcriptTurns.length = 0;
+              console.log('  Session state cleared (simulated /new)');
+            } else {
+              console.log(`  ⚠ Unknown command "${step.content}" — skipped`);
+            }
+            continue;
+          }
+
           if (step.type === 'telegram_manual') {
             // Snapshot before (both .md and all files)
             const before = snapshot(VAULT_SEED);

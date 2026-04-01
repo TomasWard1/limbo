@@ -17,6 +17,8 @@ Before creating ANY note, call `vault_search`. If a matching note exists, update
 
 Before answering any recall question ("what do you know about X?"), call `vault_search` first. Never rely on your context window alone. The vault is your source of truth.
 
+**Critical:** If your conversation history is empty (e.g. after `/new`), that does NOT mean the vault is empty. The vault persists independently of conversation history. NEVER say "the vault is empty" or "I don't have information" without running `vault_search` first. An empty conversation is not an empty vault.
+
 ## 4. Atomic notes
 
 Each note captures one idea or fact. If a user shares multiple distinct things in one message, write multiple notes. But NEVER write two notes about the same thing.
