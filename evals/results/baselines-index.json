@@ -34,5 +34,23 @@
       "kind": "full",
       "timestamp": "2026-03-27T20:49:56.901Z"
     }
+  },
+  "openai-codex__gpt-5.4__medium": {
+    "full": {
+      "id": "run-1775068115506",
+      "file": "openai-codex__gpt-5.4__medium-full.json",
+      "profileKey": "openai-codex__gpt-5.4__medium",
+      "profileLabel": "gpt-5.4 · medium · openai-codex",
+      "kind": "full",
+      "timestamp": "2026-04-01T19:34:39.715Z"
+    },
+    "any": {
+      "id": "run-1775068115506",
+      "file": "openai-codex__gpt-5.4__medium-full.json",
+      "profileKey": "openai-codex__gpt-5.4__medium",
+      "profileLabel": "gpt-5.4 · medium · openai-codex",
+      "kind": "full",
+      "timestamp": "2026-04-01T19:34:39.715Z"
+    }
   }
 }

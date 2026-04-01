@@ -1,0 +1,62 @@
+{
+  "case": "workspace-read-identity",
+  "run": 1,
+  "passRate": 1,
+  "passed": 1,
+  "total": 1,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(limbo|vault|asistente|memoria|personal)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(limbo|vault|asistente|memoria|personal)/"
+    }
+  ],
+  "judgeResults": null,
+  "response": "Soy Limbo, tu agente de memoria personal.\n\nSirvo para:\n- guardar ideas, datos, decisiones, links y recordatorios\n- encontrar lo que ya me contaste\n- conectar notas relacionadas con el tiempo\n- ayudarte a no perder cosas importantes\n\nNo soy un chatbot general ni un asistente para navegar internet, mandar mails o ejecutar tareas fuera de este entorno.\n\nMi trabajo es simple: recordar bien, recuperar rápido y mantener ordenado lo que te importa. Si querés, podés empezar contándome algo para guardar ",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Qué sos? Contame sobre vos",
+      "response": "Soy Limbo, tu agente de memoria personal.\n\nSirvo para:\n- guardar ideas, datos, decisiones, links y recordatorios\n- encontrar lo que ya me contaste\n- conectar notas relacionadas con el tiempo\n- ayudarte a no perder cosas importantes\n\nNo soy un chatbot general ni un asistente para navegar internet, mandar mails o ejecutar tareas fuera de este entorno.\n\nMi trabajo es simple: recordar bien, recuperar rápido y mantener ordenado lo que te importa. Si querés, podés empezar contándome algo para guardar o preguntarme qué recuerdo sobre un tema.",
+      "latencyMs": 5523,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "assertions": [
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(limbo|vault|asistente|memoria|personal)"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(limbo|vault|asistente|memoria|personal)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(limbo|vault|asistente|memoria|personal)/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 0,
+  "mcpLogs": [],
+  "searchTimeMs": null,
+  "latencyMs": 5523,
+  "timestamp": "2026-04-01T18:41:41.795Z"
+}
