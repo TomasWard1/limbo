@@ -1,17 +1,35 @@
 import { readFile, stat } from "fs/promises";
-import { join, resolve, basename } from "path";
+import { join, resolve, basename, extname } from "path";
 import { getNote, ensureIndex } from "../vault-index.js";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 
 /**
+ * Maximum base64 size (in bytes) for inline file responses.
+ * 512 KB of base64 ≈ 384 KB raw file. Above this threshold, files are
+ * returned as metadata references to prevent large payloads from entering
+ * the LLM context — which triggers ZeroClaw's context compressor and
+ * corrupts tool_result blocks (see issue #215).
+ */
+export const MAX_INLINE_SIZE = 512 * 1024;
+
+const IMAGE_MIMES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+/**
  * vault_get_file: retrieves a stored file by its linked note ID.
  *
  * Reads the note from the index, extracts asset_path from frontmatter,
- * reads the binary file, and returns it as base64.
+ * reads the binary file, and returns a size-aware response:
  *
- * Input: { noteId: string }
- * Returns: { data: string (base64), mimeType: string, filename: string }
+ *   - Images under MAX_INLINE_SIZE → { inline: true, data, mimeType, filename, size }
+ *     (caller should return as MCP image content block)
+ *   - Large files / non-inline types → { inline: false, filename, mimeType, size, assetPath }
+ *     (caller should return metadata text only)
  */
 export async function vaultGetFile(noteId) {
   if (!noteId || typeof noteId !== "string") {
@@ -41,8 +59,6 @@ export async function vaultGetFile(noteId) {
   }
 
   const assetTypeMatch = fmMatch[1].match(/^asset_type:\s*["']?(.+?)["']?\s*$/m);
-  const mimeType = assetTypeMatch ? assetTypeMatch[1] : "application/octet-stream";
-
   const assetPath = assetPathMatch[1];
   const fullPath = resolve(join(VAULT_PATH, assetPath));
 
@@ -66,9 +82,48 @@ export async function vaultGetFile(noteId) {
     throw new Error(`File too large to retrieve (${Math.round(fileStats.size / 1024 / 1024)}MB, max 10MB)`);
   }
 
-  const buffer = await readFile(fullPath);
-  const data = buffer.toString("base64");
   const filename = basename(fullPath);
+  const ext = extname(fullPath).toLowerCase();
+  const mimeType = assetTypeMatch
+    ? assetTypeMatch[1]
+    : guessMime(ext);
 
-  return { data, mimeType, filename };
+  const buffer = await readFile(fullPath);
+  const base64 = buffer.toString("base64");
+
+  // Small images → inline (MCP image content block is context-efficient)
+  if (IMAGE_MIMES.has(mimeType) && base64.length <= MAX_INLINE_SIZE) {
+    return {
+      inline: true,
+      data: base64,
+      mimeType,
+      filename,
+      size: fileStats.size,
+    };
+  }
+
+  // Large files or non-image types → metadata reference only
+  return {
+    inline: false,
+    filename,
+    mimeType,
+    size: fileStats.size,
+    assetPath,
+  };
+}
+
+function guessMime(ext) {
+  const map = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".json": "application/json",
+  };
+  return map[ext] || "application/octet-stream";
 }

@@ -11,8 +11,15 @@ import { vaultRead } from "./tools/read.js";
 import { vaultWriteNote } from "./tools/write.js";
 import { vaultUpdateMap } from "./tools/update-map.js";
 import { vaultStoreFile } from "./tools/store-file.js";
-import { vaultGetFile } from "./tools/get-file.js";
+import { vaultGetFile, MAX_INLINE_SIZE } from "./tools/get-file.js";
 import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
+
+/**
+ * General response size guard. Any tool_result text content exceeding this
+ * threshold is truncated with a warning. Prevents accidental context bloat
+ * from any tool — not just vault_get_file. (512 KB of text ≈ ~128K tokens)
+ */
+const MAX_RESPONSE_TEXT_SIZE = 512 * 1024;
 
 const EVAL_MODE = process.env.LIMBO_EVAL === "true";
 
@@ -151,7 +158,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "vault_get_file",
       description:
-        "Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter and returns the file as base64. Returns an image content block for image files.",
+        "Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter. Small images are returned inline as image content blocks. Large files and PDFs return metadata with a reference path (to protect context integrity).",
       inputSchema: {
         type: "object",
         properties: {
@@ -269,23 +276,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "vault_get_file": {
         const fileResult = await vaultGetFile(args.noteId);
-        if (fileResult.mimeType.startsWith("image/")) {
+        if (fileResult.inline) {
+          // Small image — return as MCP image content block (context-efficient)
           result = {
             content: [
               { type: "image", data: fileResult.data, mimeType: fileResult.mimeType },
-              { type: "text", text: `File: ${fileResult.filename} (${fileResult.mimeType})` },
+              { type: "text", text: `File: ${fileResult.filename} (${fileResult.mimeType}, ${formatSize(fileResult.size)})` },
             ],
           };
         } else {
+          // Large file or non-image — return metadata reference only
           result = {
             content: [
               {
                 type: "text",
-                text: JSON.stringify({
-                  filename: fileResult.filename,
-                  mimeType: fileResult.mimeType,
-                  data: fileResult.data,
-                }),
+                text: [
+                  `File: ${fileResult.filename}`,
+                  `Type: ${fileResult.mimeType}`,
+                  `Size: ${formatSize(fileResult.size)}`,
+                  `Path: ${fileResult.assetPath}`,
+                  "",
+                  `File available at ${fileResult.assetPath}. Use [DOCUMENT:${fileResult.assetPath}] to reference it in responses.`,
+                  `The file content was not included inline to protect context integrity (exceeds ${formatSize(MAX_INLINE_SIZE * 0.75)} threshold or is not an image).`,
+                ].join("\n"),
               },
             ],
           };
@@ -316,6 +329,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
 
+    // General response size guard — truncate any text content that would
+    // bloat the LLM context and risk compressor corruption (issue #215)
+    if (result.content) {
+      for (const block of result.content) {
+        if (block.type === "text" && block.text.length > MAX_RESPONSE_TEXT_SIZE) {
+          const originalSize = block.text.length;
+          block.text =
+            block.text.slice(0, MAX_RESPONSE_TEXT_SIZE) +
+            `\n\n[TRUNCATED — response was ${formatSize(originalSize)}, max ${formatSize(MAX_RESPONSE_TEXT_SIZE)}]`;
+        }
+      }
+    }
+
     evalLog({ type: "tool_result", tool: name, success: !result.isError });
     return result;
   } catch (err) {
@@ -326,6 +352,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 });
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
