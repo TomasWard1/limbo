@@ -1,11 +1,11 @@
 ---
-title: Newsletter #7 Ideas
-description: Brainstorm topics for newsletter issue 7
+title: Ideas para Newsletter #7
+description: Lluvia de ideas de temas para el número 7 de la newsletter
 ---
 
-# Newsletter #7 Ideas
+# Ideas para Newsletter #7
 
-- Deep dive into local LLM hosting with Ollama
-- Interview with indie hacker building AI tools
-- Curated list of MCP server implementations
-- Essay: why agents need memory systems
+- Deep dive en hosting local de LLMs con Ollama
+- Entrevista con indie hacker que construye herramientas de IA
+- Lista curada de implementaciones de MCP server
+- Ensayo: por qué los agentes necesitan sistemas de memoria

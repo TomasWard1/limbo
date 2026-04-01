@@ -1,10 +1,10 @@
 ---
 id: update-health-023
-title: "Update on health topic 23"
-description: "A update note about health matters number 23"
+title: "Actualización sobre tema de salud 23"
+description: "Una nota de actualización sobre asuntos de salud número 23"
 type: project
 schema_version: 1
 created: "2026-02-24"
 ---
 
-This is a update note about health topic number 23. It contains various details and references that make it searchable across the vault.
+Esta es una nota de actualización sobre el tema de salud número 23. Contiene varios detalles y referencias que la hacen buscable en todo el vault.

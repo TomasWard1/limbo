@@ -549,6 +549,7 @@ async function cmdRun(args) {
   const tag = args['--tag'] || null;
   const useJudge = args['--judge'] || false;
   const difficulty = args['--difficulty'] || null;
+  const includeManual = args['--include-manual'] || false;
   const runMeta = await readRuntimeMeta(CONTAINER);
   const runKind = resolveRunKind({ tag, caseName, difficulty });
 
@@ -558,6 +559,10 @@ async function cmdRun(args) {
   }
   if (difficulty) {
     cases = cases.filter(c => c.difficulty === difficulty);
+  }
+  // Exclude manual/interactive cases unless explicitly requested
+  if (!includeManual && tag !== 'manual') {
+    cases = cases.filter(c => !(c.tags || []).includes('manual'));
   }
 
   if (cases.length === 0) {
@@ -598,6 +603,20 @@ async function cmdRun(args) {
         for (let s = 0; s < steps.length; s++) {
           const step = steps[s];
           const stepLabel = steps.length > 1 ? ` [step ${s + 1}/${steps.length}]` : '';
+
+          if (step.type === 'command') {
+            // Simulate ZeroClaw commands (e.g. /new) without sending a message
+            console.log(`  Command${stepLabel}: "${step.content}"`);
+            if (step.content === '/new') {
+              // /new clears conversation history but NOT the vault
+              spawnSync('docker', ['exec', CONTAINER, 'rm', '-f', sessionStateFile], { timeout: 5000 });
+              transcriptTurns.length = 0;
+              console.log('  Session state cleared (simulated /new)');
+            } else {
+              console.log(`  ⚠ Unknown command "${step.content}" — skipped`);
+            }
+            continue;
+          }
 
           if (step.type === 'telegram_manual') {
             // Snapshot before (both .md and all files)
@@ -977,6 +996,7 @@ Options for 'run':
   --tag <tag>         Run only cases with a given tag
   --difficulty <tier> Run only cases of a given difficulty (easy|medium|hard)
   --judge             Enable LLM-as-judge evaluation
+  --include-manual    Include interactive/manual cases (excluded by default)
 
 Options for 'compare':
   --strict        Exit with error code if regressions found
@@ -990,6 +1010,7 @@ Examples:
   limbo-eval run --difficulty medium
   limbo-eval run --tag vault_write_note --judge
   limbo-eval run --tag manual              # run only manual Telegram tests
+  limbo-eval run --include-manual          # run all cases including manual
   limbo-eval compare --strict
   limbo-eval promote
   limbo-eval promote --case remember-fact

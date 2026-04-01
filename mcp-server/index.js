@@ -1,3 +1,5 @@
+import { appendFileSync, mkdirSync, statSync, renameSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -13,6 +15,40 @@ import { vaultUpdateMap } from "./tools/update-map.js";
 import { vaultStoreFile } from "./tools/store-file.js";
 import { vaultGetFile } from "./tools/get-file.js";
 import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
+
+// ── Logging ────────────────────────────────────────────────────────────────
+
+const LOG_PATH = "/data/logs/mcp.log";
+const LOG_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const SESSION_ID = randomBytes(4).toString("hex");
+
+// Ensure log directory exists on startup
+try {
+  mkdirSync("/data/logs", { recursive: true });
+} catch (err) {
+  process.stderr.write(`[mcp] Failed to create log directory: ${err.message}\n`);
+}
+
+function log(msg) {
+  const ts = new Date().toISOString();
+  const line = `[${ts}] [${SESSION_ID}] ${msg}\n`;
+  try {
+    // Rotate if file exceeds max size
+    try {
+      const st = statSync(LOG_PATH);
+      if (st.size >= LOG_MAX_BYTES) {
+        renameSync(LOG_PATH, LOG_PATH + ".1");
+      }
+    } catch {
+      // File doesn't exist yet — that's fine
+    }
+    appendFileSync(LOG_PATH, line);
+  } catch (err) {
+    process.stderr.write(`[mcp] Log write failed: ${err.message}\n`);
+  }
+}
+
+log(`MCP server starting — PID=${process.pid} session=${SESSION_ID}`);
 
 const EVAL_MODE = process.env.LIMBO_EVAL === "true";
 
@@ -206,6 +242,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  log(`tool_call: ${name}`);
   evalLog({ type: "tool_call", tool: name, params: args });
 
   try {
@@ -315,9 +352,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
 
+    log(`tool_result: ${name} success=${!result.isError}`);
     evalLog({ type: "tool_result", tool: name, success: !result.isError });
     return result;
   } catch (err) {
+    log(`tool_error: ${name} error=${err.message}`);
     evalLog({ type: "tool_result", tool: name, success: false, error: err.message });
     return {
       content: [{ type: "text", text: `Error: ${err.message}` }],
@@ -330,7 +369,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Build in-memory index before accepting connections
 const noteCount = await buildIndex();
+log(`Index built: ${noteCount} notes (FTS5 search active)`);
 process.stderr.write(`[limbo-vault] Index built: ${noteCount} notes (FTS5 search active)\n`);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
+log("Transport connected — ready to accept requests");

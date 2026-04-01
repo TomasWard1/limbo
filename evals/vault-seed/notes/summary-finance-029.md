@@ -1,10 +1,10 @@
 ---
 id: summary-finance-029
-title: "Summary on finance topic 29"
-description: "A summary note about finance matters number 29"
+title: "Resumen sobre tema de finanzas 29"
+description: "Una nota de resumen sobre asuntos de finanzas número 29"
 type: source
 schema_version: 1
 created: "2026-02-02"
 ---
 
-This is a summary note about finance topic number 29. It contains various details and references that make it searchable across the vault.
+Esta es una nota de resumen sobre el tema de finanzas número 29. Contiene varios detalles y referencias que la hacen buscable en todo el vault.

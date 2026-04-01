@@ -1,10 +1,10 @@
 ---
 id: draft-health-008
-title: "Draft on health topic 8"
-description: "A draft note about health matters number 8"
+title: "Borrador sobre tema de salud 8"
+description: "Una nota de borrador sobre asuntos de salud número 8"
 type: project
 schema_version: 1
 created: "2026-02-09"
 ---
 
-This is a draft note about health topic number 8. It contains various details and references that make it searchable across the vault.
+Esta es una nota de borrador sobre el tema de salud número 8. Contiene varios detalles y referencias que la hacen buscable en todo el vault.

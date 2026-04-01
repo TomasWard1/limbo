@@ -8,6 +8,7 @@ services:
     ports:
       - "127.0.0.1:18790:18790"
     volumes:
+      - limbo-eval-data:/data
       - ./vault-seed:/data/vault
       - limbo-eval-zc:/home/limbo/.zeroclaw
       - ./config.eval.env:/data/config/.env:ro
@@ -49,4 +50,5 @@ secrets:
     file: ~/.limbo-dev/secrets/brave_api_key
 
 volumes:
+  limbo-eval-data:
   limbo-eval-zc:
