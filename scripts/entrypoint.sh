@@ -202,6 +202,18 @@ if [ ! -f "$ZC_WORKSPACE/USER.md" ]; then
   log "INFO  Generated USER.md from template"
 fi
 
+# ── Set container timezone ───────────────────────────────────────────────────
+# Match the container's TZ to the user's timezone so that system time, schedule
+# tool, and cron expressions all operate in local time. Without this, the system
+# clock reports UTC and relative-time reminders ("in 3 hours") land at the wrong
+# wall-clock time — the agent or ZeroClaw applies the UTC offset twice.
+if [ -n "${USER_TIMEZONE:-}" ]; then
+  export TZ="$USER_TIMEZONE"
+  log "INFO  Container timezone set to $TZ"
+else
+  log "WARN  USER_TIMEZONE not set — container defaults to UTC"
+fi
+
 # ── Generate ZeroClaw config ──────────────────────────────────────────────────
 # Skip in setup mode (wizard hasn't configured anything yet).
 # Always regenerate from template so config.toml reflects the latest .env values.
