@@ -1,0 +1,146 @@
+{
+  "case": "update-map",
+  "run": 1,
+  "passRate": 1,
+  "passed": 3,
+  "total": 3,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "vault_update_map"
+      },
+      "pass": true,
+      "reason": "Tool \"vault_update_map\" was called"
+    },
+    {
+      "assertion": {
+        "type": "param_match",
+        "tool": "vault_update_map",
+        "key": "map",
+        "pattern": "personal-map"
+      },
+      "pass": true,
+      "reason": "Param \"map\" on \"vault_update_map\" matched /personal-map/"
+    },
+    {
+      "assertion": {
+        "type": "vault_file_exists",
+        "path": "maps/personal-map.md"
+      },
+      "pass": true,
+      "reason": "Vault file matched /maps/personal-map.md/i"
+    }
+  ],
+  "judgeResults": null,
+  "response": "Listo. Agregué `[[eval-seed-birthday]]` a `personal-map` en la sección **Datos Personales**.",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Agrega la nota eval-seed-birthday al mapa personal-map en la seccion Datos Personales",
+      "response": "Listo. Agregué `[[eval-seed-birthday]]` a `personal-map` en la sección **Datos Personales**.",
+      "latencyMs": 12641,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_update_map",
+          "params": {
+            "entries": [
+              "- [[eval-seed-birthday]]"
+            ],
+            "map": "personal-map",
+            "section": "Datos Personales"
+          },
+          "timestamp": "2026-04-01T19:34:35.929Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_update_map",
+          "success": true,
+          "timestamp": "2026-04-01T19:34:35.934Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "tool_called",
+          "tool": "vault_update_map"
+        },
+        {
+          "type": "param_match",
+          "tool": "vault_update_map",
+          "key": "map",
+          "pattern": "personal-map"
+        },
+        {
+          "type": "vault_file_exists",
+          "path": "maps/personal-map.md"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_update_map"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_update_map\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_update_map",
+            "key": "map",
+            "pattern": "personal-map"
+          },
+          "pass": true,
+          "reason": "Param \"map\" on \"vault_update_map\" matched /personal-map/"
+        },
+        {
+          "assertion": {
+            "type": "vault_file_exists",
+            "path": "maps/personal-map.md"
+          },
+          "pass": true,
+          "reason": "Vault file matched /maps/personal-map.md/i"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 1,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 1,
+    "deleted": 0
+  },
+  "mcpLogCount": 2,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "vault_update_map",
+      "params": {
+        "entries": [
+          "- [[eval-seed-birthday]]"
+        ],
+        "map": "personal-map",
+        "section": "Datos Personales"
+      },
+      "timestamp": "2026-04-01T19:34:35.929Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_update_map",
+      "success": true,
+      "timestamp": "2026-04-01T19:34:35.934Z"
+    }
+  ],
+  "searchTimeMs": null,
+  "latencyMs": 12641,
+  "timestamp": "2026-04-01T19:34:39.366Z"
+}

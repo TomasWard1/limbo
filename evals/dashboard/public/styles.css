@@ -825,6 +825,25 @@ h1, h2, h3, h4 {
   background: var(--slate-700);
 }
 
+.btn-secondary {
+  padding: 6px 16px;
+  background: white;
+  color: var(--slate-700);
+  border: 1px solid var(--slate-300);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background: var(--slate-100);
+  border-color: var(--slate-400);
+}
+
 .compare-table {
   width: 100%;
   border-collapse: separate;

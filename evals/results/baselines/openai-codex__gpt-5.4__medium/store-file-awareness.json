@@ -1,0 +1,82 @@
+{
+  "case": "store-file-awareness",
+  "run": 1,
+  "passRate": 1,
+  "passed": 2,
+  "total": 2,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(archivo|file|imagen|image|pdf|document)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(archivo|file|imagen|image|pdf|document)/"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(guardar|almacenar|store|vault|mandar|enviar)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(guardar|almacenar|store|vault|mandar|enviar)/"
+    }
+  ],
+  "judgeResults": null,
+  "response": "Sí.\n\nPodés mandarme archivos y los guardo como material de referencia en tu vault, con una nota asociada para que después se puedan encontrar por búsqueda.\n\nCómo funciona:\n- Me enviás un archivo: PDF, imagen, documento, captura, recibo, etc.\n- Lo guardo junto con una nota descriptiva.\n- Esa nota incluye contexto útil: qué es, de qué trata y por qué lo querías guardar.\n- Después podés pedirme cosas como:\n  - “Buscá el PDF del contrato”\n  - “Mostrame el recibo de marzo”\n  - “Qué tengo guardado sob",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Puedo guardar archivos con vos? Como funciona?",
+      "response": "Sí.\n\nPodés mandarme archivos y los guardo como material de referencia en tu vault, con una nota asociada para que después se puedan encontrar por búsqueda.\n\nCómo funciona:\n- Me enviás un archivo: PDF, imagen, documento, captura, recibo, etc.\n- Lo guardo junto con una nota descriptiva.\n- Esa nota incluye contexto útil: qué es, de qué trata y por qué lo querías guardar.\n- Después podés pedirme cosas como:\n  - “Buscá el PDF del contrato”\n  - “Mostrame el recibo de marzo”\n  - “Qué tengo guardado sobre X”\n\nAlgunas reglas prácticas:\n- Antes de guardar, verifico si ya existe algo parecido para no duplicar.\n- El archivo queda vinculado a una nota buscable.\n- Conviene que me digas un poco de contexto, por ejemplo: “Guardá este PDF, es la factura de internet de abril”.\n- El límite por archivo es 10 MB.\n\nSi querés, mandame uno ahora y lo guardo.",
+      "latencyMs": 7332,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "assertions": [
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(archivo|file|imagen|image|pdf|document)"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(guardar|almacenar|store|vault|mandar|enviar)"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(archivo|file|imagen|image|pdf|document)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(archivo|file|imagen|image|pdf|document)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardar|almacenar|store|vault|mandar|enviar)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardar|almacenar|store|vault|mandar|enviar)/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 0,
+  "mcpLogs": [],
+  "searchTimeMs": null,
+  "latencyMs": 7332,
+  "timestamp": "2026-04-01T18:40:53.808Z"
+}

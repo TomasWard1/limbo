@@ -13,8 +13,5 @@ agents/*/life/
 agents/*/memory/
 .worktrees
 
-# Eval runtime artifacts
-evals/.vault-pristine/
-
 # Allow eval env file (overrides .env.* rule)
 !evals/.env.eval

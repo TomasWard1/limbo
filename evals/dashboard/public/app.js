@@ -348,6 +348,7 @@ function setupControls() {
   });
 
   document.getElementById('compare-btn').addEventListener('click', doCompare);
+  document.getElementById('compare-baseline-btn').addEventListener('click', compareLatestVsBaseline);
 }
 
 function renderAll() {
@@ -684,11 +685,39 @@ function renderCompareSelectors() {
     selectB.appendChild(createEl('option', { value: opt.id }, opt.label));
   });
 
-  // Default: first two runs if available
-  if (allOptions.length >= 2) {
+  const latestSummary = getLatestRunForProfile(state.selectedProfile);
+  const baselineEntry = getBaselineEntryForProfile(state.selectedProfile, 'full') || getBaselineEntryForProfile(state.selectedProfile);
+
+  if (latestSummary?.id && allOptions.some(opt => opt.id === latestSummary.id)) {
+    selectA.value = latestSummary.id;
+  } else if (allOptions.length) {
     selectA.selectedIndex = 0;
-    selectB.selectedIndex = 1;
   }
+
+  if (baselineEntry?.id && allOptions.some(opt => opt.id === baselineEntry.id)) {
+    selectB.value = baselineEntry.id;
+  } else if (allOptions.length >= 2) {
+    selectB.selectedIndex = 1;
+  } else if (allOptions.length) {
+    selectB.selectedIndex = 0;
+  }
+}
+
+function getBaselineEntryForProfile(profileKey, preferredKind = null) {
+  const entry = state.baselinesIndex?.[profileKey];
+  if (!entry) return null;
+  if (preferredKind && entry[preferredKind]) return entry[preferredKind];
+  return entry.any || Object.values(entry)[0] || null;
+}
+
+async function compareLatestVsBaseline() {
+  const latestSummary = getLatestRunForProfile(state.selectedProfile);
+  const baselineEntry = getBaselineEntryForProfile(state.selectedProfile, 'full') || getBaselineEntryForProfile(state.selectedProfile);
+  if (!latestSummary || !baselineEntry?.id) return;
+
+  document.getElementById('compare-a').value = latestSummary.id;
+  document.getElementById('compare-b').value = baselineEntry.id;
+  await doCompare();
 }
 
 async function doCompare() {

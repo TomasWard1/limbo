@@ -1,0 +1,195 @@
+{
+  "case": "reminder-timezone",
+  "run": 1,
+  "passRate": 1,
+  "passed": 3,
+  "total": 3,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(timezone|huso horario|zona horaria)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(timezone|huso horario|zona horaria)/"
+    },
+    {
+      "assertion": {
+        "type": "cron_created",
+        "pattern": "pastilla|pill|medicamento",
+        "timezone": "America/Buenos_Aires",
+        "local_hour": 23,
+        "local_minute": 0
+      },
+      "pass": true,
+      "reason": "Cron job matched /pastilla|pill|medicamento/i"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)/"
+    }
+  ],
+  "judgeResults": null,
+  "response": "Listo. Quedó programado para hoy a las 23:00 (America/Buenos_Aires).\n\nID del recordatorio: `dd1b9af8-ad56-47d9-8af4-2bec65d09d79`",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Poneme un reminder para hoy a las 23:00 que tengo que tomar la pastilla",
+      "response": "¿Qué zona horaria tenés? Necesito eso para programarlo a las 23:00 de hoy.",
+      "latencyMs": 5182,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "assertions": [
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(timezone|huso horario|zona horaria)"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(timezone|huso horario|zona horaria)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(timezone|huso horario|zona horaria)/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    },
+    {
+      "index": 2,
+      "input": "America/Buenos_Aires",
+      "response": "Listo. Quedó programado para hoy a las 23:00 (America/Buenos_Aires).\n\nID del recordatorio: `dd1b9af8-ad56-47d9-8af4-2bec65d09d79`",
+      "latencyMs": 50474,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "workspace_read",
+          "params": {
+            "filename": "USER.md"
+          },
+          "timestamp": "2026-04-01T19:11:41.489Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "workspace_read",
+          "success": true,
+          "timestamp": "2026-04-01T19:11:41.490Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "workspace_write",
+          "params": {
+            "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+            "filename": "USER.md"
+          },
+          "timestamp": "2026-04-01T19:11:52.897Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "workspace_write",
+          "success": true,
+          "timestamp": "2026-04-01T19:11:52.900Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "cron_created",
+          "pattern": "pastilla|pill|medicamento",
+          "timezone": "America/Buenos_Aires",
+          "local_hour": 23,
+          "local_minute": 0
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "pastilla|pill|medicamento",
+            "timezone": "America/Buenos_Aires",
+            "local_hour": 23,
+            "local_minute": 0
+          },
+          "pass": true,
+          "reason": "Cron job matched /pastilla|pill|medicamento/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": [
+        {
+          "id": "dd1b9af8-ad56-47d9-8af4-2bec65d09d79",
+          "schedule": "Cron { expr: \"0 23 1 4 *\", tz: Some(\"America/Buenos_Aires\") } | next=2026-04-02T02:00:00+00:00 | last=never (n/a)"
+        }
+      ]
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 4,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "workspace_read",
+      "params": {
+        "filename": "USER.md"
+      },
+      "timestamp": "2026-04-01T19:11:41.489Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "workspace_read",
+      "success": true,
+      "timestamp": "2026-04-01T19:11:41.490Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "workspace_write",
+      "params": {
+        "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+        "filename": "USER.md"
+      },
+      "timestamp": "2026-04-01T19:11:52.897Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "workspace_write",
+      "success": true,
+      "timestamp": "2026-04-01T19:11:52.900Z"
+    }
+  ],
+  "searchTimeMs": null,
+  "latencyMs": 55656,
+  "timestamp": "2026-04-01T19:12:19.663Z"
+}

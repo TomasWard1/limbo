@@ -1,0 +1,260 @@
+{
+  "case": "hard-complex-note",
+  "run": 1,
+  "passRate": 1,
+  "passed": 2,
+  "total": 2,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "vault_write_note"
+      },
+      "pass": true,
+      "reason": "Tool \"vault_write_note\" was called"
+    },
+    {
+      "assertion": {
+        "type": "param_match",
+        "tool": "vault_write_note",
+        "key": "type",
+        "pattern": "decision|insight|meeting|project"
+      },
+      "pass": true,
+      "reason": "Param \"type\" on \"vault_write_note\" matched /decision|insight|meeting|project/"
+    }
+  ],
+  "judgeResults": null,
+  "response": "Guardado en `discusion-migracion-kubernetes-2026-03`.",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Ayer hablé con Laura del tema de migrar a Kubernetes. Ella dice que no vale la pena para nuestro scale, yo creo que sí. Quedamos en revisar los números la semana que viene.",
+      "response": "Guardado en `discusion-migracion-kubernetes-2026-03`.",
+      "latencyMs": 39572,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 10,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Laura Kubernetes migrar revisar números semana que viene"
+          },
+          "timestamp": "2026-04-01T19:26:22.050Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T19:26:22.052Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Kubernetes migración Laura"
+          },
+          "timestamp": "2026-04-01T19:26:27.661Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T19:26:27.662Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_read",
+          "params": {
+            "noteId": "discusion-migracion-kubernetes-2026-03"
+          },
+          "timestamp": "2026-04-01T19:26:34.791Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_read",
+          "success": true,
+          "timestamp": "2026-04-01T19:26:34.793Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Contexto\n\nConversación del 31 de marzo de 2026 entre Tomas y [[persona-laura|Laura]] sobre migrar la infraestructura a Kubernetes.\n\n## Posiciones\n- **Tomas:** Cree que sí vale la pena migrar.\n- **Laura:** Opina que no vale la pena para el scale actual.\n\n## Próximos pasos\n- Revisar los números juntos la semana del 6 de abril de 2026.",
+            "description": "Tomas y Laura debaten si migrar a Kubernetes; ella dice que no vale la pena para el scale actual, él cree que sí.",
+            "domain": "work",
+            "id": "discusion-migracion-kubernetes-2026-03",
+            "source": "limbo",
+            "status": "current",
+            "subdirectory": "work",
+            "title": "Discusión sobre migración a Kubernetes",
+            "topics": [
+              "[[persona-laura]]"
+            ],
+            "type": "decision"
+          },
+          "timestamp": "2026-04-01T19:26:42.214Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T19:26:42.218Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_update_map",
+          "params": {
+            "entries": [
+              "- [[discusion-migracion-kubernetes-2026-03|Discusión sobre migración a Kubernetes]]"
+            ],
+            "map": "work-map",
+            "section": "Decisiones"
+          },
+          "timestamp": "2026-04-01T19:26:48.375Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_update_map",
+          "success": true,
+          "timestamp": "2026-04-01T19:26:48.379Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "tool_called",
+          "tool": "vault_write_note"
+        },
+        {
+          "type": "param_match",
+          "tool": "vault_write_note",
+          "key": "type",
+          "pattern": "decision|insight|meeting|project"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "decision|insight|meeting|project"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /decision|insight|meeting|project/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 1,
+        "modified": 1,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 1,
+    "modified": 1,
+    "deleted": 0
+  },
+  "mcpLogCount": 10,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "Laura Kubernetes migrar revisar números semana que viene"
+      },
+      "timestamp": "2026-04-01T19:26:22.050Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T19:26:22.052Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "Kubernetes migración Laura"
+      },
+      "timestamp": "2026-04-01T19:26:27.661Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T19:26:27.662Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_read",
+      "params": {
+        "noteId": "discusion-migracion-kubernetes-2026-03"
+      },
+      "timestamp": "2026-04-01T19:26:34.791Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_read",
+      "success": true,
+      "timestamp": "2026-04-01T19:26:34.793Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_write_note",
+      "params": {
+        "content": "## Contexto\n\nConversación del 31 de marzo de 2026 entre Tomas y [[persona-laura|Laura]] sobre migrar la infraestructura a Kubernetes.\n\n## Posiciones\n- **Tomas:** Cree que sí vale la pena migrar.\n- **Laura:** Opina que no vale la pena para el scale actual.\n\n## Próximos pasos\n- Revisar los números juntos la semana del 6 de abril de 2026.",
+        "description": "Tomas y Laura debaten si migrar a Kubernetes; ella dice que no vale la pena para el scale actual, él cree que sí.",
+        "domain": "work",
+        "id": "discusion-migracion-kubernetes-2026-03",
+        "source": "limbo",
+        "status": "current",
+        "subdirectory": "work",
+        "title": "Discusión sobre migración a Kubernetes",
+        "topics": [
+          "[[persona-laura]]"
+        ],
+        "type": "decision"
+      },
+      "timestamp": "2026-04-01T19:26:42.214Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_write_note",
+      "success": true,
+      "timestamp": "2026-04-01T19:26:42.218Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_update_map",
+      "params": {
+        "entries": [
+          "- [[discusion-migracion-kubernetes-2026-03|Discusión sobre migración a Kubernetes]]"
+        ],
+        "map": "work-map",
+        "section": "Decisiones"
+      },
+      "timestamp": "2026-04-01T19:26:48.375Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_update_map",
+      "success": true,
+      "timestamp": "2026-04-01T19:26:48.379Z"
+    }
+  ],
+  "searchTimeMs": 3,
+  "latencyMs": 39572,
+  "timestamp": "2026-04-01T19:26:51.452Z"
+}
