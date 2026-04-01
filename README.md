@@ -235,4 +235,21 @@ docker build -t limbo:dev . && docker compose up -d
 npm test
 ```
 
+### PR evals
+
+Standard PR validation should run from a staging-based worktree, not from your dirty repo checkout and not from a container that silently falls back to `latest`.
+
+```sh
+git fetch origin
+git worktree add -b codex/pr-242-eval /tmp/limbo-staging-eval-pr242 origin/staging
+git -C /tmp/limbo-staging-eval-pr242 merge --no-ff --no-edit origin/<pr-branch>
+docker build -t limbo:staging /tmp/limbo-staging-eval-pr242
+/tmp/limbo-staging-eval-pr242/evals/scripts/recreate-eval.sh
+```
+
+Notes:
+- The eval compose now fails fast unless `LIMBO_IMAGE` is explicitly set.
+- `evals/scripts/recreate-eval.sh` defaults to `limbo:staging` and verifies the recreated container is actually using that image.
+- Always validate the final container image with `docker inspect limbo-eval --format '{{.Config.Image}}'` before trusting eval or manual test results.
+
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for release and deployment process.
