@@ -1,13 +1,13 @@
 {
   "name": "medium-person-multiple-facts",
   "description": "User mentions a person with multiple facts in one message — should create a person note capturing all details",
-  "input": "Mi viejo se llama Carlos, es ingeniero y vive en Córdoba",
+  "input": "Mi tío se llama Roberto, es abogado y vive en Mendoza",
   "assertions": [
     { "type": "tool_called", "tool": "vault_write_note" },
     { "type": "param_match", "tool": "vault_write_note", "key": "type", "pattern": "person" },
-    { "type": "vault_note_created", "pattern": "(?i)carlos" },
-    { "type": "vault_note_created", "pattern": "(?i)ingeniero|engineer" },
-    { "type": "vault_note_created", "pattern": "(?i)c[oó]rdoba" }
+    { "type": "vault_note_created", "pattern": "(?i)roberto" },
+    { "type": "vault_note_created", "pattern": "(?i)abogado|lawyer" },
+    { "type": "vault_note_created", "pattern": "(?i)mendoza" }
   ],
   "runs": 1,
   "pass_threshold": 1.0,

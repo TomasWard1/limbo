@@ -1,12 +1,12 @@
 {
   "name": "remember-fact",
   "description": "User asks Limbo to remember a personal fact (tests vault_write_note)",
-  "input": "Acordate que soy alérgico al maní",
+  "input": "Acordate que soy intolerante a la lactosa",
   "assertions": [
     { "type": "tool_called", "tool": "vault_write_note" },
     { "type": "param_match", "tool": "vault_write_note", "key": "type", "pattern": "fact|preference" },
-    { "type": "vault_note_created", "pattern": "alerg|mani|peanut" },
-    { "type": "response_matches", "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)" }
+    { "type": "vault_note_created", "pattern": "intolerante|lactosa|lactose" },
+    { "type": "response_matches", "pattern": "(?i)(guardé|guardado|saved|anotado|intolerante|lactosa)" }
   ],
   "runs": 1,
   "pass_threshold": 1.0,
