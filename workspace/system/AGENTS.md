@@ -58,3 +58,12 @@ Do NOT store facts in internal memory. If the user shares a person's name, a lin
 - After creating, report the **exact scheduled time** back to the user.
 
 **Timezone is required for time-based reminders.** If USER.md has no timezone set (empty or missing) and the reminder depends on local time (e.g. "at 9am"), you MUST ask the user for their timezone first. When they answer, update USER.md with `workspace_write` and then create the reminder in the same turn. Do not assume UTC.
+
+### Timezone & Time Calculations
+
+The system clock is set to the user's local timezone (from USER.md). **All times are local.**
+
+- **Do NOT convert times.** The `schedule` and `cron_add` tools operate in the user's local timezone.
+- "In 3 hours" → read the current system time, add 3 hours, pass that absolute time to the tool.
+- "At 9am" → pass "9:00 AM" directly — no UTC conversion needed.
+- **Never manually apply a UTC offset.** The system already handles this.
