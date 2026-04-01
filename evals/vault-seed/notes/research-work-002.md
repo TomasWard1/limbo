@@ -1,10 +1,10 @@
 ---
 id: research-work-002
-title: "Research on work topic 2"
-description: "A research note about work matters number 2"
+title: "Investigación sobre tema de laboral 2"
+description: "Una nota de investigación sobre asuntos laborales número 2"
 type: idea
 schema_version: 1
 created: "2026-02-03"
 ---
 
-This is a research note about work topic number 2. It contains various details and references that make it searchable across the vault.
+Esta es una nota de investigación sobre el tema de laboral número 2. Contiene varios detalles y referencias que la hacen buscable en todo el vault.

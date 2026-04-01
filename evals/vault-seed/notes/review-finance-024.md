@@ -1,10 +1,10 @@
 ---
 id: review-finance-024
-title: "Review on finance topic 24"
-description: "A review note about finance matters number 24"
+title: "Revisión sobre tema de finanzas 24"
+description: "Una nota de revisión sobre asuntos de finanzas número 24"
 type: source
 schema_version: 1
 created: "2026-02-25"
 ---
 
-This is a review note about finance topic number 24. It contains various details and references that make it searchable across the vault.
+Esta es una nota de revisión sobre el tema de finanzas número 24. Contiene varios detalles y referencias que la hacen buscable en todo el vault.

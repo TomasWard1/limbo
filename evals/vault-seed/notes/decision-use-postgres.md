@@ -1,10 +1,10 @@
 ---
 id: decision-use-postgres
-title: "Use PostgreSQL"
-description: "Chose PostgreSQL over MongoDB for new project"
+title: "Usar PostgreSQL"
+description: "Elegí PostgreSQL en vez de MongoDB para el proyecto nuevo"
 type: decision
 schema_version: 1
 created: "2026-01-15"
 ---
 
-Decided to use PostgreSQL instead of MongoDB. Better for relational queries and joins.
+Decidí usar PostgreSQL en vez de MongoDB. Mejor para queries relacionales y joins.

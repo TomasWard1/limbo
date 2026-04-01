@@ -1,10 +1,10 @@
 ---
 id: persona-carlos-ward
 title: "Carlos Ward"
-description: "Father of Tomas, engineer living in Cordoba"
+description: "Padre de Tomas, ingeniero que vive en Córdoba"
 type: person
 schema_version: 1
 created: "2026-01-15"
 ---
 
-Carlos Ward is an engineer living in Córdoba. Father of Tomas.
+Carlos Ward es ingeniero y vive en Córdoba. Es el padre de Tomas.

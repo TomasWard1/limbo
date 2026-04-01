@@ -1,10 +1,10 @@
 ---
 id: persona-lucas-tech
-title: "Lucas from tech meetup"
-description: "Met at a tech meetup, works at MercadoLibre"
+title: "Lucas de la meetup de tech"
+description: "Lo conocí en una meetup de tech, labura en MercadoLibre"
 type: person
 schema_version: 1
 created: "2026-01-15"
 ---
 
-Lucas works at MercadoLibre as a backend engineer. Met him at a Buenos Aires tech meetup.
+Lucas labura en MercadoLibre como ingeniero backend. Lo conocí en una meetup de tech en Buenos Aires.

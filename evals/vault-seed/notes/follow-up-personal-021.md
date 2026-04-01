@@ -1,10 +1,10 @@
 ---
 id: follow-up-personal-021
-title: "Follow-up on personal topic 21"
-description: "A follow-up note about personal matters number 21"
+title: "Seguimiento sobre tema personal 21"
+description: "Una nota de seguimiento sobre asuntos personales número 21"
 type: insight
 schema_version: 1
 created: "2026-02-22"
 ---
 
-This is a follow-up note about personal topic number 21. It contains various details and references that make it searchable across the vault.
+Esta es una nota de seguimiento sobre el tema personal número 21. Contiene varios detalles y referencias que la hacen buscable en todo el vault.

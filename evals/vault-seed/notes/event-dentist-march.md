@@ -1,10 +1,10 @@
 ---
 id: event-dentist-march
-title: "Dentist appointment"
-description: "Dentist appointment scheduled for March 27"
+title: "Turno con el dentista"
+description: "Turno con el dentista agendado para el 27 de marzo"
 type: event
 schema_version: 1
 created: "2026-01-15"
 ---
 
-Dentist appointment on March 27 at 10am.
+Turno con el dentista el 27 de marzo a las 10am.

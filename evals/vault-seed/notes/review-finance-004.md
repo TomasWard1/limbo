@@ -1,10 +1,10 @@
 ---
 id: review-finance-004
-title: "Review on finance topic 4"
-description: "A review note about finance matters number 4"
+title: "Revisión sobre tema de finanzas 4"
+description: "Una nota de revisión sobre asuntos de finanzas número 4"
 type: source
 schema_version: 1
 created: "2026-02-05"
 ---
 
-This is a review note about finance topic number 4. It contains various details and references that make it searchable across the vault.
+Esta es una nota de revisión sobre el tema de finanzas número 4. Contiene varios detalles y referencias que la hacen buscable en todo el vault.
