@@ -1,0 +1,86 @@
+name: "Improvement"
+description: "Enhancement to an existing Limbo feature"
+labels: ["type:improvement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Agent Implementation Guide
+        This template produces machine-readable specs. Be precise — an AI agent will use this to implement the improvement autonomously.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: "One sentence: what existing behavior changes and how?"
+      placeholder: "[Feature X] currently does [A]. It should do [B] instead."
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Current Behavior
+      description: "What happens today? Include file paths and tool names if applicable."
+      placeholder: |
+        `note_search` returns results sorted by modification date.
+        Defined in `mcp-server/tools/note_search.js`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired-behavior
+    attributes:
+      label: Desired Behavior
+      description: "What should happen instead? Be specific enough that an agent can implement without ambiguity."
+      placeholder: |
+        `note_search` should support a `sort` parameter: "relevance" (default, FTS rank) or "modified" (current behavior).
+    validations:
+      required: true
+
+  - type: textarea
+    id: spec
+    attributes:
+      label: Spec
+      description: "Concrete requirements as a checklist. Each item independently verifiable."
+      placeholder: |
+        - [ ] `note_search` accepts optional `sort` param ("relevance" | "modified")
+        - [ ] Default sort is "relevance" (no breaking change)
+        - [ ] TOOLS.md updated with new parameter
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-areas
+    attributes:
+      label: Affected Areas
+      description: "Files and components that need changes."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: "How to verify the improvement works correctly."
+    validations:
+      required: true
+
+  - type: textarea
+    id: backwards-compatibility
+    attributes:
+      label: Backwards Compatibility
+      description: "Does this break existing behavior? Migration needed?"
+      placeholder: |
+        No breaking changes — new param is optional, default preserves current behavior.
+
+  - type: dropdown
+    id: size-estimate
+    attributes:
+      label: Size Estimate
+      options:
+        - "small (< 2h, single file or tool)"
+        - "medium (2-8h, multiple files, may need tests)"
+        - "large (> 8h, cross-cutting, needs plan)"
+    validations:
+      required: true

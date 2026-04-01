@@ -1,0 +1,95 @@
+name: "Feature Request"
+description: "New user-facing capability for Limbo"
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Agent Implementation Guide
+        This template produces machine-readable specs. Be precise — an AI agent will use this to implement the feature autonomously.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: "One sentence: what does this feature do for the user?"
+      placeholder: "Users can [action] so that [outcome]."
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: "Why build this? What problem does it solve? Link related issues if any."
+      placeholder: |
+        Currently users have to [workaround].
+        This matters because [reason].
+    validations:
+      required: true
+
+  - type: textarea
+    id: spec
+    attributes:
+      label: Spec
+      description: "Concrete requirements the implementation MUST satisfy. Use a checklist. Each item should be independently verifiable."
+      placeholder: |
+        - [ ] Tool `note_pin` added to `mcp-server/tools/`
+        - [ ] Pinned notes appear first in `note_search` results
+        - [ ] Pin state persists across container restarts
+        - [ ] Max 10 pinned notes enforced with clear error
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-areas
+    attributes:
+      label: Affected Areas
+      description: "Which parts of the codebase does this touch? Reference ARCHITECTURE.md paths."
+      placeholder: |
+        - `mcp-server/tools/` — new tool file
+        - `mcp-server/index.js` — tool registration
+        - `workspace/system/TOOLS.md` — tool documentation for agent
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: "How do we verify this works? Think eval cases, manual tests, or observable behavior."
+      placeholder: |
+        - Eval case: send "pin my grocery list note" → tool_call note_pin with correct slug
+        - After container restart, pinned note still appears first in search
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of Scope
+      description: "What this feature intentionally does NOT include. Prevents scope creep during implementation."
+      placeholder: |
+        - No UI for managing pins (CLI only for now)
+        - No bulk pin/unpin operation
+
+  - type: textarea
+    id: design-notes
+    attributes:
+      label: Design Notes
+      description: "Optional: architectural decisions, constraints, or prior art the implementer should know."
+      placeholder: |
+        - Follow the feature toggle pattern: wizard toggle → secret → env var → entrypoint TOML
+        - Similar to how `note_archive` works — reference that implementation
+
+  - type: dropdown
+    id: size-estimate
+    attributes:
+      label: Size Estimate
+      description: "Rough implementation effort"
+      options:
+        - "small (< 2h, single file or tool)"
+        - "medium (2-8h, multiple files, may need tests)"
+        - "large (> 8h, cross-cutting, needs plan)"
+    validations:
+      required: true
