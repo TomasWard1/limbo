@@ -110,7 +110,7 @@ function startServer(env) {
   });
 }
 
-describe("vault_get_file — size guard", () => {
+describe("vault_get_file — telegram-first file references", () => {
   let vaultDir;
   let dbDir;
 
@@ -190,7 +190,7 @@ describe("vault_get_file — size guard", () => {
     await rm(dbDir, { recursive: true, force: true });
   });
 
-  it("returns small images inline as image content blocks", async () => {
+  it("returns small images as metadata references for attachment delivery", async () => {
     const server = await startServer({ VAULT_PATH: vaultDir, DB_PATH: dbDir });
     const response = await server.callTool("vault_get_file", { noteId: "small-image" });
     await server.close();
@@ -198,15 +198,12 @@ describe("vault_get_file — size guard", () => {
     const content = response.result.content;
     assert.ok(Array.isArray(content), "content should be an array");
 
-    // Should have an image block + text block
-    const imageBlock = content.find((b) => b.type === "image");
-    assert.ok(imageBlock, "should have an image content block");
-    assert.equal(imageBlock.mimeType, "image/png");
-    assert.ok(imageBlock.data.length > 0, "image data should not be empty");
-
     const textBlock = content.find((b) => b.type === "text");
     assert.ok(textBlock, "should have a text block with metadata");
     assert.match(textBlock.text, /small\.png/);
+    assert.match(textBlock.text, /image\/png/);
+    assert.match(textBlock.text, /Absolute path:/);
+    assert.match(textBlock.text, /\[DOCUMENT:/);
   });
 
   it("returns large images as metadata reference (no base64 in response)", async () => {
@@ -217,17 +214,13 @@ describe("vault_get_file — size guard", () => {
     const content = response.result.content;
     assert.ok(Array.isArray(content), "content should be an array");
 
-    // Should NOT have an image block
-    const imageBlock = content.find((b) => b.type === "image");
-    assert.equal(imageBlock, undefined, "should NOT have an image content block for large files");
-
     // Should have a text block with metadata
     const textBlock = content.find((b) => b.type === "text");
     assert.ok(textBlock, "should have a text block");
     assert.match(textBlock.text, /large\.png/, "should mention filename");
     assert.match(textBlock.text, /image\/png/, "should mention mime type");
     assert.match(textBlock.text, /assets\/large\.png/, "should include asset path");
-    assert.match(textBlock.text, /DOCUMENT/, "should include DOCUMENT reference");
+    assert.match(textBlock.text, /\[DOCUMENT:/, "should include DOCUMENT reference");
 
     // Ensure no base64 data leaked into the response
     const totalLength = content.reduce(
@@ -244,16 +237,12 @@ describe("vault_get_file — size guard", () => {
 
     const content = response.result.content;
 
-    // Should NOT have image block
-    const imageBlock = content.find((b) => b.type === "image");
-    assert.equal(imageBlock, undefined, "PDFs should never be inline");
-
     // Should have metadata text
     const textBlock = content.find((b) => b.type === "text");
     assert.ok(textBlock);
     assert.match(textBlock.text, /doc\.pdf/);
     assert.match(textBlock.text, /application\/pdf/);
-    assert.match(textBlock.text, /DOCUMENT/);
+    assert.match(textBlock.text, /\[DOCUMENT:/);
   });
 
   it("returns error for non-existent note", async () => {

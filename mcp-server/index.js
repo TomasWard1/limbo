@@ -13,7 +13,7 @@ import { vaultRead } from "./tools/read.js";
 import { vaultWriteNote } from "./tools/write.js";
 import { vaultUpdateMap } from "./tools/update-map.js";
 import { vaultStoreFile } from "./tools/store-file.js";
-import { vaultGetFile, MAX_INLINE_SIZE } from "./tools/get-file.js";
+import { vaultGetFile } from "./tools/get-file.js";
 import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
 
 /**
@@ -194,7 +194,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "vault_get_file",
       description:
-        "Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter. Small images are returned inline as image content blocks. Large files and PDFs return metadata with a reference path (to protect context integrity).",
+        "Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter and returns metadata plus an absolute path reference so Telegram responses can send it as a real attachment.",
       inputSchema: {
         type: "object",
         properties: {
@@ -315,37 +315,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "vault_get_file": {
         const fileResult = await vaultGetFile(args.noteId);
         const vaultBase = process.env.VAULT_PATH || "/data/vault";
-        if (fileResult.inline) {
-          // Small image — return as MCP image content block (context-efficient)
-          const absoluteInlinePath = `${vaultBase}/${fileResult.assetPath || ""}`;
-          result = {
-            content: [
-              { type: "image", data: fileResult.data, mimeType: fileResult.mimeType },
-              { type: "text", text: `File: ${fileResult.filename} (${fileResult.mimeType}, ${formatSize(fileResult.size)})` },
-            ],
-          };
-        } else {
-          // Large file or non-image — return metadata reference only
-          const absolutePath = `${vaultBase}/${fileResult.assetPath}`;
-          result = {
-            content: [
-              {
-                type: "text",
-                text: [
-                  `File: ${fileResult.filename}`,
-                  `Type: ${fileResult.mimeType}`,
-                  `Size: ${formatSize(fileResult.size)}`,
-                  `Path: ${fileResult.assetPath}`,
-                  `Absolute path: ${absolutePath}`,
-                  "",
-                  `File available at ${absolutePath}. Use [DOCUMENT:${absolutePath}] to reference it in responses.`,
-                  `The file content was not included inline to protect context integrity (exceeds ${formatSize(MAX_INLINE_SIZE * 0.75)} threshold or is not an image).`,
-                  `Do NOT include the file's base64 content in your reply — use the [DOCUMENT:] prefix with the absolute path above.`,
-                ].join("\n"),
-              },
-            ],
-          };
-        }
+        const absolutePath = `${vaultBase}/${fileResult.assetPath}`;
+        result = {
+          content: [
+            {
+              type: "text",
+              text: [
+                `File: ${fileResult.filename}`,
+                `Type: ${fileResult.mimeType}`,
+                `Size: ${formatSize(fileResult.size)}`,
+                `Path: ${fileResult.assetPath}`,
+                `Absolute path: ${absolutePath}`,
+                "",
+                `This file should be sent to the user as a real attachment.`,
+                `Reply with exactly: [DOCUMENT:${absolutePath}]`,
+                `Do NOT inline file contents, base64 data, or markdown excerpts from the note.`,
+              ].join("\n"),
+            },
+          ],
+        };
         break;
       }
 

@@ -1,35 +1,18 @@
-import { readFile, stat } from "fs/promises";
+import { stat } from "fs/promises";
 import { join, resolve, basename, extname } from "path";
 import { getNote, ensureIndex } from "../vault-index.js";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 
 /**
- * Maximum base64 size (in bytes) for inline file responses.
- * 512 KB of base64 ≈ 384 KB raw file. Above this threshold, files are
- * returned as metadata references to prevent large payloads from entering
- * the LLM context — which triggers ZeroClaw's context compressor and
- * corrupts tool_result blocks (see issue #215).
- */
-export const MAX_INLINE_SIZE = 512 * 1024;
-
-const IMAGE_MIMES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-]);
-
-/**
  * vault_get_file: retrieves a stored file by its linked note ID.
  *
  * Reads the note from the index, extracts asset_path from frontmatter,
- * reads the binary file, and returns a size-aware response:
+ * checks that the binary exists, and returns metadata plus a path reference.
  *
- *   - Images under MAX_INLINE_SIZE → { inline: true, data, mimeType, filename, size }
- *     (caller should return as MCP image content block)
- *   - Large files / non-inline types → { inline: false, filename, mimeType, size, assetPath }
- *     (caller should return metadata text only)
+ * Limbo's real user-facing channel is Telegram, which expects file attachments
+ * to come from paths/documents rather than inline base64 image blocks.
+ * Returning references also avoids large payloads entering the LLM context.
  */
 export async function vaultGetFile(noteId) {
   if (!noteId || typeof noteId !== "string") {
@@ -88,23 +71,7 @@ export async function vaultGetFile(noteId) {
     ? assetTypeMatch[1]
     : guessMime(ext);
 
-  const buffer = await readFile(fullPath);
-  const base64 = buffer.toString("base64");
-
-  // Small images → inline (MCP image content block is context-efficient)
-  if (IMAGE_MIMES.has(mimeType) && base64.length <= MAX_INLINE_SIZE) {
-    return {
-      inline: true,
-      data: base64,
-      mimeType,
-      filename,
-      size: fileStats.size,
-    };
-  }
-
-  // Large files or non-image types → metadata reference only
   return {
-    inline: false,
     filename,
     mimeType,
     size: fileStats.size,
