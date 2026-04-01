@@ -323,13 +323,13 @@ function buildStepMessage(stepInput, transcriptTurns) {
 }
 
 function buildProfileKey({ provider, model, reasoningEffort }) {
-  const raw = [provider || 'unknown', model || 'unknown', reasoningEffort || 'default'].join('__');
+  const raw = [provider || 'unknown', model || 'unknown', reasoningEffort || 'medium'].join('__');
   return raw.replace(/[^a-zA-Z0-9._-]+/g, '-');
 }
 
 function buildProfileLabel({ provider, model, reasoningEffort }) {
   const modelLabel = model || 'unknown-model';
-  const effortLabel = reasoningEffort || 'default';
+  const effortLabel = reasoningEffort || 'medium';
   const providerLabel = provider || 'unknown-provider';
   return `${modelLabel} · ${effortLabel} · ${providerLabel}`;
 }

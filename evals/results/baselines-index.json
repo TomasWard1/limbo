@@ -1,22 +1,4 @@
 {
-  "anthropic__claude-sonnet-4-6__default": {
-    "full": {
-      "id": "run-1774643063585",
-      "file": "anthropic__claude-sonnet-4-6__default-full.json",
-      "profileKey": "anthropic__claude-sonnet-4-6__default",
-      "profileLabel": "claude-sonnet-4-6 · default · anthropic",
-      "kind": "full",
-      "timestamp": "2026-03-27T20:30:40.479Z"
-    },
-    "any": {
-      "id": "run-1774643063585",
-      "file": "anthropic__claude-sonnet-4-6__default-full.json",
-      "profileKey": "anthropic__claude-sonnet-4-6__default",
-      "profileLabel": "claude-sonnet-4-6 · default · anthropic",
-      "kind": "full",
-      "timestamp": "2026-03-27T20:30:40.479Z"
-    }
-  },
   "anthropic__claude-sonnet-4-6__medium": {
     "full": {
       "id": "run-1774644299624",
