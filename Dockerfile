@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG ZEROCLAW_IMAGE=ghcr.io/tomasward1/zeroclaw:v0.6.5-codex-parity-custom
+ARG ZEROCLAW_IMAGE=ghcr.io/tomasward1/zeroclaw:v0.6.8-codex-parity-custom
 # ──────────────────────────────────────────────
 # Stage 1: deps — install MCP server dependencies
 # ──────────────────────────────────────────────
