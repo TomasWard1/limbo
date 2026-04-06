@@ -16,6 +16,13 @@ import { vaultStoreFile } from "./tools/store-file.js";
 import { vaultGetFile } from "./tools/get-file.js";
 import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
 
+/**
+ * General response size guard. Any tool_result text content exceeding this
+ * threshold is truncated with a warning. Prevents accidental context bloat
+ * from any tool — not just vault_get_file. (512 KB of text ≈ ~128K tokens)
+ */
+const MAX_RESPONSE_TEXT_SIZE = 512 * 1024;
+
 // ── Logging ────────────────────────────────────────────────────────────────
 
 const LOG_PATH = "/data/logs/mcp.log";
@@ -187,7 +194,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "vault_get_file",
       description:
-        "Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter and returns the file as base64. Returns an image content block for image files.",
+        "Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter and returns metadata plus an absolute path reference so Telegram responses can send it as a real attachment.",
       inputSchema: {
         type: "object",
         properties: {
@@ -308,24 +315,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "vault_get_file": {
         const fileResult = await vaultGetFile(args.noteId);
         const vaultBase = process.env.VAULT_PATH || "/data/vault";
-        if (fileResult.mimeType.startsWith("image/")) {
-          result = {
-            content: [
-              { type: "image", data: fileResult.data, mimeType: fileResult.mimeType },
-              { type: "text", text: `File: ${fileResult.filename} (${fileResult.mimeType})\nAbsolute path: ${vaultBase}/${fileResult.assetPath}` },
-            ],
-          };
-        } else {
-          const absolutePath = `${vaultBase}/${fileResult.assetPath}`;
-          result = {
-            content: [
-              {
-                type: "text",
-                text: `File retrieved: ${fileResult.filename} (${fileResult.mimeType})\nAbsolute path: ${absolutePath}\n\nTo send this file to the user, reply with: [DOCUMENT:${absolutePath}]\n\nDo NOT include the file's base64 content in your reply — use the [DOCUMENT:] prefix with the absolute path above.`,
-              },
-            ],
-          };
-        }
+        const absolutePath = `${vaultBase}/${fileResult.assetPath}`;
+        result = {
+          content: [
+            {
+              type: "text",
+              text: [
+                `File: ${fileResult.filename}`,
+                `Type: ${fileResult.mimeType}`,
+                `Size: ${formatSize(fileResult.size)}`,
+                `Path: ${fileResult.assetPath}`,
+                `Absolute path: ${absolutePath}`,
+                "",
+                `This file should be sent to the user as a real attachment.`,
+                `Reply with exactly: [DOCUMENT:${absolutePath}]`,
+                `Do NOT inline file contents, base64 data, or markdown excerpts from the note.`,
+              ].join("\n"),
+            },
+          ],
+        };
         break;
       }
 
@@ -352,6 +360,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
 
+    // General response size guard — truncate any text content that would
+    // bloat the LLM context and risk compressor corruption (issue #215)
+    if (result.content) {
+      for (const block of result.content) {
+        if (block.type === "text" && block.text.length > MAX_RESPONSE_TEXT_SIZE) {
+          const originalSize = block.text.length;
+          block.text =
+            block.text.slice(0, MAX_RESPONSE_TEXT_SIZE) +
+            `\n\n[TRUNCATED — response was ${formatSize(originalSize)}, max ${formatSize(MAX_RESPONSE_TEXT_SIZE)}]`;
+        }
+      }
+    }
+
     log(`tool_result: ${name} success=${!result.isError}`);
     evalLog({ type: "tool_result", tool: name, success: !result.isError });
     return result;
@@ -364,6 +385,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 });
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
