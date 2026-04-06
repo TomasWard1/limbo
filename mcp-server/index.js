@@ -57,6 +57,24 @@ function log(msg) {
 
 log(`MCP server starting — PID=${process.pid} session=${SESSION_ID}`);
 
+// ── Control-char sanitization ─────────────────────────────────────────────
+// Strip ASCII control characters (0x00-0x1F) except \t (0x09), \n (0x0A),
+// \r (0x0D) from tool result text.  These chars cause JSON parse failures
+// in downstream consumers (e.g. OpenAI Codex serialization in ZeroClaw).
+// See: https://github.com/TomasWard1/limbo/issues/245
+
+const CONTROL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
+
+function sanitizeToolResult(result) {
+  if (!result || !Array.isArray(result.content)) return result;
+  for (const block of result.content) {
+    if (block.type === "text" && typeof block.text === "string") {
+      block.text = block.text.replace(CONTROL_CHAR_RE, "");
+    }
+  }
+  return result;
+}
+
 const EVAL_MODE = process.env.LIMBO_EVAL === "true";
 
 function evalLog(event) {
@@ -373,16 +391,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
     }
 
+    sanitizeToolResult(result);
     log(`tool_result: ${name} success=${!result.isError}`);
     evalLog({ type: "tool_result", tool: name, success: !result.isError });
     return result;
   } catch (err) {
     log(`tool_error: ${name} error=${err.message}`);
     evalLog({ type: "tool_result", tool: name, success: false, error: err.message });
-    return {
+    const errResult = {
       content: [{ type: "text", text: `Error: ${err.message}` }],
       isError: true,
     };
+    return sanitizeToolResult(errResult);
   }
 });
 
