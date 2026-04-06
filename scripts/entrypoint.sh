@@ -202,6 +202,12 @@ for f in /app/workspace/templates/*.md; do
   fi
 done
 
+# USER.md migration: regenerate if stale template syntax detected (issue #243)
+if [ -f "$ZC_WORKSPACE/USER.md" ] && grep -q '${' "$ZC_WORKSPACE/USER.md"; then
+  log "WARN  USER.md contains unexpanded template syntax — regenerating from current template"
+  rm "$ZC_WORKSPACE/USER.md"
+fi
+
 # USER.md: generate from template via envsubst on first run
 if [ ! -f "$ZC_WORKSPACE/USER.md" ]; then
   USER_NAME="${USER_NAME:-User}"
