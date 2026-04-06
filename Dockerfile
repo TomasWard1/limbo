@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG ZEROCLAW_IMAGE=ghcr.io/tomasward1/zeroclaw:v0.6.5-codex-parity-custom
+ARG ZEROCLAW_IMAGE=ghcr.io/tomasward1/zeroclaw:v0.6.8-codex-parity-custom
 # ──────────────────────────────────────────────
 # Stage 1: deps — install MCP server dependencies
 # ──────────────────────────────────────────────
@@ -32,8 +32,8 @@ FROM ${ZEROCLAW_IMAGE} AS zeroclaw
 # ──────────────────────────────────────────────
 FROM node:22-slim AS runtime
 
-# Non-root user for security + envsubst for template rendering
-RUN apt-get update && apt-get install -y --no-install-recommends gettext-base && rm -rf /var/lib/apt/lists/* \
+# Non-root user for security + envsubst for template rendering + tzdata for TZ support
+RUN apt-get update && apt-get install -y --no-install-recommends gettext-base tzdata && rm -rf /var/lib/apt/lists/* \
   && groupadd -r limbo && useradd --create-home -r -g limbo limbo
 
 # Copy ZeroClaw binary

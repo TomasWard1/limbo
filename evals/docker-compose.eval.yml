@@ -1,13 +1,16 @@
 # Eval-mode Limbo — isolated vault, MCP logging enabled
 # Usage: LIMBO_IMAGE=limbo:staging docker compose -f evals/docker-compose.eval.yml up -d
+# Intentionally fails if LIMBO_IMAGE is unset to avoid accidentally testing
+# ghcr.io/tomasward1/limbo:latest instead of the freshly built PR image.
 services:
   limbo-eval:
-    image: ${LIMBO_IMAGE:-ghcr.io/tomasward1/limbo:latest}
+    image: ${LIMBO_IMAGE:?LIMBO_IMAGE must be set (for example LIMBO_IMAGE=limbo:staging)}
     container_name: limbo-eval
     restart: "no"
     ports:
       - "127.0.0.1:18790:18790"
     volumes:
+      - limbo-eval-data:/data
       - ./vault-seed:/data/vault
       - limbo-eval-zc:/home/limbo/.zeroclaw
       - ./config.eval.env:/data/config/.env:ro
@@ -49,4 +52,5 @@ secrets:
     file: ~/.limbo-dev/secrets/brave_api_key
 
 volumes:
+  limbo-eval-data:
   limbo-eval-zc:

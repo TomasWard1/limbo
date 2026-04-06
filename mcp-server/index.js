@@ -1,3 +1,5 @@
+import { appendFileSync, mkdirSync, statSync, renameSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -13,6 +15,65 @@ import { vaultUpdateMap } from "./tools/update-map.js";
 import { vaultStoreFile } from "./tools/store-file.js";
 import { vaultGetFile } from "./tools/get-file.js";
 import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
+
+/**
+ * General response size guard. Any tool_result text content exceeding this
+ * threshold is truncated with a warning. Prevents accidental context bloat
+ * from any tool — not just vault_get_file. (512 KB of text ≈ ~128K tokens)
+ */
+const MAX_RESPONSE_TEXT_SIZE = 512 * 1024;
+
+// ── Logging ────────────────────────────────────────────────────────────────
+
+const LOG_PATH = "/data/logs/mcp.log";
+const LOG_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const SESSION_ID = randomBytes(4).toString("hex");
+
+// Ensure log directory exists on startup
+try {
+  mkdirSync("/data/logs", { recursive: true });
+} catch (err) {
+  process.stderr.write(`[mcp] Failed to create log directory: ${err.message}\n`);
+}
+
+function log(msg) {
+  const ts = new Date().toISOString();
+  const line = `[${ts}] [${SESSION_ID}] ${msg}\n`;
+  try {
+    // Rotate if file exceeds max size
+    try {
+      const st = statSync(LOG_PATH);
+      if (st.size >= LOG_MAX_BYTES) {
+        renameSync(LOG_PATH, LOG_PATH + ".1");
+      }
+    } catch {
+      // File doesn't exist yet — that's fine
+    }
+    appendFileSync(LOG_PATH, line);
+  } catch (err) {
+    process.stderr.write(`[mcp] Log write failed: ${err.message}\n`);
+  }
+}
+
+log(`MCP server starting — PID=${process.pid} session=${SESSION_ID}`);
+
+// ── Control-char sanitization ─────────────────────────────────────────────
+// Strip ASCII control characters (0x00-0x1F) except \t (0x09), \n (0x0A),
+// \r (0x0D) from tool result text.  These chars cause JSON parse failures
+// in downstream consumers (e.g. OpenAI Codex serialization in ZeroClaw).
+// See: https://github.com/TomasWard1/limbo/issues/245
+
+const CONTROL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
+
+function sanitizeToolResult(result) {
+  if (!result || !Array.isArray(result.content)) return result;
+  for (const block of result.content) {
+    if (block.type === "text" && typeof block.text === "string") {
+      block.text = block.text.replace(CONTROL_CHAR_RE, "");
+    }
+  }
+  return result;
+}
 
 const EVAL_MODE = process.env.LIMBO_EVAL === "true";
 
@@ -151,7 +212,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "vault_get_file",
       description:
-        "Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter and returns the file as base64. Returns an image content block for image files.",
+        "Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter and returns metadata plus an absolute path reference so Telegram responses can send it as a real attachment.",
       inputSchema: {
         type: "object",
         properties: {
@@ -206,6 +267,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  log(`tool_call: ${name}`);
   evalLog({ type: "tool_call", tool: name, params: args });
 
   try {
@@ -256,11 +318,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "vault_store_file": {
         const storeResult = await vaultStoreFile(args);
+        const absoluteAssetPath = `${process.env.VAULT_PATH || "/data/vault"}/${storeResult.assetPath}`;
         result = {
           content: [
             {
               type: "text",
-              text: `File stored: ${storeResult.assetPath}\nLinked note: ${storeResult.noteId} → ${storeResult.notePath}`,
+              text: `File stored successfully.\nAsset path (absolute): ${absoluteAssetPath}\nAsset path (relative): ${storeResult.assetPath}\nLinked note: ${storeResult.noteId} → ${storeResult.notePath}\n\nTo send this file to the user, reply with: [DOCUMENT:${absoluteAssetPath}]`,
             },
           ],
         };
@@ -269,27 +332,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "vault_get_file": {
         const fileResult = await vaultGetFile(args.noteId);
-        if (fileResult.mimeType.startsWith("image/")) {
-          result = {
-            content: [
-              { type: "image", data: fileResult.data, mimeType: fileResult.mimeType },
-              { type: "text", text: `File: ${fileResult.filename} (${fileResult.mimeType})` },
-            ],
-          };
-        } else {
-          result = {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({
-                  filename: fileResult.filename,
-                  mimeType: fileResult.mimeType,
-                  data: fileResult.data,
-                }),
-              },
-            ],
-          };
-        }
+        const vaultBase = process.env.VAULT_PATH || "/data/vault";
+        const absolutePath = `${vaultBase}/${fileResult.assetPath}`;
+        result = {
+          content: [
+            {
+              type: "text",
+              text: [
+                `File: ${fileResult.filename}`,
+                `Type: ${fileResult.mimeType}`,
+                `Size: ${formatSize(fileResult.size)}`,
+                `Path: ${fileResult.assetPath}`,
+                `Absolute path: ${absolutePath}`,
+                "",
+                `This file should be sent to the user as a real attachment.`,
+                `Reply with exactly: [DOCUMENT:${absolutePath}]`,
+                `Do NOT inline file contents, base64 data, or markdown excerpts from the note.`,
+              ].join("\n"),
+            },
+          ],
+        };
         break;
       }
 
@@ -316,22 +378,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
 
+    // General response size guard — truncate any text content that would
+    // bloat the LLM context and risk compressor corruption (issue #215)
+    if (result.content) {
+      for (const block of result.content) {
+        if (block.type === "text" && block.text.length > MAX_RESPONSE_TEXT_SIZE) {
+          const originalSize = block.text.length;
+          block.text =
+            block.text.slice(0, MAX_RESPONSE_TEXT_SIZE) +
+            `\n\n[TRUNCATED — response was ${formatSize(originalSize)}, max ${formatSize(MAX_RESPONSE_TEXT_SIZE)}]`;
+        }
+      }
+    }
+
+    sanitizeToolResult(result);
+    log(`tool_result: ${name} success=${!result.isError}`);
     evalLog({ type: "tool_result", tool: name, success: !result.isError });
     return result;
   } catch (err) {
+    log(`tool_error: ${name} error=${err.message}`);
     evalLog({ type: "tool_result", tool: name, success: false, error: err.message });
-    return {
+    const errResult = {
       content: [{ type: "text", text: `Error: ${err.message}` }],
       isError: true,
     };
+    return sanitizeToolResult(errResult);
   }
 });
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
 // Build in-memory index before accepting connections
 const noteCount = await buildIndex();
+log(`Index built: ${noteCount} notes (FTS5 search active)`);
 process.stderr.write(`[limbo-vault] Index built: ${noteCount} notes (FTS5 search active)\n`);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
+log("Transport connected — ready to accept requests");

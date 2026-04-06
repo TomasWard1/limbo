@@ -30,9 +30,14 @@ function sendMessage(message, container, sessionStateFile = null) {
   const runtimeConfig = readZeroClawConfig(container);
   const dockerArgs = ['exec'];
 
-  // Anthropic OAuth still needs the token exported explicitly for docker exec.
-  if (runtimeConfig.provider === 'anthropic') {
+  // docker exec doesn't inherit env vars from the container's entrypoint,
+  // so we must inject provider-specific auth for each call.
+  // openai-codex uses auth-profiles.json from the ZeroClaw state volume — no env needed.
+  const provider = runtimeConfig.provider;
+  if (provider === 'anthropic') {
     dockerArgs.push('-e', 'ANTHROPIC_OAUTH_TOKEN=' + readContainerSecret(container, 'llm_api_key'));
+  } else if (provider === 'openai') {
+    dockerArgs.push('-e', 'OPENAI_API_KEY=' + readContainerSecret(container, 'llm_api_key'));
   }
 
   dockerArgs.push(
@@ -492,10 +497,10 @@ function readContainerSecret(container, name) {
 
 async function resetVault() {
   const pristineDir = path.join(EVALS_DIR, '.vault-pristine');
-
-  // First run: save pristine copy
-  try { await fs.access(pristineDir); } catch {
-    await fs.cp(VAULT_SEED, pristineDir, { recursive: true });
+  try {
+    await fs.access(pristineDir);
+  } catch {
+    throw new Error(`Missing pristine eval seed at ${pristineDir}`);
   }
 
   // Clean vault-seed contents without deleting the directory itself
@@ -542,32 +547,38 @@ function loadCases(filterName) {
   return cases;
 }
 
-// ── Commands ────────────────────────────────────────────────────────────────
+function summarizeRun(results) {
+  const totalPassed = results.reduce((s, r) => s + (r.passed || 0), 0);
+  const totalAssertions = results.reduce((s, r) => s + (r.total || 0), 0);
+  return {
+    totalPassed,
+    totalAssertions,
+    overallRate: totalAssertions > 0 ? ((totalPassed / totalAssertions) * 100).toFixed(1) : '0.0',
+  };
+}
 
-async function cmdRun(args) {
-  const caseName = args['--case'] || null;
-  const tag = args['--tag'] || null;
-  const useJudge = args['--judge'] || false;
-  const difficulty = args['--difficulty'] || null;
-  const runMeta = await readRuntimeMeta(CONTAINER);
-  const runKind = resolveRunKind({ tag, caseName, difficulty });
+async function writeRunOutputs(runData, resultFile) {
+  await fs.mkdir(HISTORY_DIR, { recursive: true });
+  await fs.writeFile(resultFile, JSON.stringify(runData, null, 2));
+  await fs.writeFile(path.join(RESULTS_DIR, 'latest.json'), JSON.stringify(runData, null, 2));
+}
 
-  let cases = loadCases(caseName);
-  if (tag) {
-    cases = cases.filter(c => (c.tags || []).includes(tag));
+function printRunSummary(results) {
+  const { totalPassed, totalAssertions, overallRate } = summarizeRun(results);
+  console.log(`═══ Summary: ${totalPassed}/${totalAssertions} assertions passed (${overallRate}%) ═══`);
+}
+
+function resolveRunFile(fromArg) {
+  if (!fromArg || fromArg === 'latest') {
+    return path.join(RESULTS_DIR, 'latest.json');
   }
-  if (difficulty) {
-    cases = cases.filter(c => c.difficulty === difficulty);
+  if (fromArg.endsWith('.json')) {
+    return path.isAbsolute(fromArg) ? fromArg : path.join(HISTORY_DIR, fromArg);
   }
+  return path.join(HISTORY_DIR, `${fromArg}.json`);
+}
 
-  if (cases.length === 0) {
-    console.error('No cases found.');
-    process.exit(1);
-  }
-
-  console.log(`Running ${cases.length} eval case(s)...\n`);
-
-  const runId = `run-${Date.now()}`;
+async function executeCases(cases, { useJudge = false } = {}) {
   const results = [];
 
   for (const evalCase of cases) {
@@ -598,6 +609,20 @@ async function cmdRun(args) {
         for (let s = 0; s < steps.length; s++) {
           const step = steps[s];
           const stepLabel = steps.length > 1 ? ` [step ${s + 1}/${steps.length}]` : '';
+
+          if (step.type === 'command') {
+            // Simulate ZeroClaw commands (e.g. /new) without sending a message
+            console.log(`  Command${stepLabel}: "${step.content}"`);
+            if (step.content === '/new') {
+              // /new clears conversation history but NOT the vault
+              spawnSync('docker', ['exec', CONTAINER, 'rm', '-f', sessionStateFile], { timeout: 5000 });
+              transcriptTurns.length = 0;
+              console.log('  Session state cleared (simulated /new)');
+            } else {
+              console.log(`  ⚠ Unknown command "${step.content}" — skipped`);
+            }
+            continue;
+          }
 
           if (step.type === 'telegram_manual') {
             // Snapshot before (both .md and all files)
@@ -796,9 +821,44 @@ async function cmdRun(args) {
     }
   }
 
+  return results;
+}
+
+// ── Commands ────────────────────────────────────────────────────────────────
+
+async function cmdRun(args) {
+  const caseName = args['--case'] || null;
+  const tag = args['--tag'] || null;
+  const useJudge = args['--judge'] || false;
+  const difficulty = args['--difficulty'] || null;
+  const includeManual = args['--include-manual'] || false;
+  const runMeta = await readRuntimeMeta(CONTAINER);
+  const runKind = resolveRunKind({ tag, caseName, difficulty });
+
+  let cases = loadCases(caseName);
+  if (tag) {
+    cases = cases.filter(c => (c.tags || []).includes(tag));
+  }
+  if (difficulty) {
+    cases = cases.filter(c => c.difficulty === difficulty);
+  }
+  // Exclude manual/interactive cases unless explicitly requested
+  if (!includeManual && tag !== 'manual') {
+    cases = cases.filter(c => !(c.tags || []).includes('manual'));
+  }
+
+  if (cases.length === 0) {
+    console.error('No cases found.');
+    process.exit(1);
+  }
+
+  console.log(`Running ${cases.length} eval case(s)...\n`);
+
+  const runId = `run-${Date.now()}`;
+  const results = await executeCases(cases, { useJudge });
+
   // Save results
   const resultFile = path.join(HISTORY_DIR, `${runId}.json`);
-  await fs.mkdir(HISTORY_DIR, { recursive: true });
   const runData = {
     id: runId,
     timestamp: new Date().toISOString(),
@@ -812,15 +872,68 @@ async function cmdRun(args) {
     },
     results,
   };
-  await fs.writeFile(resultFile, JSON.stringify(runData, null, 2));
-  await fs.writeFile(path.join(RESULTS_DIR, 'latest.json'), JSON.stringify(runData, null, 2));
-
-  // Summary
-  const totalPassed = results.reduce((s, r) => s + r.passed, 0);
-  const totalAssertions = results.reduce((s, r) => s + r.total, 0);
-  const overallRate = totalAssertions > 0 ? ((totalPassed / totalAssertions) * 100).toFixed(1) : 0;
-  console.log(`═══ Summary: ${totalPassed}/${totalAssertions} assertions passed (${overallRate}%) ═══`);
+  await writeRunOutputs(runData, resultFile);
+  printRunSummary(results);
   console.log(`Results saved: ${resultFile}`);
+}
+
+async function cmdRerunFailed(args) {
+  const fromArg = args['--from'] || 'latest';
+  const filterCase = args['--case'] || null;
+  const sourceFile = resolveRunFile(fromArg);
+
+  let baseRun;
+  try {
+    baseRun = JSON.parse(await fs.readFile(sourceFile, 'utf8'));
+  } catch {
+    console.error(`Could not read run file: ${sourceFile}`);
+    process.exit(1);
+  }
+
+  const failedResults = (baseRun.results || []).filter((result) => result.passed < result.total);
+  const targetResults = filterCase
+    ? failedResults.filter((result) => result.case === filterCase)
+    : failedResults;
+
+  if (targetResults.length === 0) {
+    console.log(filterCase
+      ? `No failed result found for case "${filterCase}" in ${baseRun.id}.`
+      : `No failed cases found in ${baseRun.id}.`);
+    return;
+  }
+
+  const caseNames = [...new Set(targetResults.map((result) => result.case))];
+  const cases = loadCases().filter((evalCase) => caseNames.includes(evalCase.name));
+  if (cases.length !== caseNames.length) {
+    const loadedNames = new Set(cases.map((evalCase) => evalCase.name));
+    const missing = caseNames.filter((name) => !loadedNames.has(name));
+    console.error(`Missing case definitions: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+
+  console.log(`Re-running ${cases.length} failed case(s) from ${baseRun.id}...\n`);
+  const rerunResults = await executeCases(cases, { useJudge: Boolean(baseRun.scope?.judge) });
+  const rerunMap = new Map(rerunResults.map((result) => [`${result.case}#${result.run}`, result]));
+  const mergedResults = (baseRun.results || []).map((result) => rerunMap.get(`${result.case}#${result.run}`) || result);
+  const runMeta = await readRuntimeMeta(CONTAINER);
+  const rerunRecord = {
+    sourceRunId: baseRun.id,
+    timestamp: new Date().toISOString(),
+    cases: caseNames,
+  };
+
+  const nextRerunHistory = Array.isArray(baseRun.rerunHistory) ? baseRun.rerunHistory.concat(rerunRecord) : [rerunRecord];
+  const mergedRun = {
+    ...baseRun,
+    timestamp: rerunRecord.timestamp,
+    meta: runMeta,
+    results: mergedResults,
+    rerunHistory: nextRerunHistory,
+  };
+
+  await writeRunOutputs(mergedRun, sourceFile);
+  printRunSummary(mergedResults);
+  console.log(`Updated run in place: ${sourceFile}`);
 }
 
 async function cmdCompare(args) {
@@ -968,6 +1081,7 @@ Usage:
 
 Commands:
   run       Run eval cases against a live Limbo container
+  rerun-failed Re-run only failed cases from a previous run and merge them in place
   compare   Compare latest results against baseline
   promote   Promote latest results as the new baseline
   report    Show pass rates for the last 10 runs
@@ -977,9 +1091,14 @@ Options for 'run':
   --tag <tag>         Run only cases with a given tag
   --difficulty <tier> Run only cases of a given difficulty (easy|medium|hard)
   --judge             Enable LLM-as-judge evaluation
+  --include-manual    Include interactive/manual cases (excluded by default)
 
 Options for 'compare':
   --strict        Exit with error code if regressions found
+
+Options for 'rerun-failed':
+  --from <run-id|file>  Source run to patch (default: latest)
+  --case <name>         Re-run only one failed case from that run
 
 Options for 'promote':
   --case <name>   Promote only a specific case (default: all cases)
@@ -990,6 +1109,9 @@ Examples:
   limbo-eval run --difficulty medium
   limbo-eval run --tag vault_write_note --judge
   limbo-eval run --tag manual              # run only manual Telegram tests
+  limbo-eval run --include-manual          # run all cases including manual
+  limbo-eval rerun-failed --from run-1775068115506
+  limbo-eval rerun-failed --from latest --case create-reminder
   limbo-eval compare --strict
   limbo-eval promote
   limbo-eval promote --case remember-fact
@@ -1004,6 +1126,9 @@ async function main() {
   switch (command) {
     case 'run':
       await cmdRun(args);
+      break;
+    case 'rerun-failed':
+      await cmdRerunFailed(args);
       break;
     case 'compare':
       await cmdCompare(args);

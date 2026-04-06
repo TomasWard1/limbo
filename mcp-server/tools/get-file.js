@@ -1,5 +1,5 @@
-import { readFile, stat } from "fs/promises";
-import { join, resolve, basename } from "path";
+import { stat } from "fs/promises";
+import { join, resolve, basename, extname } from "path";
 import { getNote, ensureIndex } from "../vault-index.js";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
@@ -8,10 +8,11 @@ const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
  * vault_get_file: retrieves a stored file by its linked note ID.
  *
  * Reads the note from the index, extracts asset_path from frontmatter,
- * reads the binary file, and returns it as base64.
+ * checks that the binary exists, and returns metadata plus a path reference.
  *
- * Input: { noteId: string }
- * Returns: { data: string (base64), mimeType: string, filename: string }
+ * Limbo's real user-facing channel is Telegram, which expects file attachments
+ * to come from paths/documents rather than inline base64 image blocks.
+ * Returning references also avoids large payloads entering the LLM context.
  */
 export async function vaultGetFile(noteId) {
   if (!noteId || typeof noteId !== "string") {
@@ -41,8 +42,6 @@ export async function vaultGetFile(noteId) {
   }
 
   const assetTypeMatch = fmMatch[1].match(/^asset_type:\s*["']?(.+?)["']?\s*$/m);
-  const mimeType = assetTypeMatch ? assetTypeMatch[1] : "application/octet-stream";
-
   const assetPath = assetPathMatch[1];
   const fullPath = resolve(join(VAULT_PATH, assetPath));
 
@@ -66,9 +65,32 @@ export async function vaultGetFile(noteId) {
     throw new Error(`File too large to retrieve (${Math.round(fileStats.size / 1024 / 1024)}MB, max 10MB)`);
   }
 
-  const buffer = await readFile(fullPath);
-  const data = buffer.toString("base64");
   const filename = basename(fullPath);
+  const ext = extname(fullPath).toLowerCase();
+  const mimeType = assetTypeMatch
+    ? assetTypeMatch[1]
+    : guessMime(ext);
 
-  return { data, mimeType, filename };
+  return {
+    filename,
+    mimeType,
+    size: fileStats.size,
+    assetPath,
+  };
+}
+
+function guessMime(ext) {
+  const map = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".json": "application/json",
+  };
+  return map[ext] || "application/octet-stream";
 }

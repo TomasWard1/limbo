@@ -1,0 +1,87 @@
+{
+  "case": "reminder-relative-time",
+  "run": 1,
+  "passRate": 1,
+  "passed": 2,
+  "total": 2,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "cron_created",
+        "pattern": "ropa|lavarropas|lavadora|laundry|clothes"
+      },
+      "pass": true,
+      "reason": "Cron job matched /ropa|lavarropas|lavadora|laundry|clothes/i"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(3.*hora|hora|reminder|recordatorio|programado|avisarte)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(3.*hora|hora|reminder|recordatorio|programado|avisarte)/"
+    }
+  ],
+  "judgeResults": null,
+  "response": "<tool_result>\n{\"sessions\":[{\"id\":\"telegram__7011103847\",\"channel\":\"telegram\",\"last_activity\":\"2026-04-01T18:35:24Z\",\"message_count\":133},{\"id\":\"local__default\",\"channel\":\"local\",\"last_activity\":\"2026-04-01T18:09:21Z\",\"message_count\":18}]}\n</tool_result>\n<tool_result>\n{\"jobs\":[]}\n</tool_result>\n<tool_result>\n{\"job_id\":\"8\",\"schedule\":{\"kind\":\"at\",\"at\":\"2026-04-01T21:35:24Z\"},\"job_type\":\"agent\",\"name\":\"Recordatorio lavarropas\",\"prompt\":\"Enviá exactamente este mensaje en español: \\\"Recordatorio: sac",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Haceme acordar en 3 horas que tengo que sacar la ropa del lavarropas",
+      "response": "<tool_result>\n{\"sessions\":[{\"id\":\"telegram__7011103847\",\"channel\":\"telegram\",\"last_activity\":\"2026-04-01T18:35:24Z\",\"message_count\":133},{\"id\":\"local__default\",\"channel\":\"local\",\"last_activity\":\"2026-04-01T18:09:21Z\",\"message_count\":18}]}\n</tool_result>\n<tool_result>\n{\"jobs\":[]}\n</tool_result>\n<tool_result>\n{\"job_id\":\"8\",\"schedule\":{\"kind\":\"at\",\"at\":\"2026-04-01T21:35:24Z\"},\"job_type\":\"agent\",\"name\":\"Recordatorio lavarropas\",\"prompt\":\"Enviá exactamente este mensaje en español: \\\"Recordatorio: sacar la ropa del lavarropas.\\\"\",\"delivery\":{\"mode\":\"announce\",\"channel\":\"telegram\",\"to\":\"7011103847\",\"best_effort\":true},\"session_target\":\"isolated\",\"enabled\":true,\"created_at\":\"2026-04-01T18:35:45.864413911Z\"}  \n</tool_result>Listo. Te lo voy a recordar a las 21:35 UTC de hoy.Listo. Recordatorio programado para las 21:35 UTC de hoy.",
+      "latencyMs": 26602,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "assertions": [
+        {
+          "type": "cron_created",
+          "pattern": "ropa|lavarropas|lavadora|laundry|clothes"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(3.*hora|hora|reminder|recordatorio|programado|avisarte)"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "ropa|lavarropas|lavadora|laundry|clothes"
+          },
+          "pass": true,
+          "reason": "Cron job matched /ropa|lavarropas|lavadora|laundry|clothes/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(3.*hora|hora|reminder|recordatorio|programado|avisarte)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(3.*hora|hora|reminder|recordatorio|programado|avisarte)/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": [
+        {
+          "id": "66c63ba6-e92f-4aac-bc36-fddd76a421b3",
+          "schedule": "At { at: 2026-04-01T21:35:24Z } | next=2026-04-01T21:35:24+00:00 | last=never (n/a)"
+        }
+      ]
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 0,
+  "mcpLogs": [],
+  "searchTimeMs": null,
+  "latencyMs": 26602,
+  "timestamp": "2026-04-01T18:35:51.191Z"
+}

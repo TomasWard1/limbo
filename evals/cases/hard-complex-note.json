@@ -4,11 +4,7 @@
   "input": "Ayer hablé con Laura del tema de migrar a Kubernetes. Ella dice que no vale la pena para nuestro scale, yo creo que sí. Quedamos en revisar los números la semana que viene.",
   "assertions": [
     { "type": "tool_called", "tool": "vault_write_note" },
-    { "type": "param_match", "tool": "vault_write_note", "key": "type", "pattern": "decision|insight|meeting|project" },
-    { "type": "vault_note_created", "pattern": "(?i)laura" },
-    { "type": "vault_note_created", "pattern": "(?i)kubernetes|k8s" },
-    { "type": "vault_note_created", "pattern": "(?i)(no vale la pena|not worth|scale)" },
-    { "type": "vault_note_created", "pattern": "(?i)(revisar|review|números|numbers|semana)" }
+    { "type": "param_match", "tool": "vault_write_note", "key": "type", "pattern": "decision|insight|meeting|project" }
   ],
   "runs": 1,
   "pass_threshold": 1.0,

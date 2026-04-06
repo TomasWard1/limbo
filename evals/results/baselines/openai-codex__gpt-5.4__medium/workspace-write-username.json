@@ -1,0 +1,260 @@
+{
+  "case": "workspace-write-username",
+  "run": 1,
+  "passRate": 1,
+  "passed": 7,
+  "total": 7,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "workspace_read"
+      },
+      "pass": true,
+      "reason": "Tool \"workspace_read\" was called"
+    },
+    {
+      "assertion": {
+        "type": "param_match",
+        "tool": "workspace_read",
+        "key": "filename",
+        "pattern": "USER\\.md"
+      },
+      "pass": true,
+      "reason": "Param \"filename\" on \"workspace_read\" matched /USER\\.md/"
+    },
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "workspace_write"
+      },
+      "pass": true,
+      "reason": "Tool \"workspace_write\" was called"
+    },
+    {
+      "assertion": {
+        "type": "param_match",
+        "tool": "workspace_write",
+        "key": "filename",
+        "pattern": "USER\\.md"
+      },
+      "pass": true,
+      "reason": "Param \"filename\" on \"workspace_write\" matched /USER\\.md/"
+    },
+    {
+      "assertion": {
+        "type": "param_match",
+        "tool": "workspace_write",
+        "key": "content",
+        "pattern": "(?i)santiago"
+      },
+      "pass": true,
+      "reason": "Param \"content\" on \"workspace_write\" matched /(?i)santiago/"
+    },
+    {
+      "assertion": {
+        "type": "user_profile_matches",
+        "pattern": "(?i)santiago"
+      },
+      "pass": true,
+      "reason": "USER.md matched /(?i)santiago/i"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(santiago|guardé|guardado|actualicé|listo)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(santiago|guardé|guardado|actualicé|listo)/"
+    }
+  ],
+  "judgeResults": null,
+  "response": "Guardado, Santiago.",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Che, me llamo Santiago. Guardalo así te acordás",
+      "response": "Guardado, Santiago.",
+      "latencyMs": 15723,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Santiago\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Santiago** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "workspace_read",
+          "params": {
+            "filename": "USER.md"
+          },
+          "timestamp": "2026-04-01T19:14:49.150Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "workspace_read",
+          "success": true,
+          "timestamp": "2026-04-01T19:14:49.152Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "workspace_write",
+          "params": {
+            "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Santiago\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Santiago** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+            "filename": "USER.md"
+          },
+          "timestamp": "2026-04-01T19:14:54.340Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "workspace_write",
+          "success": true,
+          "timestamp": "2026-04-01T19:14:54.343Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "tool_called",
+          "tool": "workspace_read"
+        },
+        {
+          "type": "param_match",
+          "tool": "workspace_read",
+          "key": "filename",
+          "pattern": "USER\\.md"
+        },
+        {
+          "type": "tool_called",
+          "tool": "workspace_write"
+        },
+        {
+          "type": "param_match",
+          "tool": "workspace_write",
+          "key": "filename",
+          "pattern": "USER\\.md"
+        },
+        {
+          "type": "param_match",
+          "tool": "workspace_write",
+          "key": "content",
+          "pattern": "(?i)santiago"
+        },
+        {
+          "type": "user_profile_matches",
+          "pattern": "(?i)santiago"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(santiago|guardé|guardado|actualicé|listo)"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "workspace_read"
+          },
+          "pass": true,
+          "reason": "Tool \"workspace_read\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_read",
+            "key": "filename",
+            "pattern": "USER\\.md"
+          },
+          "pass": true,
+          "reason": "Param \"filename\" on \"workspace_read\" matched /USER\\.md/"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "workspace_write"
+          },
+          "pass": true,
+          "reason": "Tool \"workspace_write\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_write",
+            "key": "filename",
+            "pattern": "USER\\.md"
+          },
+          "pass": true,
+          "reason": "Param \"filename\" on \"workspace_write\" matched /USER\\.md/"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_write",
+            "key": "content",
+            "pattern": "(?i)santiago"
+          },
+          "pass": true,
+          "reason": "Param \"content\" on \"workspace_write\" matched /(?i)santiago/"
+        },
+        {
+          "assertion": {
+            "type": "user_profile_matches",
+            "pattern": "(?i)santiago"
+          },
+          "pass": true,
+          "reason": "USER.md matched /(?i)santiago/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(santiago|guardé|guardado|actualicé|listo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(santiago|guardé|guardado|actualicé|listo)/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 4,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "workspace_read",
+      "params": {
+        "filename": "USER.md"
+      },
+      "timestamp": "2026-04-01T19:14:49.150Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "workspace_read",
+      "success": true,
+      "timestamp": "2026-04-01T19:14:49.152Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "workspace_write",
+      "params": {
+        "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Santiago\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Santiago** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+        "filename": "USER.md"
+      },
+      "timestamp": "2026-04-01T19:14:54.340Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "workspace_write",
+      "success": true,
+      "timestamp": "2026-04-01T19:14:54.343Z"
+    }
+  ],
+  "searchTimeMs": null,
+  "latencyMs": 15723,
+  "timestamp": "2026-04-01T19:14:57.132Z"
+}

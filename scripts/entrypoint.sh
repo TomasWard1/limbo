@@ -178,6 +178,18 @@ for f in /app/workspace/system/*.md; do
 done
 log "INFO  System workspace files copied to ZeroClaw workspace"
 
+# Skills: copy from image on every boot (overwrite — image is source of truth)
+if [ -d /app/workspace/skills ]; then
+  mkdir -p "$ZC_WORKSPACE/skills"
+  for skill_dir in /app/workspace/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+    mkdir -p "$ZC_WORKSPACE/skills/$skill_name"
+    cp "$skill_dir"* "$ZC_WORKSPACE/skills/$skill_name/" 2>/dev/null
+  done
+  log "INFO  Skills synced to ZeroClaw workspace"
+fi
+
 # User files: seed from templates only on first run (never overwrite)
 for f in /app/workspace/templates/*.md; do
   [ -f "$f" ] || continue
@@ -190,6 +202,12 @@ for f in /app/workspace/templates/*.md; do
   fi
 done
 
+# USER.md migration: regenerate if stale template syntax detected (issue #243)
+if [ -f "$ZC_WORKSPACE/USER.md" ] && grep -q '${' "$ZC_WORKSPACE/USER.md"; then
+  log "WARN  USER.md contains unexpanded template syntax — regenerating from current template"
+  rm "$ZC_WORKSPACE/USER.md"
+fi
+
 # USER.md: generate from template via envsubst on first run
 if [ ! -f "$ZC_WORKSPACE/USER.md" ]; then
   USER_NAME="${USER_NAME:-User}"
@@ -200,6 +218,18 @@ if [ ! -f "$ZC_WORKSPACE/USER.md" ]; then
   envsubst '$USER_NAME $USER_TIMEZONE $USER_LANGUAGE $USER_CONTEXT' \
     < /app/workspace/templates/USER.md.template > "$ZC_WORKSPACE/USER.md"
   log "INFO  Generated USER.md from template"
+fi
+
+# ── Set container timezone ───────────────────────────────────────────────────
+# Match the container's TZ to the user's timezone so that system time, schedule
+# tool, and cron expressions all operate in local time. Without this, the system
+# clock reports UTC and relative-time reminders ("in 3 hours") land at the wrong
+# wall-clock time — the agent or ZeroClaw applies the UTC offset twice.
+if [ -n "${USER_TIMEZONE:-}" ]; then
+  export TZ="$USER_TIMEZONE"
+  log "INFO  Container timezone set to $TZ"
+else
+  log "WARN  USER_TIMEZONE not set — container defaults to UTC"
 fi
 
 # ── Generate ZeroClaw config ──────────────────────────────────────────────────

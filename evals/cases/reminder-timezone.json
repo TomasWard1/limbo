@@ -1,18 +1,31 @@
 {
   "name": "reminder-timezone",
   "description": "Reminder should be created in the user's timezone, not UTC",
-  "input": "Poneme un reminder para hoy a las 23:00 que tengo que tomar la pastilla",
-  "assertions": [
+  "steps": [
     {
-      "type": "cron_created",
-      "pattern": "pastilla|pill|medicamento",
-      "timezone": "America/Buenos_Aires",
-      "local_hour": 23,
-      "local_minute": 0
+      "input": "Poneme un reminder para hoy a las 23:00 que tengo que tomar la pastilla",
+      "assertions": [
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(timezone|huso horario|zona horaria)"
+        }
+      ]
     },
     {
-      "type": "response_matches",
-      "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+      "input": "America/Buenos_Aires",
+      "assertions": [
+        {
+          "type": "cron_created",
+          "pattern": "pastilla|pill|medicamento",
+          "timezone": "America/Buenos_Aires",
+          "local_hour": 23,
+          "local_minute": 0
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+        }
+      ]
     }
   ],
   "runs": 1,
