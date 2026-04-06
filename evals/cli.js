@@ -30,9 +30,14 @@ function sendMessage(message, container, sessionStateFile = null) {
   const runtimeConfig = readZeroClawConfig(container);
   const dockerArgs = ['exec'];
 
-  // Anthropic OAuth still needs the token exported explicitly for docker exec.
-  if (runtimeConfig.provider === 'anthropic') {
+  // docker exec doesn't inherit env vars from the container's entrypoint,
+  // so we must inject provider-specific auth for each call.
+  // openai-codex uses auth-profiles.json from the ZeroClaw state volume — no env needed.
+  const provider = runtimeConfig.provider;
+  if (provider === 'anthropic') {
     dockerArgs.push('-e', 'ANTHROPIC_OAUTH_TOKEN=' + readContainerSecret(container, 'llm_api_key'));
+  } else if (provider === 'openai') {
+    dockerArgs.push('-e', 'OPENAI_API_KEY=' + readContainerSecret(container, 'llm_api_key'));
   }
 
   dockerArgs.push(
