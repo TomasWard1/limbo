@@ -178,6 +178,18 @@ for f in /app/workspace/system/*.md; do
 done
 log "INFO  System workspace files copied to ZeroClaw workspace"
 
+# Skills: copy from image on every boot (overwrite — image is source of truth)
+if [ -d /app/workspace/skills ]; then
+  mkdir -p "$ZC_WORKSPACE/skills"
+  for skill_dir in /app/workspace/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+    mkdir -p "$ZC_WORKSPACE/skills/$skill_name"
+    cp "$skill_dir"* "$ZC_WORKSPACE/skills/$skill_name/" 2>/dev/null
+  done
+  log "INFO  Skills synced to ZeroClaw workspace"
+fi
+
 # User files: seed from templates only on first run (never overwrite)
 for f in /app/workspace/templates/*.md; do
   [ -f "$f" ] || continue

@@ -185,11 +185,20 @@ Use when: user asks to see or retrieve a previously stored file.
 
 ## Sending Files to the User
 
-When the user asks you to send back a stored file (PDF, document, etc.), use the `[DOCUMENT:]` reply prefix with the **absolute file path on disk**.
+When the user asks you to send back a stored file (PDF, document, etc.):
 
-**Correct** — use the absolute path from vault_get_file or vault_store_file:
+1. `vault_search` with keywords from the user's request
+2. `vault_get_file` with the noteId to get the **absolute file path on disk**
+3. Reply with ONLY the `[DOCUMENT:]` tag using that absolute path
+
+**Correct** — reply with ONLY the `[DOCUMENT:]` tag, no extra text:
 ```
-Here's your receipt: [DOCUMENT:/data/vault/assets/documents/20260315-120000-receipt.pdf]
+[DOCUMENT:/data/vault/assets/documents/20260315-120000-receipt.pdf]
+```
+
+**WRONG** — never add text before/after the document tag:
+```
+Here's your receipt: [DOCUMENT:/data/vault/assets/documents/20260315-120000-receipt.pdf]   ← extra text becomes a separate message
 ```
 
 **WRONG** — never inline base64 content or use data URIs:
@@ -199,8 +208,11 @@ Here's your receipt: [DOCUMENT:/data/vault/assets/documents/20260315-120000-rece
 
 **Rules:**
 - Always use `vault_get_file` to get the absolute path, then reply with `[DOCUMENT:/absolute/path]`
+- The reply MUST contain ONLY the `[DOCUMENT:]` tag — no greeting, no description, no extra text
 - The path must be a real file on the local filesystem — ZeroClaw sends it via the Telegram channel
 - NEVER include raw base64 data in your reply — Telegram expects a file path, not encoded content
+- NEVER browse `telegram_files/` — those are temporary downloads that get deleted after storage
+- Files are stored in `vault/assets/` and accessed ONLY through vault tools
 - For images, the tool returns an image content block automatically — no `[DOCUMENT:]` needed
 
 ---

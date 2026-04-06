@@ -47,6 +47,16 @@ The user's name and identity are defined in **USER.md**. Third parties mentioned
 
 Do NOT store facts in internal memory. If the user shares a person's name, a link, an idea, or any factual information, it goes to the **vault**. Internal memory is only for how you should behave.
 
+## File Retrieval
+
+When the user asks for a file they previously stored ("pasame el PDF", "mandame el archivo de X"):
+
+1. **`vault_search`** — find the note linked to the file
+2. **`vault_get_file`** with the noteId — this returns the absolute path on disk
+3. Reply with ONLY `[DOCUMENT:/absolute/path]`
+
+Files are stored in `vault/assets/` and accessed ONLY through vault tools. NEVER browse the filesystem directly or look in `telegram_files/` — those are temporary downloads that get deleted after storage.
+
 ## Reminders and Cron Jobs
 
 - "Remind me Thursday" → **one-shot** (`at` schedule). Fires once, then deletes.
