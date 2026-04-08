@@ -1,0 +1,204 @@
+# GitLab CI/CD — equivalent of .github/workflows/{ci,promote,publish}.yml
+# GitHub Actions originals are kept intact for when the account is restored.
+
+stages:
+  - test
+  - promote
+  - release
+
+variables:
+  NODE_VERSION: "22"
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# ─── CI: runs on MRs and staging pushes ───────────────────────────
+
+docker-build:
+  stage: test
+  image: docker:latest
+  services:
+    - docker:dind
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "staging"
+  script:
+    - docker build --tag limbo:ci-test .
+
+mcp-server-check:
+  stage: test
+  image: node:${NODE_VERSION}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "staging"
+  before_script:
+    - cd mcp-server && npm ci && cd ..
+  script:
+    - node --check mcp-server/index.js
+    - node --check setup-server/server.js
+
+tests:
+  stage: test
+  image: node:${NODE_VERSION}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "staging"
+  before_script:
+    - cd mcp-server && npm ci && cd ..
+  script:
+    - node -e "require('./cli.js')"
+    - node --test test/cli-filter.test.js test/cli-auth.test.js test/zeroclaw-migration.test.js test/setup-server.test.js
+
+# ─── PROMOTE: auto-create MR from staging → main ──────────────────
+
+promote-staging-to-main:
+  stage: promote
+  image: alpine:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == "staging"
+  before_script:
+    - apk add --no-cache curl jq git
+  script:
+    - |
+      # Determine bump type from commits on staging not on main
+      git fetch origin main
+      COMMITS=$(git log origin/main..origin/staging --pretty=format:"%s" 2>/dev/null || echo "")
+      echo "--- Commits on staging not on main ---"
+      echo "$COMMITS"
+
+      if echo "$COMMITS" | grep -qE "^feat(\(.+\))?!:|BREAKING CHANGE"; then
+        TYPE="feat!"
+      elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+        TYPE="feat"
+      elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:"; then
+        TYPE="fix"
+      else
+        TYPE="chore"
+      fi
+
+      echo "Bump type: $TYPE"
+
+      # Check for existing MR
+      EXISTING=$(curl -s --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests?source_branch=staging&target_branch=main&state=opened" \
+        | jq '.[0].iid // empty')
+
+      if [ -z "$EXISTING" ]; then
+        # Create new MR
+        curl -s --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+          -X POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests" \
+          -d "source_branch=staging" \
+          -d "target_branch=main" \
+          -d "title=${TYPE}: promote staging to main" \
+          -d "remove_source_branch=false" | jq '.web_url'
+        echo "Created new MR"
+      else
+        # Update existing MR title
+        curl -s --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+          -X PUT "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${EXISTING}" \
+          -d "title=${TYPE}: promote staging to main" | jq '.web_url'
+        echo "Updated existing MR #${EXISTING}"
+      fi
+
+# ─── RELEASE: version bump + npm publish + docker push + tag ──────
+
+release:
+  stage: release
+  image: docker:latest
+  services:
+    - docker:dind
+  id_tokens:
+    SIGSTORE_ID_TOKEN:
+      aud: https://registry.npmjs.org
+  environment: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: on_success
+  variables:
+    GIT_STRATEGY: clone
+    GIT_DEPTH: "0"
+  before_script:
+    - apk add --no-cache nodejs npm git jq curl
+    - npm install -g npm@11.6.2
+  script:
+    - |
+      # Skip bot commits
+      if echo "$CI_COMMIT_MESSAGE" | grep -q "\[skip ci\]"; then
+        echo "Skipping release for [skip ci] commit"
+        exit 0
+      fi
+
+      # Determine version bump
+      LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+      if [ -z "$LAST_TAG" ]; then
+        RANGE="HEAD"
+      else
+        RANGE="${LAST_TAG}..HEAD"
+      fi
+
+      COMMITS=$(git log "$RANGE" --first-parent --pretty=format:"%B" 2>/dev/null || echo "")
+      echo "--- First-parent commits since last tag ---"
+      echo "$COMMITS"
+
+      if echo "$COMMITS" | grep -qE "^feat(\(.+\))?!:|BREAKING CHANGE"; then
+        BUMP="major"
+      elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+        BUMP="minor"
+      elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:"; then
+        BUMP="patch"
+      else
+        echo "No releasable changes found on main."
+        exit 0
+      fi
+
+      echo "Bump type: $BUMP"
+
+      # Bump version
+      npm version "$BUMP" --no-git-tag-version
+      VERSION=$(node -p "require('./package.json').version")
+      MAJOR=$(echo "$VERSION" | cut -d. -f1)
+      MINOR=$(echo "$VERSION" | cut -d. -f1-2)
+      echo "Publishing version: $VERSION"
+
+      # Docker: build and push to GitLab Container Registry
+      IMAGE="${CI_REGISTRY_IMAGE}"
+      docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+
+      docker buildx create --use --name multiarch 2>/dev/null || true
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --push \
+        --tag "${IMAGE}:${VERSION}" \
+        --tag "${IMAGE}:${MINOR}" \
+        --tag "${IMAGE}:${MAJOR}" \
+        --tag "${IMAGE}:latest" \
+        .
+
+      # npm publish (trusted publishing via OIDC — no token needed)
+      npm publish --provenance --access public
+
+      # Git: commit version bump and tag
+      git config user.name "gitlab-ci[bot]"
+      git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
+      git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git"
+      git add package.json
+      git commit -m "chore: release v${VERSION} [skip ci]"
+      git tag "v${VERSION}"
+      git push origin main --follow-tags
+
+      # Create GitLab Release
+      PREV_TAG=$(git describe --tags --abbrev=0 "v${VERSION}^" 2>/dev/null || echo "")
+      if [ -n "$PREV_TAG" ]; then
+        CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+      else
+        CHANGELOG=$(git log HEAD --pretty=format:"- %s (%h)" --no-merges)
+      fi
+
+      curl -s --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+        -X POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"tag_name\": \"v${VERSION}\",
+          \"name\": \"Limbo v${VERSION}\",
+          \"description\": $(echo "$CHANGELOG" | jq -Rs .)
+        }"
+
+      echo "Released v${VERSION}"
