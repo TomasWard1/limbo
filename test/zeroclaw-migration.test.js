@@ -258,7 +258,7 @@ test('docker-compose.yml does not use OPENCLAW_ env vars', () => {
 // ─── 10. Workspace docs updated ─────────────────────────────────────────────
 
 test('IDENTITY.md does not reference OpenClaw gateway', () => {
-  const id = read('workspace/templates/IDENTITY.md');
+  const id = read('workspace/system/IDENTITY.md');
   assert.ok(!id.includes('OpenClaw'), 'IDENTITY.md should reference ZeroClaw, not OpenClaw');
 });
 

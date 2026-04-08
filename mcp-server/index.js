@@ -227,7 +227,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "workspace_read",
       description:
-        "Read one of your workspace personality/config files. Use this to check your current USER.md, SOUL.md, or IDENTITY.md before updating them. Also readable: AGENTS.md, TOOLS.md, limbo-skill.md (system files — read-only).",
+        "Read one of your workspace personality/config files. Use this to check your current USER.md before updating it. Also readable: SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, limbo-skill.md (all read-only).",
       inputSchema: {
         type: "object",
         properties: {
@@ -242,14 +242,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "workspace_write",
       description:
-        "Update one of your writable personality files: USER.md, SOUL.md, or IDENTITY.md. Read the file first with workspace_read, then write the full updated content. System files (AGENTS.md, TOOLS.md) cannot be written — they are reset on every boot.",
+        "Update USER.md with user profile information (name, timezone, language, preferences). Read the file first with workspace_read, then write the full updated content. Only USER.md is writable — all other workspace files are read-only.",
       inputSchema: {
         type: "object",
         properties: {
           filename: {
             type: "string",
-            enum: ["USER.md", "SOUL.md", "IDENTITY.md"],
-            description: "Which file to update",
+            enum: ["USER.md"],
+            description: "Which file to update (only USER.md is writable)",
           },
           content: {
             type: "string",

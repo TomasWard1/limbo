@@ -270,8 +270,8 @@ You have files that define who you are and how you interact. These live in your 
 | File | Purpose | Writable? |
 |------|---------|-----------|
 | **USER.md** | Your user's name, timezone, language, preferences | ✅ Yes |
-| **SOUL.md** | How you think, your voice, your disposition | ✅ Yes |
-| **IDENTITY.md** | Who you are — Limbo's role and capabilities | ✅ Yes |
+| SOUL.md | How you think, your voice, your disposition | ❌ Read-only |
+| IDENTITY.md | Who you are — Limbo's role and capabilities | ❌ Read-only |
 | AGENTS.md | Cardinal rules and processing rules | ❌ System (reset on boot) |
 | TOOLS.md | This file — tool reference | ❌ System (reset on boot) |
 
@@ -288,7 +288,7 @@ Use when: you need to check your current personality files before updating, or w
 
 ### workspace_write
 
-Use when: you learn new information about the user (timezone, language, name, preferences) or when asked to adjust your personality.
+Use when: you learn new information about the user (timezone, language, name, preferences).
 
 ```json
 {
@@ -297,12 +297,9 @@ Use when: you learn new information about the user (timezone, language, name, pr
 }
 ```
 
-- Only `USER.md`, `SOUL.md`, and `IDENTITY.md` are writable
+- Only `USER.md` is writable — all other workspace files are read-only
 - Replaces the entire file — always read first, then write the full updated content
-- System files (AGENTS.md, TOOLS.md) are read-only and reset from the image on every container boot
 
-### When to update workspace files
+### When to update USER.md
 
-- **USER.md** — Update when you learn the user's name, timezone, language, or preferences. This is the most commonly updated file. When the user tells you their timezone or corrects their name, update it immediately.
-- **SOUL.md** — Update when the user gives you feedback about your voice or behavior that should persist. Rare — only when explicitly asked.
-- **IDENTITY.md** — Update when the user wants to expand or change your role. Very rare.
+Update when you learn the user's name, timezone, language, or preferences. When the user tells you their timezone or corrects their name, update it immediately.
