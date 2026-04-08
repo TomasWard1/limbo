@@ -32,15 +32,28 @@
 
 ## Git Workflow
 
-- **Integration branch: `staging`** — ALL pull requests MUST target `staging`, never `main`
+- **Remote: `gitlab`** — GitHub account is suspended (appeal pending, Ticket #4254416). Push to `gitlab`, not `origin`.
+- **Integration branch: `staging`** — ALL merge requests MUST target `staging`, never `main`
 - `main` is the production/release branch — only receives merges from `staging`
 - Feature branches are created from `staging`
-- Always use `--base staging` when creating PRs with `gh pr create`
+- Use `git push gitlab <branch>` for all pushes
+- Create MRs via GitLab API or web UI (not `gh pr create` — GitHub is down)
+- **When GitHub is restored**: resume `git push origin`, optionally remove `gitlab` remote
+
+## Container Registry (MIGRATED)
+
+> **Status: GitLab registry active, ghcr.io inaccessible (GitHub suspended)**
+
+All container images now live on **GitLab Container Registry**, not ghcr.io:
+- Limbo image: `registry.gitlab.com/tomas209/limbo`
+- ZeroClaw image: `registry.gitlab.com/tomas209/zeroclaw`
+
+**When GitHub is restored**: evaluate whether to move back to ghcr.io or stay on GitLab.
 
 ## Custom ZeroClaw Build
 
 Limbo uses a custom ZeroClaw image with extra cargo features (`rag-pdf`).
-The image tag follows the pattern `ghcr.io/tomasward1/zeroclaw:<version>-custom`.
+The image tag follows the pattern `registry.gitlab.com/tomas209/zeroclaw:<version>-custom`.
 
 **Rebuild ZeroClaw** (only when changing features or version):
 ```bash
@@ -49,13 +62,27 @@ The image tag follows the pattern `ghcr.io/tomasward1/zeroclaw:<version>-custom`
 ./scripts/build-zeroclaw.sh v0.5.3 "rag-pdf,browser-native"  # add features
 ```
 
-The script builds multi-platform (amd64+arm64) and pushes to GHCR automatically. Requires `docker login ghcr.io`.
+The script builds multi-platform (amd64+arm64) and pushes to GitLab Container Registry. Requires `docker login registry.gitlab.com`.
 
 **Critical rules when bumping ZeroClaw:**
-- The Dockerfile MUST use the custom image (`ghcr.io/tomasward1/zeroclaw:<version>-custom`), never the official one — we need `rag-pdf`.
-- Always build and push the custom image BEFORE pushing the Dockerfile change — CI pulls from GHCR.
+- The Dockerfile MUST use the custom image (`registry.gitlab.com/tomas209/zeroclaw:<version>-custom`), never the official one — we need `rag-pdf`.
+- Always build and push the custom image BEFORE pushing the Dockerfile change — CI pulls from the registry.
 - The image must include both `linux/amd64` and `linux/arm64` — CI runs on amd64, local dev is arm64.
 - When a new ZeroClaw version adds workspace members, the build script may need patching (see Patch 3 in the script).
+
+## CI/CD
+
+Limbo uses **GitLab CI** (`.gitlab-ci.yml`). GitHub Actions files are kept but inactive.
+
+| Stage | Jobs | Trigger |
+|-------|------|---------|
+| test | `docker-build`, `mcp-server-check`, `tests` | MRs + push to staging |
+| promote | `promote-staging-to-main` | Push to staging |
+| release | `release` (version bump + npm publish + docker push + tag) | Push to main |
+
+- npm publishing uses **OIDC trusted publishing** (no token needed)
+- `GITLAB_TOKEN` CI variable is set for MR creation and release pushing
+- Release job pushes version bump commit + tag to `main` (protected, maintainer push allowed)
 
 ## Dev Secrets
 
