@@ -10,7 +10,7 @@ ZEROCLAW_VERSION="${1:-v0.5.3}"
 EXTRA_FEATURES="${2:-rag-pdf}"
 BASE_FEATURES="channel-lark,whatsapp-web"
 FEATURES="${BASE_FEATURES},${EXTRA_FEATURES}"
-TAG="ghcr.io/tomasward1/zeroclaw:${ZEROCLAW_VERSION}-custom"
+TAG="registry.gitlab.com/tomas209/zeroclaw:${ZEROCLAW_VERSION}-custom"
 
 echo "==> Cloning ZeroClaw ${ZEROCLAW_VERSION}..."
 TMPDIR=$(mktemp -d)
@@ -47,6 +47,6 @@ docker buildx build \
   "$TMPDIR"
 
 echo ""
-echo "==> Done: $TAG (pushed to GHCR)"
+echo "==> Done: $TAG (pushed to GitLab Container Registry)"
 echo "    Update your Dockerfile:"
 echo "    FROM $TAG AS zeroclaw"
