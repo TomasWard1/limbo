@@ -19,7 +19,7 @@ const ZEROCLAW_STATE_DIR = path.join(LIMBO_DIR, 'zeroclaw-state');
 const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
-const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
+const REGISTRY_IMAGE = 'registry.gitlab.com/tomas209/limbo';
 const DEFAULT_TAG = 'latest';
 const DEFAULT_PORT = 18789;
 const COEXIST_PORT = 18900;
@@ -140,7 +140,7 @@ const ASCII_ART = String.raw`
 function composeContent() {
   return `services:
   limbo:
-    image: ${GHCR_IMAGE}:${DEFAULT_TAG}
+    image: ${REGISTRY_IMAGE}:${DEFAULT_TAG}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -201,7 +201,7 @@ volumes:
 function composeContentHardened() {
   return `services:
   limbo:
-    image: ${GHCR_IMAGE}:${DEFAULT_TAG}
+    image: ${REGISTRY_IMAGE}:${DEFAULT_TAG}
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -354,7 +354,7 @@ const TEXT = {
     imagePulled: 'Image pulled.',
     pullFailed: 'Could not pull from GHCR. Trying local build fallback...',
     buildingFallback: 'Building from local Dockerfile...',
-    buildOk: (tag) => `Built: ${GHCR_IMAGE}:${tag}`,
+    buildOk: (tag) => `Built: ${REGISTRY_IMAGE}:${tag}`,
     starting: 'Starting Limbo...',
     healthy: 'Limbo started.',
     subscriptionSetup: 'Provider authentication',
@@ -482,7 +482,7 @@ const TEXT = {
     imagePulled: 'Imagen descargada.',
     pullFailed: 'No se pudo bajar la imagen desde GHCR. Probando build local...',
     buildingFallback: 'Construyendo desde el Dockerfile local...',
-    buildOk: (tag) => `Imagen construida: ${GHCR_IMAGE}:${tag}`,
+    buildOk: (tag) => `Imagen construida: ${REGISTRY_IMAGE}:${tag}`,
     starting: 'Arrancando Limbo...',
     healthy: 'Limbo arrancó.',
     subscriptionSetup: 'Autenticacion del provider',
@@ -1108,7 +1108,7 @@ function pullOrBuildImage(lang) {
   const repoDockerfile = path.join(__dirname, 'Dockerfile');
   if (fs.existsSync(repoDockerfile)) {
     header(t(lang, 'buildingFallback'));
-    execSync(`docker build -t ${GHCR_IMAGE}:${DEFAULT_TAG} .`, { stdio: 'inherit', cwd: __dirname });
+    execSync(`docker build -t ${REGISTRY_IMAGE}:${DEFAULT_TAG} .`, { stdio: 'inherit', cwd: __dirname });
     ok(t(lang, 'buildOk', DEFAULT_TAG));
     return;
   }
@@ -2098,7 +2098,7 @@ function cmdUpdate() {
   let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
   const patched = compose.replace(
     /image:\s*ghcr\.io\/tomasward1\/limbo:\S+/g,
-    `image: ${GHCR_IMAGE}:${DEFAULT_TAG}`
+    `image: ${REGISTRY_IMAGE}:${DEFAULT_TAG}`
   );
   if (patched !== compose) {
     compose = patched;

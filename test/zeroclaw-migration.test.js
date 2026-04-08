@@ -109,9 +109,9 @@ test('entrypoint.sh appends channels_config.telegram conditionally', () => {
 test('Dockerfile pulls ZeroClaw binary from official or custom image', () => {
   const df = read('Dockerfile');
   assert.ok(
-    df.match(/ARG ZEROCLAW_IMAGE=ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+/) ||
-    df.match(/FROM ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+ AS zeroclaw/),
-    'Dockerfile must default to a ZeroClaw image from ghcr.io/zeroclaw-labs/zeroclaw or ghcr.io/tomasward1/zeroclaw'
+    df.match(/ARG ZEROCLAW_IMAGE=(ghcr\.io\/(zeroclaw-labs|tomasward1)|registry\.gitlab\.com\/tomas209)\/zeroclaw:\S+/) ||
+    df.match(/FROM (ghcr\.io\/(zeroclaw-labs|tomasward1)|registry\.gitlab\.com\/tomas209)\/zeroclaw:\S+ AS zeroclaw/),
+    'Dockerfile must default to a ZeroClaw image from ghcr.io or registry.gitlab.com'
   );
   assert.ok(df.includes('FROM ${ZEROCLAW_IMAGE} AS zeroclaw') || df.match(/FROM ghcr\.io\/(zeroclaw-labs|tomasward1)\/zeroclaw:\S+ AS zeroclaw/),
     'Dockerfile must build the zeroclaw stage from the configured ZeroClaw image');
