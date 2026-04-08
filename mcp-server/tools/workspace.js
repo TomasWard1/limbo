@@ -9,7 +9,7 @@ const WORKSPACE_DIR = process.env.ZEROCLAW_WORKSPACE_DIR
 // Only these files are writable by the agent.
 // System files (AGENTS.md, TOOLS.md, limbo-skill.md) are overwritten on every boot
 // from the image — the agent cannot persist changes to them.
-const WRITABLE_FILES = new Set(["USER.md", "SOUL.md", "IDENTITY.md"]);
+const WRITABLE_FILES = new Set(["USER.md"]);
 
 // All workspace .md files are readable.
 function isReadable(filename) {

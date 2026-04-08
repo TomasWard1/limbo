@@ -166,8 +166,9 @@ done
 
 # ── Bootstrap workspace (ZeroClaw native) ─────────────────────────────────────
 # All workspace files live directly in $ZEROCLAW_STATE_DIR/workspace/.
-# System files are copied from the image on every boot (immutable source of truth).
-# User-seeded files are only written on first run (agent can modify them).
+# System files (AGENTS.md, TOOLS.md, SOUL.md, IDENTITY.md, limbo-skill.md) are
+# copied from the image on every boot (immutable source of truth).
+# User files (USER.md) are seeded from template on first run only.
 ZC_WORKSPACE="$ZEROCLAW_STATE_DIR/workspace"
 mkdir -p "$ZC_WORKSPACE"
 
