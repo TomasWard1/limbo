@@ -115,8 +115,8 @@ fi
 # ─── Pre-pull Docker image ───────────────────────────────────────────────────
 header "Docker image"
 
-log "Pulling ghcr.io/tomasward1/limbo:latest..."
-if docker pull ghcr.io/tomasward1/limbo:latest; then
+log "Pulling registry.gitlab.com/tomas209/limbo:latest..."
+if docker pull registry.gitlab.com/tomas209/limbo:latest; then
   ok "Image ready."
 else
   warn "Could not pull image. It will be pulled on first 'limbo start'."
