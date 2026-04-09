@@ -2264,6 +2264,59 @@ ${c.bold}Usage:${c.reset}
   }
 }
 
+async function cmdSwitchBrain() {
+  if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
+
+  const existingEnv = parseEnvFile();
+  if (!existingEnv.MODEL_PROVIDER) {
+    die('No existing configuration found. Run `limbo start` first to set up.');
+  }
+
+  const lang = existingEnv.CLI_LANGUAGE || 'en';
+  const currentProvider = existingEnv.MODEL_PROVIDER || 'unknown';
+  const currentModel = existingEnv.MODEL_NAME || 'unknown';
+
+  header(lang === 'es' ? 'Cambiar Proveedor' : 'Switch Provider');
+  console.log(`  ${c.dim}${lang === 'es' ? 'Proveedor actual' : 'Current provider'}: ${c.reset}${c.bold}${currentProvider}${c.reset} (${currentModel})\n`);
+
+  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+  const cleaned = envContent
+    .replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '')
+    .replace(/^AUTH_MODE=.*\n?/gm, '')
+    .replace(/^MODEL_PROVIDER=.*\n?/gm, '')
+    .replace(/^MODEL_NAME=.*\n?/gm, '');
+  fs.writeFileSync(ENV_FILE, cleaned + 'SWITCH_BRAIN_MODE=true\n', { mode: 0o600 });
+
+  pullOrBuildImage(lang);
+  ensureVolumePermissions();
+
+  log(lang === 'es' ? 'Iniciando wizard de cambio de proveedor...' : 'Starting provider switch wizard...');
+  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
+  if (upResult.status !== 0) {
+    process.stderr.write(upResult.stderr || '');
+    die('Container failed to start. Run `limbo logs` to investigate.');
+  }
+
+  const wizardUrl = extractWizardUrl();
+
+  let tunnel = null;
+  if (isServerEnvironment() || process.argv.includes('--tunnel')) {
+    tunnel = await createSetupTunnel(PORT);
+  }
+
+  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
+  if (!wizardUrl) {
+    warn('Could not extract setup token from container logs.');
+  }
+  printWizardUrl(displayUrl, tunnel);
+
+  try {
+    const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
+    const final = envAfter.replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '');
+    if (final !== envAfter) fs.writeFileSync(ENV_FILE, final, { mode: 0o600 });
+  } catch {}
+}
+
 function cmdHelp() {
   console.log(`
 ${c.bold}limbo${c.reset} - personal AI memory agent
@@ -2278,6 +2331,7 @@ ${c.bold}Commands:${c.reset}
   update        Pull latest image and restart
   status        Show container status
   config        Configure optional features (voice, web-search)
+  switch-brain  Change your AI provider (opens a quick wizard)
   help          Show this help
 
 ${c.bold}Flags:${c.reset}
@@ -2402,6 +2456,7 @@ if (require.main === module) {
       case 'update':  cmdUpdate(); break;
       case 'status':  cmdStatus(); break;
       case 'config':  cmdConfig(); break;
+      case 'switch-brain': await cmdSwitchBrain(); break;
       case 'version':
       case '--version':
       case '-v':      console.log(require('./package.json').version); break;

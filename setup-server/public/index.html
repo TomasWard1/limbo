@@ -1000,102 +1000,6 @@
         </div>
       </div>
 
-      <!-- Subscription: Anthropic (claude setup-token) — OS-aware guide -->
-      <div id="claudeTokenSection" style="display:none">
-        <h2 class="step-title">
-          <span data-lang="en">Connect your Claude subscription</span>
-          <span data-lang="es">Conectá tu suscripción de Claude</span>
-        </h2>
-        <p class="step-desc">
-          <span data-lang="en">We need a token from Claude to connect your account. Follow these steps:</span>
-          <span data-lang="es">Necesitamos un token de Claude para conectar tu cuenta. Seguí estos pasos:</span>
-        </p>
-        <div class="guide-steps">
-          <div class="guide-step">
-            <div class="guide-num">1</div>
-            <div class="guide-text">
-              <span data-lang="en"><strong style="color:var(--text)">Open a terminal</strong> on your computer</span>
-              <span data-lang="es"><strong style="color:var(--text)">Abrí una terminal</strong> en tu computadora</span>
-            </div>
-          </div>
-        </div>
-        <div class="os-pills" id="osPills">
-          <button class="os-pill" data-os="mac" onclick="selectOS('mac')">macOS</button>
-          <button class="os-pill" data-os="windows" onclick="selectOS('windows')">Windows</button>
-          <button class="os-pill" data-os="linux" onclick="selectOS('linux')">Linux</button>
-        </div>
-        <div class="os-instruction" id="osInstruction"></div>
-        <div style="margin-bottom:20px">
-          <label class="collapsible-header" id="claudeInstalledHeader">
-            <input type="checkbox" id="claudeInstalledCheck" onchange="toggleClaudeInstall()">
-            <span style="font-size:14px;color:var(--text-sub)">
-              <span data-lang="en">I already have Claude Code installed</span>
-              <span data-lang="es">Ya tengo Claude Code instalado</span>
-            </span>
-          </label>
-          <div class="collapsible-body" id="claudeInstallBody">
-            <div class="guide-steps" style="margin-bottom:12px">
-              <div class="guide-step">
-                <div class="guide-num">2</div>
-                <div class="guide-text">
-                  <span data-lang="en"><strong style="color:var(--text)">Install Claude Code</strong> — paste this in your terminal:</span>
-                  <span data-lang="es"><strong style="color:var(--text)">Instalá Claude Code</strong> — pegá esto en tu terminal:</span>
-                </div>
-              </div>
-            </div>
-            <div class="cmd-block" onclick="copyCommand(this)" id="installCmd">
-              <span>npm install -g @anthropic-ai/claude-code</span>
-              <span class="copy-hint" data-lang="en">click to copy</span>
-              <span class="copy-hint" data-lang="es">click para copiar</span>
-            </div>
-            <div id="windowsNodeHint" style="display:none">
-              <p class="input-hint" style="margin-bottom:16px">
-                <span data-lang="en">If you don't have Node.js, install it first from <a href="https://nodejs.org" target="_blank">nodejs.org</a> (download the LTS version)</span>
-                <span data-lang="es">Si no tenés Node.js, instalalo primero desde <a href="https://nodejs.org" target="_blank">nodejs.org</a> (descargá la versión LTS)</span>
-              </p>
-            </div>
-          </div>
-        </div>
-        <div class="guide-steps">
-          <div class="guide-step">
-            <div class="guide-num" id="tokenStepNum">3</div>
-            <div class="guide-text">
-              <span data-lang="en"><strong style="color:var(--text)">Generate the token</strong> — paste this command in your terminal:</span>
-              <span data-lang="es"><strong style="color:var(--text)">Generá el token</strong> — pegá este comando en tu terminal:</span>
-            </div>
-          </div>
-        </div>
-        <div class="cmd-block" onclick="copyCommand(this)">
-          <span>claude setup-token</span>
-          <span class="copy-hint" data-lang="en">click to copy</span>
-          <span class="copy-hint" data-lang="es">click para copiar</span>
-        </div>
-        <div class="info-box" style="margin-bottom:20px">
-          <span data-lang="en">This command opens your browser to sign in with Claude. After signing in, it gives you a code — paste it below.</span>
-          <span data-lang="es">Este comando abre tu navegador para que inicies sesión en Claude. Después de iniciar sesión, te da un código — pegalo acá abajo.</span>
-        </div>
-        <div class="guide-steps">
-          <div class="guide-step">
-            <div class="guide-num" id="pasteStepNum">4</div>
-            <div class="guide-text">
-              <span data-lang="en"><strong style="color:var(--text)">Paste the token</strong> below</span>
-              <span data-lang="es"><strong style="color:var(--text)">Pegá el token</strong> acá abajo</span>
-            </div>
-          </div>
-        </div>
-        <div class="input-group">
-          <label class="input-label" for="claudeTokenInput">
-            <span data-lang="en">Setup Token</span>
-            <span data-lang="es">Token de configuración</span>
-          </label>
-          <input type="password" class="input-field" id="claudeTokenInput" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
-          <div class="validation-msg" id="claudeTokenValidation"></div>
-        </div>
-        <div id="claudeSuccessView" style="display:none" class="auth-success">
-          <span data-lang="en">Connected to Claude</span>
-          <span data-lang="es">Conectado a Claude</span>
-        </div>
-      </div>
       <div class="btn-row">
         <button class="btn-primary" id="btnApiKeyContinue" disabled onclick="submitApiKey()">
           <span data-lang="en">Continue</span>
@@ -1400,6 +1304,8 @@
     // Setup Token & Language
     // ═══════════════════════════════════════════════════════════════════
 
+    var wizardMode = 'full';
+
     var SETUP_TOKEN = new URLSearchParams(window.location.search).get('token') || '';
     function authHeaders() {
       return { 'Authorization': 'Bearer ' + SETUP_TOKEN, 'Content-Type': 'application/json' };
@@ -1421,13 +1327,32 @@
       },
       subscriptionDone: false,
       subscriptionEmail: '',
-      detectedOS: detectOS(),
     };
 
     var totalSteps = 7;
 
     document.body.className = 'lang-' + state.language;
     updateLangToggle();
+
+    (async function() {
+      try {
+        var resp = await fetch('/api/wizard-mode?token=' + SETUP_TOKEN);
+        if (resp.ok) {
+          var data = await resp.json();
+          wizardMode = data.mode || 'full';
+          if (data.existingConfig && data.existingConfig.language) {
+            state.language = data.existingConfig.language;
+            document.body.className = 'lang-' + state.language;
+          }
+        }
+      } catch(e) {}
+
+      if (wizardMode === 'switch-brain') {
+        document.querySelectorAll('.progress-dot').forEach(function(dot, i) {
+          if (i >= 4) dot.style.display = 'none';
+        });
+      }
+    })();
 
     function toggleLanguage() {
       state.language = state.language === 'es' ? 'en' : 'es';
@@ -1437,60 +1362,6 @@
 
     function updateLangToggle() {
       document.getElementById('langToggle').textContent = state.language === 'es' ? 'EN' : 'ES';
-    }
-
-    function detectOS() {
-      var ua = navigator.userAgent || '';
-      if (/Win/i.test(ua)) return 'windows';
-      if (/Mac/i.test(ua)) return 'mac';
-      return 'linux';
-    }
-
-    function selectOS(os) {
-      state.detectedOS = os;
-      document.querySelectorAll('.os-pill').forEach(function(p) {
-        p.classList.toggle('active', p.dataset.os === os);
-      });
-      updateOSInstruction();
-    }
-
-    function updateOSInstruction() {
-      var el = document.getElementById('osInstruction');
-      var os = state.detectedOS;
-      var l = state.language;
-      var instructions = {
-        mac: {
-          en: 'Press <kbd>\u2318 Command</kbd> + <kbd>Space</kbd>, type <kbd>Terminal</kbd>, press <kbd>Enter</kbd>',
-          es: 'Presion\u00e1 <kbd>\u2318 Command</kbd> + <kbd>Espacio</kbd>, escrib\u00ed <kbd>Terminal</kbd>, presion\u00e1 <kbd>Enter</kbd>',
-        },
-        windows: {
-          en: 'Press <kbd>Windows</kbd> + <kbd>R</kbd>, type <kbd>cmd</kbd>, press <kbd>Enter</kbd>',
-          es: 'Presion\u00e1 <kbd>Windows</kbd> + <kbd>R</kbd>, escrib\u00ed <kbd>cmd</kbd>, presion\u00e1 <kbd>Enter</kbd>',
-        },
-        linux: {
-          en: 'Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd>',
-          es: 'Presion\u00e1 <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd>',
-        },
-      };
-      // These are hardcoded strings, not user input
-      el.innerHTML = (instructions[os] && instructions[os][l]) || instructions.mac[l];
-
-      var windowsHint = document.getElementById('windowsNodeHint');
-      if (windowsHint) windowsHint.style.display = os === 'windows' ? '' : 'none';
-    }
-
-    function toggleClaudeInstall() {
-      var checked = document.getElementById('claudeInstalledCheck').checked;
-      var body = document.getElementById('claudeInstallBody');
-      if (checked) {
-        body.classList.add('collapsed');
-        document.getElementById('tokenStepNum').textContent = '2';
-        document.getElementById('pasteStepNum').textContent = '3';
-      } else {
-        body.classList.remove('collapsed');
-        document.getElementById('tokenStepNum').textContent = '3';
-        document.getElementById('pasteStepNum').textContent = '4';
-      }
     }
 
     var keyPrefixes = {
@@ -1538,7 +1409,7 @@
     // ═══════════════════════════════════════════════════════════════════
 
     function goToStep(n) {
-      if (n === 2 && state.provider === 'openrouter') {
+      if (n === 2 && (state.provider === 'openrouter' || state.provider === 'anthropic')) {
         state.authMode = 'api-key';
         n = 3;
       }
@@ -1566,7 +1437,8 @@
 
     document.getElementById('btnBack').addEventListener('click', function() {
       var prev = state.step - 1;
-      if (prev === 2 && state.provider === 'openrouter') prev = 1;
+      if (prev === 6 && wizardMode === 'switch-brain') prev = 4;
+      if (prev === 2 && (state.provider === 'openrouter' || state.provider === 'anthropic')) prev = 1;
       if (prev >= 1) goToStep(prev);
     });
 
@@ -1575,7 +1447,6 @@
     // ═══════════════════════════════════════════════════════════════════
 
     var subscriptionLabels = {
-      anthropic: { en: 'Use your Claude Pro/Team subscription', es: 'Us\u00e1 tu suscripci\u00f3n de Claude Pro/Team' },
       openai:    { en: 'Use your ChatGPT Plus/Pro subscription', es: 'Us\u00e1 tu suscripci\u00f3n de ChatGPT Plus/Pro' },
     };
 
@@ -1620,11 +1491,9 @@
     function setupApiKeyStep() {
       var isSub = state.authMode === 'subscription';
       var isOAuth = isSub && state.provider === 'openai';
-      var isClaude = isSub && state.provider === 'anthropic';
 
       document.getElementById('apiKeySection').style.display = 'none';
       document.getElementById('oauthSection').style.display = 'none';
-      document.getElementById('claudeTokenSection').style.display = 'none';
 
       var btn = document.getElementById('btnApiKeyContinue');
 
@@ -1640,17 +1509,6 @@
         } else {
           document.getElementById('oauthStartView').style.display = '';
         }
-      } else if (isClaude) {
-        document.getElementById('claudeTokenSection').style.display = '';
-        btn.disabled = !state.subscriptionDone;
-        document.getElementById('claudeSuccessView').style.display = state.subscriptionDone ? '' : 'none';
-        var input = document.getElementById('claudeTokenInput');
-        if (!state.subscriptionDone) {
-          input.value = '';
-          input.className = 'input-field';
-          document.getElementById('claudeTokenValidation').textContent = '';
-        }
-        selectOS(state.detectedOS);
       } else {
         document.getElementById('apiKeySection').style.display = '';
         btn.disabled = true;
@@ -1784,64 +1642,6 @@
       }
     }
 
-    // --- Anthropic setup-token ---
-    document.getElementById('claudeTokenInput').addEventListener('input', function () {
-      var val = this.value.trim();
-      var msgEl = document.getElementById('claudeTokenValidation');
-      var btn = document.getElementById('btnApiKeyContinue');
-
-      if (!val) {
-        this.className = 'input-field';
-        msgEl.textContent = '';
-        btn.disabled = true;
-        return;
-      }
-
-      if (val.length > 20) {
-        this.className = 'input-field valid';
-        msgEl.textContent = '';
-        btn.disabled = false;
-      } else {
-        this.className = 'input-field invalid';
-        msgEl.textContent = state.language === 'es' ? 'Token demasiado corto' : 'Token too short';
-        msgEl.className = 'validation-msg error';
-        btn.disabled = true;
-      }
-    });
-
-    async function connectClaudeToken(token) {
-      var btn = document.getElementById('btnApiKeyContinue');
-      var origHTML = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<div class="spinner"></div>';
-
-      try {
-        await safeApiFetchWithRetry('/api/auth/anthropic/token', {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({ token: token }),
-        });
-
-        state.subscriptionDone = true;
-        document.getElementById('claudeSuccessView').style.display = '';
-        document.getElementById('claudeTokenInput').className = 'input-field valid';
-        document.getElementById('claudeTokenValidation').textContent = '';
-        btn.disabled = false;
-        btn.innerHTML = origHTML;
-        document.body.className = 'lang-' + state.language;
-      } catch (err) {
-        btn.disabled = false;
-        btn.innerHTML = origHTML;
-        document.body.className = 'lang-' + state.language;
-        var msg = err instanceof ConnectionLostError
-          ? (state.language === 'es' ? 'Se perdi\u00f3 la conexi\u00f3n' : 'Connection lost')
-          : err.message;
-        var msgEl = document.getElementById('claudeTokenValidation');
-        msgEl.textContent = msg;
-        msgEl.className = 'validation-msg error';
-      }
-    }
-
     function copyCommand(el) {
       var cmd = el.querySelector('span:first-child').textContent;
       navigator.clipboard.writeText(cmd).then(function() {
@@ -1856,12 +1656,6 @@
     }
 
     async function submitApiKey() {
-      if (state.authMode === 'subscription' && state.provider === 'anthropic' && !state.subscriptionDone) {
-        var token = document.getElementById('claudeTokenInput').value.trim();
-        if (!token) return;
-        await connectClaudeToken(token);
-        if (!state.subscriptionDone) return;
-      }
       if (state.authMode === 'api-key') {
         state.apiKey = document.getElementById('apiKeyInput').value.trim();
       }
@@ -1962,6 +1756,10 @@
 
     function submitModel() {
       if (!state.model) return;
+      if (wizardMode === 'switch-brain') {
+        goToStep(7);
+        return;
+      }
       goToStep(5);
     }
 
@@ -2178,12 +1976,12 @@
       var items = [
         { label: l === 'es' ? 'Idioma' : 'Language', value: state.language === 'es' ? 'Espa\u00f1ol (Argentina)' : 'English' },
         { label: l === 'es' ? 'Proveedor' : 'Provider', value: providerNames[state.provider] || state.provider, step: 1 },
-        { label: l === 'es' ? 'Autenticaci\u00f3n' : 'Authentication', value: authModeNames[l][state.authMode] || state.authMode, step: 2, hide: state.provider === 'openrouter' },
+        { label: l === 'es' ? 'Autenticaci\u00f3n' : 'Authentication', value: authModeNames[l][state.authMode] || state.authMode, step: 2, hide: state.provider === 'openrouter' || state.provider === 'anthropic' },
         { label: state.authMode === 'subscription' ? (l === 'es' ? 'Cuenta' : 'Account') : (l === 'es' ? 'Clave' : 'Key'), value: state.authMode === 'subscription' ? (state.subscriptionEmail || (l === 'es' ? 'Conectado' : 'Connected')) : maskKey(state.apiKey), step: 3 },
         { label: l === 'es' ? 'Modelo' : 'Model', value: state.model, step: 4 },
-        { label: 'Telegram', value: l === 'es' ? 'Activado' : 'Enabled', step: 5 },
-        { label: l === 'es' ? 'Voz' : 'Voice', value: state.features.voice.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6 },
-        { label: l === 'es' ? 'B\u00fasqueda Web' : 'Web Search', value: state.features.webSearch.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6 },
+        { label: 'Telegram', value: l === 'es' ? 'Activado' : 'Enabled', step: 5, hide: wizardMode === 'switch-brain' },
+        { label: l === 'es' ? 'Voz' : 'Voice', value: state.features.voice.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6, hide: wizardMode === 'switch-brain' },
+        { label: l === 'es' ? 'B\u00fasqueda Web' : 'Web Search', value: state.features.webSearch.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6, hide: wizardMode === 'switch-brain' },
       ];
 
       // Build summary using DOM API
@@ -2254,19 +2052,30 @@
       btn.innerHTML = '<div class="spinner"></div> <span data-lang="en">Configuring...</span><span data-lang="es">Configurando...</span>';
       document.body.className = 'lang-' + state.language;
 
-      var payload = {
-        language: state.language,
-        provider: state.provider,
-        authMode: state.authMode,
-        model: state.model,
-        telegram: { enabled: true, botToken: state.telegram.botToken },
-        features: {
-          voice: { enabled: state.features.voice.enabled, apiKey: state.features.voice.enabled ? state.features.voice.apiKey : '' },
-          webSearch: { enabled: state.features.webSearch.enabled, apiKey: state.features.webSearch.enabled ? state.features.webSearch.apiKey : '' },
-        },
-      };
-      if (state.authMode === 'api-key') {
-        payload.apiKey = state.apiKey;
+      var payload;
+      if (wizardMode === 'switch-brain') {
+        payload = {
+          provider: state.provider,
+          authMode: state.authMode,
+          model: state.model,
+          apiKey: state.apiKey,
+          language: state.language,
+        };
+      } else {
+        payload = {
+          language: state.language,
+          provider: state.provider,
+          authMode: state.authMode,
+          model: state.model,
+          telegram: { enabled: true, botToken: state.telegram.botToken },
+          features: {
+            voice: { enabled: state.features.voice.enabled, apiKey: state.features.voice.enabled ? state.features.voice.apiKey : '' },
+            webSearch: { enabled: state.features.webSearch.enabled, apiKey: state.features.webSearch.enabled ? state.features.webSearch.apiKey : '' },
+          },
+        };
+        if (state.authMode === 'api-key') {
+          payload.apiKey = state.apiKey;
+        }
       }
 
       try {
