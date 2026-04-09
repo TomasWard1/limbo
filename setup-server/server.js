@@ -13,9 +13,9 @@ const crypto = require('crypto');
 const PORT = parseInt(process.env.LIMBO_PORT, 10) || 18789;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.LIMBO_DATA_DIR || '/data';
-const ZEROCLAW_STATE = process.env.ZEROCLAW_STATE_DIR || '/home/limbo/.zeroclaw';
+const OPENCLAW_STATE = process.env.OPENCLAW_STATE_DIR || '/home/limbo/.openclaw';
 const CONFIG_DIR = path.join(DATA_DIR, 'config');
-const SECRETS_DIR = path.join(ZEROCLAW_STATE, 'secrets');
+const SECRETS_DIR = path.join(OPENCLAW_STATE, 'secrets');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const SETUP_TOKEN_FILE = path.join(CONFIG_DIR, 'setup_token');
 
@@ -230,37 +230,35 @@ function decodeJwtPayload(token) {
 }
 
 // ─── OpenAI Codex auth profiles ──────────────────────────────────────────────
-// OpenAI OAuth tokens expire and need refresh. ZeroClaw reads auth-profiles.json
+// OpenAI OAuth tokens expire and need refresh. OpenClaw reads auth-profiles.json
 // for the refresh token and handles renewal automatically. This is ONLY needed
 // for OpenAI Codex — Anthropic tokens are static and stored as secrets instead.
-const AUTH_PROFILES_FILE = path.join(ZEROCLAW_STATE, 'auth-profiles.json');
+// OpenClaw stores auth profiles per-agent: agents/{id}/agent/auth-profiles.json
+// The default agent is "main".
+const AUTH_PROFILES_DIR = path.join(OPENCLAW_STATE, 'agents', 'main', 'agent');
+const AUTH_PROFILES_FILE = path.join(AUTH_PROFILES_DIR, 'auth-profiles.json');
 
 function buildCodexAuthProfile(profile) {
   const profileName = profile.email || 'default';
   const profileId = `openai-codex:${profileName}`;
-  const now = new Date().toISOString();
   return {
-    schema_version: 1,
-    updated_at: now,
-    active_profiles: { 'openai-codex': profileId },
+    version: 1,
     profiles: {
       [profileId]: {
+        type: 'oauth',
         provider: 'openai-codex',
-        profile_name: profileName,
-        kind: 'oauth',
-        account_id: profile.accountId || null,
-        access_token: profile.access,
-        refresh_token: profile.refresh,
-        expires_at: new Date(profile.expires).toISOString(),
-        created_at: now,
-        updated_at: now,
+        access: profile.access,
+        refresh: profile.refresh,
+        expires: profile.expires,
+        email: profile.email || '',
+        accountId: profile.accountId || '',
       },
     },
   };
 }
 
 function writeAuthProfiles(store) {
-  fs.mkdirSync(ZEROCLAW_STATE, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(AUTH_PROFILES_DIR, { recursive: true, mode: 0o700 });
   fs.writeFileSync(AUTH_PROFILES_FILE, JSON.stringify(store, null, 2), { mode: 0o600 });
   log('Auth profile written to ' + AUTH_PROFILES_FILE);
 }
@@ -543,7 +541,7 @@ async function exchangeOAuthCode(code, verifier, redirectUri) {
 function processOAuthTokens(tokenRes) {
   const jwt = decodeJwtPayload(tokenRes.access_token);
   const authClaim = jwt['https://api.openai.com/auth'] || {};
-  // Write auth profile for ZeroClaw's OAuth refresh flow
+  // Write auth profile for OpenClaw's OAuth refresh flow
   const store = buildCodexAuthProfile({
     access: tokenRes.access_token,
     refresh: tokenRes.refresh_token,

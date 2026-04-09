@@ -1,10 +1,10 @@
 import { readFile, writeFile } from "fs/promises";
 import { join, resolve } from "path";
 
-// ZeroClaw workspace: where the agent's personality/config files live at runtime.
+// OpenClaw workspace: where the agent's personality/config files live at runtime.
 // Entrypoint copies templates here on first run; the agent can modify them after.
-const WORKSPACE_DIR = process.env.ZEROCLAW_WORKSPACE_DIR
-  || join(process.env.ZEROCLAW_STATE_DIR || "/home/limbo/.zeroclaw", "workspace");
+const WORKSPACE_DIR = process.env.OPENCLAW_WORKSPACE_DIR
+  || join(process.env.OPENCLAW_STATE_DIR || "/home/limbo/.openclaw", "workspace");
 
 // Only these files are writable by the agent.
 // System files (AGENTS.md, TOOLS.md, limbo-skill.md) are overwritten on every boot

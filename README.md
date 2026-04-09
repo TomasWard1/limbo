@@ -15,7 +15,7 @@
 
 ---
 
-Limbo is a second brain with a conversational interface. It stores atomic notes in a local vault, searches them semantically, and maintains Maps of Content (MOCs) to keep knowledge navigable. Runs in a Docker container, accessible via Telegram or the ZeroClaw gateway.
+Limbo is a second brain with a conversational interface. It stores atomic notes in a local vault, searches them semantically, and maintains Maps of Content (MOCs) to keep knowledge navigable. Runs in a Docker container, accessible via Telegram or the OpenClaw gateway.
 
 ---
 
@@ -95,9 +95,9 @@ limbo config web-search --enable --api-key BSA_xxx  # Enable web search
 
 The setup wizard walks you through creating a Telegram bot and pairing it. Message your bot and Limbo responds — full agent with personality, memory logic, and vault tools.
 
-### ZeroClaw gateway
+### OpenClaw gateway
 
-Any [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw)-compatible client can connect via WebSocket:
+Any [OpenClaw](https://github.com/openclaw-ai/openclaw)-compatible client can connect via WebSocket:
 
 ```
 ws://localhost:18789
@@ -153,7 +153,7 @@ limbo config web-search --disable
 | Recommended | 1 GB | 1 | 5 GB |
 | With other services | 2 GB | 1 | 10 GB |
 
-Limbo uses ~35 MB at rest, peaks ~70 MB during cold starts. CPU usage is negligible.
+Limbo uses ~150 MB at rest, peaks ~300 MB during agent runs. CPU usage is negligible.
 
 ---
 
@@ -164,8 +164,8 @@ Limbo uses ~35 MB at rest, peaks ~70 MB during cold starts. CPU usage is negligi
 │              Docker Container           │
 │                                         │
 │  ┌─────────────┐    ┌────────────────┐  │
-│  │  ZeroClaw   │◄──►│  LLM (Claude   │  │
-│  │  daemon     │    │  or OpenAI)    │  │
+│  │  OpenClaw   │◄──►│  LLM (Claude   │  │
+│  │  gateway    │    │  or OpenAI)    │  │
 │  │  :18789     │    └────────┬───────┘  │
 │  └──────┬──────┘             │          │
 │         │           ┌────────▼───────┐  │
@@ -179,8 +179,8 @@ Limbo uses ~35 MB at rest, peaks ~70 MB during cold starts. CPU usage is negligi
 └─────────────────────────────────────────┘
 ```
 
-- **ZeroClaw** — Rust runtime (~5 MB RAM) handling connections, LLM routing, Telegram, and MCP tools
-- **MCP server** — Node.js vault read/write tools, spawned by ZeroClaw
+- **OpenClaw** — Node.js runtime (~150 MB) handling connections, LLM routing, Telegram, and MCP tools
+- **MCP server** — Node.js vault read/write tools, spawned by OpenClaw
 - **Vault** — plain markdown with YAML frontmatter, persisted in a Docker volume
 
 ---
@@ -215,7 +215,7 @@ Managed by `limbo start`, stored in `~/.limbo/.env`.
 | `AUTH_MODE` | `api-key` | `api-key` or `subscription` |
 | `MODEL_PROVIDER` | `anthropic` | `anthropic`, `openai`, `openai-codex`, or `openrouter` |
 | `MODEL_NAME` | `claude-sonnet-4-6` | Model to use |
-| `RUNTIME_REASONING_EFFORT` | `medium` | ZeroClaw `runtime.reasoning_effort` override |
+| `RUNTIME_REASONING_EFFORT` | `medium` | OpenClaw reasoning effort override |
 | `TELEGRAM_ENABLED` | `false` | Enable Telegram integration |
 | `VOICE_ENABLED` | `false` | Enable Groq voice transcription |
 | `WEB_SEARCH_ENABLED` | `false` | Enable Brave web search |

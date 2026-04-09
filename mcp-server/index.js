@@ -192,7 +192,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           title: { type: "string", description: "Human-readable title for the linked note" },
           description: { type: "string", description: "One-sentence description of the file's content or purpose" },
           content: { type: "string", description: "Markdown body for the linked note — include context from the conversation about why this file was saved" },
-          filePath: { type: "string", description: "Absolute path to a local file to store (e.g. /home/limbo/.zeroclaw/workspace/telegram_files/doc.pdf). Preferred over fileData. Filename is derived from the path." },
+          filePath: { type: "string", description: "Absolute path to a local file to store (e.g. /home/limbo/.openclaw/workspace/telegram_files/doc.pdf). Preferred over fileData. Filename is derived from the path." },
           filename: { type: "string", description: "Original filename with extension — required with fileData, optional with filePath (auto-derived)" },
           fileData: { type: "string", description: "Base64-encoded file content (max 10MB) — fallback when filePath is not available" },
           subdirectory: { type: "string", description: "Optional subdirectory under assets/ (e.g. 'images', 'documents', 'screenshots')" },

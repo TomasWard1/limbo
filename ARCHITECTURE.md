@@ -5,16 +5,16 @@
 
 ## What Is Limbo
 
-Self-hosted personal AI memory agent. Runs as a Docker container exposing a ZeroClaw gateway (WebSocket on :18789). Users interact via Telegram. The agent stores and retrieves knowledge from a markdown vault using MCP tools.
+Self-hosted personal AI memory agent. Runs as a Docker container exposing an OpenClaw gateway (WebSocket on :18789). Users interact via Telegram. The agent stores and retrieves knowledge from a markdown vault using MCP tools.
 
-**Stack**: ZeroClaw (Rust agent runtime, custom fork) + Node.js MCP server + SQLite FTS5 + Telegram bot.
+**Stack**: OpenClaw (Node.js agent runtime) + Node.js MCP server + SQLite FTS5 + Telegram bot.
 
 **Published as**: `limbo-ai` on npm — the CLI (`npx limbo-ai`) handles install, start, stop, update, and setup.
 
 ## High-Level Flow
 
 ```
-User (Telegram) → ZeroClaw Gateway (:18789) → LLM (configurable provider)
+User (Telegram) → OpenClaw Gateway (:18789) → LLM (configurable provider)
                                                     ↓
                                               MCP Tools (stdio)
                                                     ↓
@@ -26,8 +26,8 @@ User (Telegram) → ZeroClaw Gateway (:18789) → LLM (configurable provider)
 ```
 limbo/
 ├── cli.js                    # Main CLI (84KB) — install, start, stop, update, configure
-├── Dockerfile                # Multi-stage: deps → zeroclaw binary → runtime (node:22-slim)
-├── config.toml.template      # ZeroClaw config — rendered by entrypoint via envsubst
+├── Dockerfile                # Multi-stage: deps → runtime (node:22-slim)
+├── openclaw.json.template    # OpenClaw config — rendered by entrypoint via envsubst
 ├── docker-compose.yml        # Production reference (generated per-user into ~/.limbo)
 ├── docker-compose.dev.yml    # Local dev
 ├── docker-compose.test.yml   # Local testing
@@ -45,7 +45,7 @@ limbo/
 │       ├── store-file.js     # vault_store_file — binary files (images/PDFs) + linked note
 │       └── get-file.js       # vault_get_file — retrieve stored files as base64
 │
-├── workspace/                # Agent persona files (injected into ZeroClaw context)
+├── workspace/                # Agent persona files (injected into OpenClaw context)
 │   ├── system/               # Product-owned, root-owned, reset every boot
 │   │   ├── AGENTS.md         # Behavioral workflows and rules
 │   │   ├── TOOLS.md          # Tool usage instructions
@@ -64,7 +64,6 @@ limbo/
 │
 ├── scripts/
 │   ├── entrypoint.sh         # Container startup (13KB) — 12-stage orchestration
-│   ├── build-zeroclaw.sh     # Custom ZeroClaw image builder (multi-platform)
 │   └── install.sh            # Server provisioning (Ubuntu/Debian)
 │
 ├── evals/                    # End-to-end eval framework
@@ -81,7 +80,7 @@ limbo/
 ├── test/                     # Unit tests (node --test)
 │   ├── cli-filter.test.js
 │   ├── cli-auth.test.js
-│   ├── zeroclaw-migration.test.js
+│   ├── openclaw-migration.test.js
 │   ├── setup-server.test.js
 │   └── cli-wizard-parity.test.js
 │
@@ -90,36 +89,33 @@ limbo/
 └── squid/                    # Squid proxy config (for container network access)
 ```
 
-## Docker Build (3 stages)
+## Docker Build (2 stages)
 
 1. **deps** (node:22-slim) — `npm ci` + compile better-sqlite3 native addon
-2. **zeroclaw** — copies binary from custom image `ghcr.io/tomasward1/zeroclaw:<ver>-custom`
-3. **runtime** (node:22-slim) — non-root `limbo` user, copies app + binary + node_modules
+2. **runtime** (node:22-slim) — non-root `limbo` user, copies app + node_modules (OpenClaw included as npm dependency)
 
 **Data volume**: `/data` — contains vault/, db/, config/, logs/, backups/, memory/
-
-**Build arg**: `ZEROCLAW_IMAGE` — override to test custom ZeroClaw builds locally.
 
 ## Entrypoint Flow (scripts/entrypoint.sh)
 
 12-stage startup:
 1. Directory setup (`/data/*`)
-2. Secrets sync (`/run/secrets/` → `$ZEROCLAW_STATE_DIR/secrets/`)
+2. Secrets sync (`/run/secrets/` → `$OPENCLAW_STATE_DIR/secrets/`)
 3. First-run detection (presence of `.env` in /data)
 4. Setup wizard (if no `MODEL_PROVIDER` in .env → serve wizard on :18789)
 5. Workspace file seeding (templates → /data, system files symlinked)
-6. Config template rendering (envsubst on config.toml.template)
-7. Feature sections (Telegram, Voice, Web Search) conditionally appended to config.toml
+6. Config template rendering (envsubst on openclaw.json.template)
+7. Feature sections (Telegram, Voice, Web Search) conditionally merged into openclaw.json
 8. Auth profiles generation
 9. Migration runner
 10. FTS index build
 11. MCP server registration
-12. ZeroClaw launch
+12. OpenClaw launch
 
 ## MCP Server Details
 
 - **Protocol**: JSON-RPC 2.0 over stdio
-- **Invoked by ZeroClaw**: `node /app/mcp-server/index.js`
+- **Invoked by OpenClaw**: `node /app/mcp-server/index.js`
 - **Vault path**: `/data/vault/` (markdown files with YAML frontmatter)
 - **FTS database**: `/data/db/fts.db` (SQLite, WAL mode)
 - **Index**: In-memory hashmap of all vault notes, rebuilt on startup
@@ -145,18 +141,18 @@ topics:
 
 These are documented in the vault but rarely change:
 
-- **Extension = MCP tools, not ZeroClaw features**. New capabilities go in `mcp-server/tools/` as Node.js. Cargo features only for things that must compile into Rust (e.g., `rag-pdf`).
-- **Separate container, not plugin**. Limbo is a standalone Docker container, not an OpenClaw plugin.
+- **Extension = MCP tools, not OpenClaw core**. New capabilities go in `mcp-server/tools/` as Node.js.
+- **Separate container, not plugin**. Limbo is a standalone Docker container with OpenClaw as an npm dependency.
 - **System files reset on boot, user files persist**. AGENTS.md/TOOLS.md overwrite from image; SOUL.md/IDENTITY.md/USER.md survive across container restarts.
 - **Maps live in vault/maps/, notes in vault/notes/**. Separated to simplify `vault_update_map`.
-- **Feature integration pattern**: wizard toggle → secret file → env var → entrypoint appends TOML section.
+- **Feature integration pattern**: wizard toggle → secret file → env var → entrypoint merges JSON config section.
 - **Minimal .env triggers setup wizard**. Container detects first run by absence of `MODEL_PROVIDER`.
 
 ## Eval System
 
 - 20+ JSON test cases in `evals/cases/`
 - Each case: sends message via WebSocket, asserts on tool_called + response_matches + vault_state
-- Current baseline: 94.0% (FTS5 + ZeroClaw v0.6.3)
+- Current baseline: 94.0% (FTS5 + OpenClaw)
 - `node evals/cli.js run` → `compare --strict` → `promote`
 - Uses real LLM calls (costs tokens)
 
@@ -166,13 +162,13 @@ Key env vars (see `.env.example` for full list):
 - `MODEL_PROVIDER` — anthropic, openai, etc.
 - `TELEGRAM_ENABLED` — true/false
 - `LIMBO_PORT` — gateway port (default 18789)
-- `ZEROCLAW_STATE_DIR` — where ZeroClaw stores its state
+- `OPENCLAW_STATE_DIR` — where OpenClaw stores its state
 - `LIMBO_EVAL` — enables MCP tool call logging
 
 ## Testing
 
 ```bash
-npm test    # runs: cli-filter, cli-auth, zeroclaw-migration, setup-server, cli-wizard-parity
+npm test    # runs: cli-filter, cli-auth, openclaw-migration, setup-server, cli-wizard-parity
 ```
 
 Tests use Node.js built-in test runner (`node --test`).

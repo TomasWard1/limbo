@@ -1,4 +1,5 @@
 node_modules/
+/.codex-tmp/
 .env
 .env.*
 !.env.example
@@ -8,9 +9,6 @@ data/
 .worktrees/
 .vercel
 
-# Agent runtime data (personal memory, daily notes, plans)
-agents/*/life/
-agents/*/memory/
 .worktrees
 
 # Allow eval env file (overrides .env.* rule)
