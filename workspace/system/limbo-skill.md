@@ -6,11 +6,11 @@ Use this file when you need to interact with a running Limbo instance — either
 
 ## What Limbo Is
 
-Limbo is a personal memory agent with a conversational interface. It stores atomic notes in a local vault with semantic search and organizes them into Maps of Content (MOCs). It runs in Docker via ZeroClaw gateway and is accessible via:
+Limbo is a personal memory agent with a conversational interface. It stores atomic notes in a local vault with semantic search and organizes them into Maps of Content (MOCs). It runs in Docker via OpenClaw gateway and is accessible via:
 
-- **Conversational chat**: ZeroClaw gateway WebSocket at port 18789
+- **Conversational chat**: OpenClaw gateway WebSocket at port 18789
 - **Telegram**: optional bot integration for mobile access
-- **MCP tools**: internal vault tools (native to ZeroClaw, available inside the container)
+- **MCP tools**: internal vault tools (native to OpenClaw, available inside the container)
 
 Limbo remembers things for you across sessions. It uses atomic note-taking (one idea per note), maintains MOC index files, and searches by regex/keyword across all stored notes.
 
@@ -18,17 +18,17 @@ Limbo remembers things for you across sessions. It uses atomic note-taking (one 
 
 ## Connection Models
 
-### Model A — Conversational Client (ZeroClaw WebSocket) — *recommended*
+### Model A — Conversational Client (OpenClaw WebSocket) — *recommended*
 
-When you connect to `ws://localhost:18789`, you're connecting to the **ZeroClaw gateway** — Limbo's conversational interface. This is the designed integration point for external agents.
+When you connect to `ws://localhost:18789`, you're connecting to the **OpenClaw gateway** — Limbo's conversational interface. This is the designed integration point for external agents.
 
-> **Important:** Port 18789 does NOT speak MCP protocol. It speaks the ZeroClaw agent communication protocol. Do not add it as an MCP server in `mcp.json`.
+> **Important:** Port 18789 does NOT speak MCP protocol. It speaks the OpenClaw agent communication protocol. Do not add it as an MCP server in `mcp.json`.
 
-**To connect as a ZeroClaw client:**
+**To connect as an OpenClaw client:**
 
 ```bash
-# Using zeroclaw CLI (if installed):
-zeroclaw connect ws://localhost:18789 --token <GATEWAY_TOKEN>
+# Using openclaw CLI (if installed):
+openclaw connect ws://localhost:18789 --token <GATEWAY_TOKEN>
 ```
 
 **Authentication:** The gateway requires a bearer token. This is set via the `GATEWAY_TOKEN` environment variable when the container starts. If not pre-set, the container generates one at startup (check container logs: `docker logs <container_name> | grep GATEWAY_TOKEN`).
@@ -42,7 +42,7 @@ zeroclaw connect ws://localhost:18789 --token <GATEWAY_TOKEN>
 
 ### Model B — Direct MCP Vault Tools — *advanced*
 
-The MCP server (`/app/mcp-server/index.js` inside the container) exposes vault tools directly via stdio MCP protocol. ZeroClaw invokes these tools natively — no mcporter needed.
+The MCP server (`/app/mcp-server/index.js` inside the container) exposes vault tools directly via stdio MCP protocol. OpenClaw invokes these tools natively — no mcporter needed.
 
 **To use it inside the container:**
 
@@ -50,7 +50,7 @@ The MCP server (`/app/mcp-server/index.js` inside the container) exposes vault t
 docker exec -i <container_name> node /app/mcp-server/index.js
 ```
 
-ZeroClaw agents can invoke vault tools directly by name:
+OpenClaw agents can invoke vault tools directly by name:
 
 - `vault_search` — search notes by keyword/regex
 - `vault_read` — read full note content by ID
@@ -58,7 +58,7 @@ ZeroClaw agents can invoke vault tools directly by name:
 - `vault_update_map` — append entries to a Map of Content
 
 **Use this model when:**
-- You're running inside the container (e.g., as a Paperclip agent with container access)
+- You're running inside the container (e.g., as an agent with container access)
 - You need programmatic tool-use rather than conversational interaction
 - You want to bypass Limbo's persona and interact with raw vault data
 
@@ -66,7 +66,7 @@ ZeroClaw agents can invoke vault tools directly by name:
 
 ## Vault Tools Reference
 
-All four vault tools are available natively through ZeroClaw's MCP support:
+All four vault tools are available natively through OpenClaw's MCP support:
 
 ### `vault_search`
 Search notes by regex or keyword query.
@@ -117,7 +117,7 @@ Append entries to a section in a Map of Content.
 
 ## Interaction Guidance
 
-When talking to Limbo through the ZeroClaw gateway:
+When talking to Limbo through the OpenClaw gateway:
 
 - **Ask before assuming**: Limbo searches its vault before answering recall questions. Ask "Do you remember when I told you about X?" rather than assuming it knows.
 - **Be explicit about storage**: Say "remember this" or "save this" to trigger note creation. Limbo will search for duplicates before writing.
@@ -144,7 +144,7 @@ docker compose up -d
 docker logs limbo 2>&1 | grep -i token
 
 # 3. Connect (conversational)
-zeroclaw connect ws://localhost:18789 --token <token>
+openclaw connect ws://localhost:18789 --token <token>
 
 # 4. Ask Limbo something
 # > "What do I know about project X?"

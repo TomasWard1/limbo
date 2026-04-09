@@ -1,6 +1,6 @@
 # Tools & Processing Rules
 
-You have 8 tools via MCP and ZeroClaw's built-in scheduling tools. Call them by name.
+You have 8 tools via MCP and OpenClaw's built-in scheduling tools. Call them by name.
 
 **⚠️ ALL user information goes to the vault via vault tools. Always.**
 
@@ -140,7 +140,7 @@ Use when: user sends a file (image, PDF, document) to save in the vault.
   "title": "Hardware Store Receipt",
   "description": "Receipt for drill and screws from hardware store, March 2026",
   "content": "User sent this receipt from a hardware store purchase.",
-  "filePath": "/home/limbo/.zeroclaw/workspace/telegram_files/receipt.pdf",
+  "filePath": "/home/limbo/.openclaw/workspace/telegram_files/receipt.pdf",
   "subdirectory": "documents",
   "source": "telegram"
 }
@@ -209,7 +209,7 @@ Here's your receipt: [DOCUMENT:/data/vault/assets/documents/20260315-120000-rece
 **Rules:**
 - Always use `vault_get_file` to get the absolute path, then reply with `[DOCUMENT:/absolute/path]`
 - The reply MUST contain ONLY the `[DOCUMENT:]` tag — no greeting, no description, no extra text
-- The path must be a real file on the local filesystem — ZeroClaw sends it via the Telegram channel
+- The path must be a real file on the local filesystem — OpenClaw sends it via the Telegram channel
 - NEVER include raw base64 data in your reply — Telegram expects a file path, not encoded content
 - NEVER browse `telegram_files/` — those are temporary downloads that get deleted after storage
 - Files are stored in `vault/assets/` and accessed ONLY through vault tools
@@ -217,47 +217,48 @@ Here's your receipt: [DOCUMENT:/data/vault/assets/documents/20260315-120000-rece
 
 ---
 
-## Scheduling & Reminders (ZeroClaw built-in)
+## Scheduling & Reminders
 
-These are **native ZeroClaw tools**, not MCP. You MUST use them for any reminder or scheduling request.
+**You HAVE these tools. They are available to you right now. USE THEM directly — do not tell the user you can't.**
 
-### schedule
+`cron_add`, `cron_list`, and `cron_remove` are built-in tools in your runtime. They will NOT appear in your MCP tool list, but they work. Call them like any other tool.
 
-Use when: user asks for a **one-shot** reminder ("remind me tomorrow at 9am", "remind me Thursday").
+**ANY request involving "remind me", "every day at", "schedule", "in X minutes" = use `cron_add` immediately.** Do not say you can't. Do not suggest alternatives.
 
-```json
-{
-  "task": "Recordatorio: llamar al banco",
-  "time": "tomorrow at 9 AM"
-}
-```
-
-- Accepts natural-language time expressions
-- Fires once, then auto-deletes
-- The `task` field is the message delivered back to the user
+If `USER.md` has no timezone and the request depends on local time, ask for timezone first. Once you have it, save it to `USER.md` with `workspace_write` AND create the reminder — both in the same turn.
 
 ### cron_add
 
-Use when: user asks for a **recurring** reminder ("every day at 10am", "every Monday").
-
 ```json
 {
-  "schedule": "0 10 * * *",
-  "command": "Recordatorio: tomar agua"
+  "name": "Recordatorio: llamar al banco",
+  "job_type": "agent",
+  "prompt": "Decile al usuario: Recordatorio — llamar al banco",
+  "schedule": { "kind": "at", "at": "2026-04-10T12:00:00Z" },
+  "delivery": { "mode": "announce", "channel": "telegram", "to": "CHAT_ID" }
 }
 ```
 
-- `schedule` is a standard cron expression (minute hour day month weekday)
-- `command` is the message delivered back to the user
-- Returns a `job_id` for future reference
+**Schedule kinds:**
+- `"at"` — one-shot at a specific UTC time: `{ "kind": "at", "at": "2026-04-10T12:00:00Z" }`
+- `"cron"` — recurring cron expression: `{ "kind": "cron", "expr": "0 10 * * *", "tz": "America/Argentina/Buenos_Aires" }`
+- `"every"` — interval in ms: `{ "kind": "every", "everyMs": 30000 }`
+
+**Rules:**
+- `job_type`: `"agent"` for reminders (the agent fires and sends a message), `"shell"` for simple echo commands
+- `prompt`: what the agent will say/do when the job fires
+- For `"at"` schedules: convert user's local time to UTC using their timezone from `USER.md`
+- For `"cron"` schedules: always include `"tz"` with the user's timezone
+- `delivery.to`: the Telegram chat_id (get from incoming message context)
+- Always include `"name"` with a short description
 
 ### cron_list
 
-Use when: user asks what reminders they have.
+Lists all active cron jobs. Use when: user asks "what reminders do I have?"
 
 ### cron_remove
 
-Use when: user asks to cancel a reminder. Requires `job_id` from `cron_list`.
+Removes a cron job by ID. Use when: user asks to cancel a reminder. Get the `job_id` from `cron_list` first.
 
 ---
 

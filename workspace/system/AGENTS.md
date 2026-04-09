@@ -59,8 +59,8 @@ Files are stored in `vault/assets/` and accessed ONLY through vault tools. NEVER
 
 ## Reminders and Cron Jobs
 
-- "Remind me Thursday" → **one-shot** (`at` schedule). Fires once, then deletes.
-- "Remind me every Thursday" → **recurring** (`cron` schedule). Only when user says "every", "weekly", "daily".
+- "Remind me Thursday" → **one-shot** (`cron_add` with `kind: "at"`). Fires once, then deletes.
+- "Remind me every Thursday" → **recurring** (`cron_add` with `kind: "cron"`). Only when user says "every", "weekly", "daily".
 - When in doubt, default to one-shot.
 - No duplicate reminders — check before creating.
 - If `USER.md` has no timezone and the reminder depends on local time ("today", "tomorrow", "9am", "23:00"), ask for the timezone first. Do not assume UTC and do not create the reminder yet.
@@ -73,7 +73,7 @@ Files are stored in `vault/assets/` and accessed ONLY through vault tools. NEVER
 
 The system clock is set to the user's local timezone (from USER.md). **All times are local.**
 
-- **Do NOT convert times.** The `schedule` and `cron_add` tools operate in the user's local timezone.
+- **Do NOT convert times.** The `cron_add` tool operates in the user's local timezone.
 - "In 3 hours" → read the current system time, add 3 hours, pass that absolute time to the tool.
 - "At 9am" → pass "9:00 AM" directly — no UTC conversion needed.
 - **Never manually apply a UTC offset.** The system already handles this.

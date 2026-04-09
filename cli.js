@@ -13,19 +13,27 @@ const readline = require('readline');
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const LIMBO_DIR = path.join(os.homedir(), '.limbo');
+// --home flag or LIMBO_HOME env var overrides the default ~/.limbo directory.
+// Useful for testing without affecting the production install.
+const LIMBO_DIR = (() => {
+  const idx = process.argv.indexOf('--home');
+  if (idx !== -1 && idx + 1 < process.argv.length) return path.resolve(process.argv[idx + 1]);
+  if (process.env.LIMBO_HOME) return path.resolve(process.env.LIMBO_HOME);
+  return path.join(os.homedir(), '.limbo');
+})();
 const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
-const ZEROCLAW_STATE_DIR = path.join(LIMBO_DIR, 'zeroclaw-state');
+const OPENCLAW_STATE_DIR = path.join(LIMBO_DIR, 'openclaw-state');
 const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const REGISTRY_IMAGE = 'registry.gitlab.com/tomas209/limbo';
 const DEFAULT_TAG = 'latest';
+const IMAGE_OVERRIDE = process.env.LIMBO_IMAGE || null;
 const DEFAULT_PORT = 18789;
 const COEXIST_PORT = 18900;
 let PORT = DEFAULT_PORT;
 
-// ─── ZeroClaw Detection ─────────────────────────────────────────────────────
+// ─── Port Conflict Detection ────────────────────────────────────────────────
 
 function isPortInUse(port) {
   try {
@@ -39,7 +47,7 @@ function isPortInUse(port) {
   }
 }
 
-function detectExistingZeroClaw() {
+function detectPortConflict() {
   if (!isPortInUse(DEFAULT_PORT)) return null;
 
   let processInfo = 'unknown process';
@@ -48,7 +56,7 @@ function detectExistingZeroClaw() {
     if (lsof) {
       const pid = lsof.split('\n')[0];
       const cmdline = execSync(`ps -p ${pid} -o command= 2>/dev/null`, { encoding: 'utf8', stdio: 'pipe' }).trim();
-      if (cmdline.includes('zeroclaw')) processInfo = 'ZeroClaw';
+      if (cmdline.includes('openclaw')) processInfo = 'OpenClaw';
       else if (cmdline.includes('docker')) processInfo = 'Docker container';
       else processInfo = cmdline.slice(0, 60);
     }
@@ -59,7 +67,7 @@ function detectExistingZeroClaw() {
 
 function findExistingApiKeys() {
   const searchPaths = [
-    path.join(os.homedir(), '.zeroclaw', '.env'),
+    path.join(os.homedir(), '.openclaw', '.env'),
     '/opt/openclaw/.env',
     '/opt/openclaw/secrets/llm_api_key',
     path.join(os.homedir(), '.openclaw', '.env'),
@@ -91,10 +99,7 @@ function findExistingApiKeys() {
   return null;
 }
 
-// ZeroClaw compatibility snapshots from official docs:
-// - https://docs.zeroclaw.dev/providers/openai
-// - https://docs.zeroclaw.dev/providers/anthropic
-// - https://docs.zeroclaw.dev/start/wizard-cli-reference
+// OpenClaw compatibility snapshots from official docs:
 const MODEL_CATALOG = {
   'openai:subscription': {
     provider: 'openai-codex',
@@ -136,11 +141,29 @@ const ASCII_ART = String.raw`
 |_____|___|_|  |_|____/ \___/
 `;
 
+function resolveImage() {
+  return IMAGE_OVERRIDE || parseFlag('--image') || `${REGISTRY_IMAGE}:${DEFAULT_TAG}`;
+}
+
+function resolveExtraEnv() {
+  const extra = [];
+  const args = process.argv;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--env' && i + 1 < args.length) {
+      extra.push(args[i + 1]);
+      i++;
+    }
+  }
+  if (!extra.length) return '';
+  return extra.map(e => `      ${e.split('=')[0]}: "${e.split('=').slice(1).join('=')}"`).join('\n') + '\n';
+}
+
 // docker-compose.yml written to ~/.limbo on install
 function composeContent() {
   return `services:
   limbo:
-    image: ${REGISTRY_IMAGE}:${DEFAULT_TAG}
+    image: ${resolveImage()}
+    init: true
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -153,13 +176,13 @@ function composeContent() {
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
-      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
-      - ${ZEROCLAW_STATE_DIR}:/home/limbo/.zeroclaw
+      - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -170,11 +193,11 @@ function composeContent() {
       - ${LIMBO_DIR}/.env
     environment:
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
-    healthcheck:
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
+${resolveExtraEnv()}    healthcheck:
       test:
         - CMD-SHELL
-        - zeroclaw status --format=exit-code 2>/dev/null || node -e "require('http').get('http://127.0.0.1:'\${LIMBO_PORT:-18789}'/',r=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))"
+        - node -e "fetch('http://localhost:'\${LIMBO_PORT:-18789}'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 3
@@ -201,7 +224,8 @@ volumes:
 function composeContentHardened() {
   return `services:
   limbo:
-    image: ${REGISTRY_IMAGE}:${DEFAULT_TAG}
+    image: ${resolveImage()}
+    init: true
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -214,13 +238,13 @@ function composeContentHardened() {
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
-      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
-      - ${ZEROCLAW_STATE_DIR}:/home/limbo/.zeroclaw
+      - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -231,16 +255,16 @@ function composeContentHardened() {
       - ${LIMBO_DIR}/.env
     environment:
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
       NO_PROXY: "127.0.0.1,localhost"
-    networks:
+${resolveExtraEnv()}    networks:
       - internal
     healthcheck:
       test:
         - CMD-SHELL
-        - zeroclaw status --format=exit-code 2>/dev/null || node -e "require('http').get('http://127.0.0.1:'\${LIMBO_PORT:-18789}'/',r=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))"
+        - node -e "fetch('http://localhost:'\${LIMBO_PORT:-18789}'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 3
@@ -823,7 +847,7 @@ async function chooseModel(lang, providerFamily, authMode) {
 async function collectConfig(existingEnv = {}) {
   console.log(`${c.cyan}${ASCII_ART}${c.reset}`);
 
-  // Check for existing API keys from another ZeroClaw installation
+  // Check for existing API keys from another installation
   const existingKeys = findExistingApiKeys();
   if (existingKeys && !existingEnv.LLM_API_KEY && !existingEnv.ANTHROPIC_API_KEY && !existingEnv.OPENAI_API_KEY) {
     const keyValue = existingKeys.keys.LLM_API_KEY || existingKeys.keys.ANTHROPIC_API_KEY || existingKeys.keys.OPENAI_API_KEY || existingKeys.keys.OPENROUTER_API_KEY || '';
@@ -1021,13 +1045,14 @@ async function collectConfig(existingEnv = {}) {
   };
 }
 
-// Migrate zeroclaw state from old named volume (limbo_limbo-zeroclaw-state or
-// limbo-zeroclaw-state) to the new bind-mount directory at ZEROCLAW_STATE_DIR.
+// Migrate state from old ZeroClaw named volume (limbo_limbo-zeroclaw-state or
+// limbo-zeroclaw-state) to the new bind-mount directory at OPENCLAW_STATE_DIR.
 // Only runs if the bind-mount dir is empty and the named volume exists.
-function migrateZeroclawStateVolume() {
+// Legacy migration — can be removed once all production instances have migrated.
+function migrateLegacyStateVolume() {
   // Skip if bind-mount dir already has content
   try {
-    const entries = fs.readdirSync(ZEROCLAW_STATE_DIR);
+    const entries = fs.readdirSync(OPENCLAW_STATE_DIR);
     if (entries.length > 0) return;
   } catch { return; }
 
@@ -1044,11 +1069,11 @@ function migrateZeroclawStateVolume() {
 
   if (!foundVolume) return;
 
-  log(`Migrating ZeroClaw state from volume "${foundVolume}" to ${ZEROCLAW_STATE_DIR} ...`);
+  log(`Migrating legacy state from volume "${foundVolume}" to ${OPENCLAW_STATE_DIR} ...`);
   const migrate = spawnSync('docker', [
     'run', '--rm',
     '-v', `${foundVolume}:/src:ro`,
-    '-v', `${ZEROCLAW_STATE_DIR}:/dst`,
+    '-v', `${OPENCLAW_STATE_DIR}:/dst`,
     'alpine',
     'sh', '-c', 'cp -a /src/. /dst/',
   ], { stdio: 'pipe' });
@@ -1064,8 +1089,8 @@ function ensureComposeFile(hardened = false) {
   fs.mkdirSync(LIMBO_DIR, { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'maps'), { recursive: true });
-  fs.mkdirSync(ZEROCLAW_STATE_DIR, { recursive: true });
-  migrateZeroclawStateVolume();
+  fs.mkdirSync(OPENCLAW_STATE_DIR, { recursive: true });
+  migrateLegacyStateVolume();
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
   // Ensure secret files exist (Docker Compose secrets require the files to be present)
   for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
@@ -1104,6 +1129,13 @@ function ensureGatewayToken(existingEnv) {
 }
 
 function pullOrBuildImage(lang) {
+  // --image or LIMBO_IMAGE: user provided a pre-built image, skip build/pull entirely.
+  if (IMAGE_OVERRIDE || parseFlag('--image')) {
+    const img = resolveImage();
+    ok(`Using image: ${img}`);
+    return;
+  }
+
   // When running from the repo (npx .), prefer local build over registry pull.
   const repoDockerfile = path.join(__dirname, 'Dockerfile');
   if (fs.existsSync(repoDockerfile)) {
@@ -1133,7 +1165,7 @@ function ensureVolumePermissions() {
     '--cap-add', 'DAC_OVERRIDE',
     '--entrypoint', 'sh',
     'limbo',
-    '-c', 'chown -R limbo:limbo /data /home/limbo/.zeroclaw 2>/dev/null; true',
+    '-c', 'chown -R limbo:limbo /data /home/limbo/.openclaw 2>/dev/null; true',
   ], { stdio: 'pipe' });
 }
 
@@ -1472,7 +1504,7 @@ function stopExistingContainers(lang) {
 
 
 // ─── Native OAuth (PKCE) for OpenAI Codex ───────────────────────────────────
-// Implements the full OAuth flow locally so we never need ZeroClaw's interactive TUI.
+// Implements the full OAuth flow locally so we never need an interactive TUI.
 
 const OPENAI_OAUTH = {
   clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
@@ -1551,7 +1583,7 @@ function decodeJwtPayload(token) {
 
 function writeAuthProfilesToDocker(store) {
   const json = JSON.stringify(store, null, 2);
-  const destDir = '/home/limbo/.zeroclaw';
+  const destDir = '/home/limbo/.openclaw';
   const destFile = `${destDir}/auth-profiles.json`;
   spawnSync('docker', [
     'compose', 'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
@@ -1851,7 +1883,7 @@ async function cmdStart() {
   const cliMode = process.argv.includes('--cli');
   const reconfig = process.argv.includes('--reconfigure');
 
-  // ── Detect existing ZeroClaw / port selection ─────────────────────────────
+  // ── Detect existing instance / port selection ──────────────────────────────
   const existingEnv = parseEnvFile();
   const alreadyHasEnv = fs.existsSync(ENV_FILE);
   const hasProviderConfig = alreadyHasEnv && existingEnv.MODEL_PROVIDER;
@@ -1864,13 +1896,13 @@ async function cmdStart() {
       PORT = parsed;
     }
   } else {
-    const existing = detectExistingZeroClaw();
+    const existing = detectPortConflict();
     if (existing) {
       console.log(`
-  ${c.yellow}${c.bold}Existing ZeroClaw detected${c.reset}
+  ${c.yellow}${c.bold}Existing instance detected${c.reset}
   ${c.dim}Port ${existing.port} is in use (${existing.processInfo})${c.reset}
 
-  Limbo will run its own ZeroClaw instance on port ${c.bold}${COEXIST_PORT}${c.reset}.
+  Limbo will run its own instance on port ${c.bold}${COEXIST_PORT}${c.reset}.
   Both can coexist safely — separate containers, separate data.
 `);
       PORT = COEXIST_PORT;

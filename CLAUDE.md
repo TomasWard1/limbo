@@ -17,8 +17,8 @@
 | CLI | `cli.js` (single 84KB file) |
 | Eval cases | `evals/cases/*.json` |
 | Eval runner | `evals/cli.js` |
-| Config template | `config.toml.template` |
-| Docker build | `Dockerfile` (3-stage: deps → zeroclaw → runtime) |
+| Config template | `openclaw.json.template` |
+| Docker build | `Dockerfile` (2-stage: deps → runtime) |
 | Unit tests | `test/*.test.js` (node --test) |
 | Setup wizard | `setup-server/server.js` (zero deps) |
 
@@ -26,9 +26,9 @@
 
 - **Adding a new MCP tool**: Create `mcp-server/tools/<name>.js`, register in `mcp-server/index.js`
 - **Changing agent behavior**: Edit `workspace/system/AGENTS.md` (resets on container boot)
-- **Adding a feature toggle**: Follow pattern: wizard toggle → secret → env var → entrypoint TOML append
+- **Adding a feature toggle**: Follow pattern: wizard toggle → secret → env var → entrypoint JSON config
 - **Running evals**: `docker build -t limbo:eval . && LIMBO_IMAGE=limbo:eval docker compose -f evals/docker-compose.eval.yml up -d && node evals/cli.js run`
-- **Bumping ZeroClaw**: `./scripts/build-zeroclaw.sh <version>` THEN update `ZEROCLAW_IMAGE` ARG in Dockerfile
+- **Bumping OpenClaw**: Update the `openclaw` version in `package.json`, then `npm install`
 
 ## Git Workflow
 
@@ -44,31 +44,16 @@
 
 > **Status: GitLab registry active, ghcr.io inaccessible (GitHub suspended)**
 
-All container images now live on **GitLab Container Registry**, not ghcr.io:
+Limbo container image lives on **GitLab Container Registry**, not ghcr.io:
 - Limbo image: `registry.gitlab.com/tomas209/limbo`
-- ZeroClaw image: `registry.gitlab.com/tomas209/zeroclaw`
 
 **When GitHub is restored**: evaluate whether to move back to ghcr.io or stay on GitLab.
 
-## Custom ZeroClaw Build
+## OpenClaw Runtime
 
-Limbo uses a custom ZeroClaw image with extra cargo features (`rag-pdf`).
-The image tag follows the pattern `registry.gitlab.com/tomas209/zeroclaw:<version>-custom`.
+Limbo uses OpenClaw (Node.js) as its agent runtime. OpenClaw is an npm dependency — no custom image builds needed.
 
-**Rebuild ZeroClaw** (only when changing features or version):
-```bash
-./scripts/build-zeroclaw.sh              # default version + rag-pdf
-./scripts/build-zeroclaw.sh v0.6.3       # upgrade version
-./scripts/build-zeroclaw.sh v0.5.3 "rag-pdf,browser-native"  # add features
-```
-
-The script builds multi-platform (amd64+arm64) and pushes to GitLab Container Registry. Requires `docker login registry.gitlab.com`.
-
-**Critical rules when bumping ZeroClaw:**
-- The Dockerfile MUST use the custom image (`registry.gitlab.com/tomas209/zeroclaw:<version>-custom`), never the official one — we need `rag-pdf`.
-- Always build and push the custom image BEFORE pushing the Dockerfile change — CI pulls from the registry.
-- The image must include both `linux/amd64` and `linux/arm64` — CI runs on amd64, local dev is arm64.
-- When a new ZeroClaw version adds workspace members, the build script may need patching (see Patch 3 in the script).
+**Bumping OpenClaw**: Update the version in `package.json` and run `npm install`. No multi-platform builds, no registry pushes — it's just a Node.js package.
 
 ## CI/CD
 
@@ -99,7 +84,7 @@ Never commit secrets. Never create new ones per instance — always reuse the sh
 ## Local Development
 
 ```bash
-docker build -t limbo:rag-pdf-test .                         # build limbo image
+docker build -t limbo:test .                                  # build limbo image
 docker compose -f docker-compose.test.yml up -d              # start (first time opens setup wizard at :18789)
 docker compose -f docker-compose.test.yml logs -f            # tail logs
 docker compose -f docker-compose.test.yml down               # stop (keeps config)
