@@ -28,7 +28,7 @@ const VERSIONS_DIR = new URL("./versions/", import.meta.url);
  * Bump this when a new migration is added. The runner uses it as the target
  * version and will run all migrations between stored version and this value.
  */
-const CURRENT_DATA_VERSION = 4;
+const CURRENT_DATA_VERSION = 5;
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 
