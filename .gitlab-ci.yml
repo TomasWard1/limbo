@@ -186,6 +186,7 @@ release:
       git add package.json
       git commit -m "chore: release v${VERSION} [skip ci]"
       git tag "v${VERSION}"
+      git checkout -B main
       git push origin main --follow-tags
 
       # Create GitLab Release
