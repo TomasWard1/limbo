@@ -37,7 +37,7 @@
 - `main` is the production/release branch — only receives merges from `staging`
 - Feature branches are created from `staging`
 - Use `git push gitlab <branch>` for all pushes
-- Create MRs via GitLab API or web UI (not `gh pr create` — GitHub is down)
+- Create MRs via `glab mr create` CLI (not `gh pr create` — GitHub is down)
 - **When GitHub is restored**: resume `git push origin`, optionally remove `gitlab` remote
 
 ## Container Registry (MIGRATED)
@@ -83,16 +83,16 @@ Never commit secrets. Never create new ones per instance — always reuse the sh
 
 ## Local Development
 
+**E2E testing** uses a pre-configured environment at `/tmp/limbo-e2e-test/` with Telegram bot, secrets, and vault already set up. No wizard needed — just build and run:
+
 ```bash
-docker build -t limbo:test .                                  # build limbo image
-docker compose -f docker-compose.test.yml up -d              # start (first time opens setup wizard at :18789)
-docker compose -f docker-compose.test.yml logs -f            # tail logs
-docker compose -f docker-compose.test.yml down               # stop (keeps config)
-docker compose -f docker-compose.test.yml down -v            # full reset (wipes setup)
+docker build -t limbo:test .                                              # build image
+LIMBO_IMAGE=limbo:test docker compose -f docker-compose.test.yml up -d    # start on :18900
+docker compose -f docker-compose.test.yml logs -f                         # tail logs
+docker compose -f docker-compose.test.yml down                            # stop
 ```
 
-Config and secrets persist in named volumes (`limbo-test-data`, `limbo-test-state`).
-Only the first run requires Telegram/provider setup — subsequent starts are instant.
+The e2e state lives in `/tmp/limbo-e2e-test/` (bind mounts for vault, openclaw-state, secrets, flags). Data volume is `limbo-e2e-test_limbo-data`.
 
 ## Evals
 

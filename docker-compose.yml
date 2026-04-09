@@ -19,6 +19,7 @@ services:
       - limbo-data:/data
       - ./vault:/data/vault
       - ./openclaw-state:/home/limbo/.openclaw
+      - ./flags:/flags
     secrets:
       - llm_api_key
       - telegram_bot_token

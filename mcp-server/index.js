@@ -15,6 +15,7 @@ import { vaultUpdateMap } from "./tools/update-map.js";
 import { vaultStoreFile } from "./tools/store-file.js";
 import { vaultGetFile } from "./tools/get-file.js";
 import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
+import { updateInstance } from "./tools/update-instance.js";
 
 /**
  * General response size guard. Any tool_result text content exceeding this
@@ -259,6 +260,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["filename", "content"],
       },
     },
+    {
+      name: "update_instance",
+      description:
+        "Trigger a Limbo self-update. Notifies the user that Limbo is going offline briefly, then signals the host to pull the latest image and restart. Use when the user wants to update Limbo.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
   ],
 }));
 
@@ -368,6 +378,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = {
           content: [{ type: "text", text: `Updated ${wsWrite.filename} (${wsWrite.size} bytes)` }],
         };
+        break;
+      }
+
+      case "update_instance": {
+        result = await updateInstance();
         break;
       }
 
