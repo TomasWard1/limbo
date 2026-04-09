@@ -1,0 +1,216 @@
+{
+  "case": "speed-search-broad",
+  "run": 1,
+  "passRate": 1,
+  "passed": 3,
+  "total": 3,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "vault_search"
+      },
+      "pass": true,
+      "reason": "Tool \"vault_search\" was called"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)/"
+    },
+    {
+      "assertion": {
+        "type": "latency_under",
+        "max_ms": 45000
+      },
+      "pass": true,
+      "reason": "Latency 31100ms <= 45000ms"
+    }
+  ],
+  "judgeResults": null,
+  "response": "En este momento solo encuentro a **Laura** en tus notas.\n\nSi querés, puedo intentar reconstruir una lista más amplia buscando menciones de personas en todas tus notas, no solo notas de tipo persona.",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Mostrame todas las personas que conozco",
+      "response": "En este momento solo encuentro a **Laura** en tus notas.\n\nSi querés, puedo intentar reconstruir una lista más amplia buscando menciones de personas en todas tus notas, no solo notas de tipo persona.",
+      "latencyMs": 31100,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 8,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "type:person OR persona OR person"
+          },
+          "timestamp": "2026-04-01T19:12:28.778Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T19:12:28.779Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "persona"
+          },
+          "timestamp": "2026-04-01T19:12:33.680Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T19:12:33.682Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "persona-"
+          },
+          "timestamp": "2026-04-01T19:12:42.019Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T19:12:42.020Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "[[persona-"
+          },
+          "timestamp": "2026-04-01T19:12:45.672Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T19:12:45.672Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "tool_called",
+          "tool": "vault_search"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)"
+        },
+        {
+          "type": "latency_under",
+          "max_ms": 45000
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 45000
+          },
+          "pass": true,
+          "reason": "Latency 31100ms <= 45000ms"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 8,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "type:person OR persona OR person"
+      },
+      "timestamp": "2026-04-01T19:12:28.778Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T19:12:28.779Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "persona"
+      },
+      "timestamp": "2026-04-01T19:12:33.680Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T19:12:33.682Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "persona-"
+      },
+      "timestamp": "2026-04-01T19:12:42.019Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T19:12:42.020Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "[[persona-"
+      },
+      "timestamp": "2026-04-01T19:12:45.672Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T19:12:45.672Z"
+    }
+  ],
+  "searchTimeMs": 4,
+  "latencyMs": 31100,
+  "timestamp": "2026-04-01T19:12:52.265Z"
+}

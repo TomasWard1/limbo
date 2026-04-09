@@ -15,14 +15,14 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   mcp-server-check:
     name: MCP Server
@@ -45,6 +45,9 @@ jobs:
         working-directory: mcp-server
         run: node --check index.js
 
+      - name: Check for syntax errors in setup server
+        run: node --check setup-server/server.js
+
   tests:
     name: Tests
     runs-on: ubuntu-latest
@@ -55,6 +58,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install MCP server dependencies
+        working-directory: mcp-server
+        run: npm ci
+
+      - name: Verify CLI module exports
+        run: node -e "require('./cli.js')"
 
       - name: Run unit tests
-        run: node --test test/cli-filter.test.js test/zeroclaw-migration.test.js
+        run: node --test test/cli-filter.test.js test/cli-auth.test.js test/zeroclaw-migration.test.js test/setup-server.test.js

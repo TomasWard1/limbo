@@ -1,0 +1,73 @@
+{
+  "id": "run-1774796618679",
+  "timestamp": "2026-03-29T15:04:22.914Z",
+  "results": [
+    {
+      "case": "telegram-pdf",
+      "run": 1,
+      "passRate": 0,
+      "passed": 0,
+      "total": 4,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_store_file"
+          },
+          "pass": false,
+          "reason": "Tool \"vault_store_file\" was NOT called"
+        },
+        {
+          "assertion": {
+            "type": "vault_file_exists",
+            "pattern": "assets/.*\\.pdf$"
+          },
+          "pass": false,
+          "reason": "No vault file matched /assets/.*\\.pdf$/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "asset_path.*\\.pdf|asset_type.*application/pdf"
+          },
+          "pass": false,
+          "reason": "No created vault note matched /asset_path.*\\.pdf|asset_type.*application/pdf/i"
+        },
+        {
+          "assertion": {
+            "type": "response_no_error"
+          },
+          "pass": false,
+          "reason": "Response contains error pattern: /\\b(error|failed|failure|exception)\\b/i"
+        }
+      ],
+      "judgeResults": null,
+      "response": "💬 [telegram] from tomasward1: [Document: BoardingPass.pdf] /home/limbo/.zeroclaw/workspace/telegram_files/Boar...\n  ⏳ Processing message...\n  ❌ LLM error after 17811ms: All providers/models failed. Attempts:\nprovider=anthropic model=claude-sonnet-4-6 attempt 2/3: non_retryable; error=Anthropic API error (400 Bad Request): {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"messages.0.content.0: unexpected `tool_use_id` found in `tool_result` blocks: toolu_012FV2xd9C...",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "boarding pass vuelo Tucuman Ward"
+          },
+          "timestamp": "2026-03-29T15:04:09.515Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-29T15:04:09.517Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 44057,
+      "timestamp": "2026-03-29T15:04:22.914Z"
+    }
+  ]
+}

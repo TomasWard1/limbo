@@ -1,250 +1,362 @@
 // test/cli-auth.test.js
-// Unit tests for the streamFilteredAuth pure-logic functions exported from cli.js.
+// Unit tests for CLI install-phase pure functions exported from cli.js.
 // Run with: node --test test/cli-auth.test.js
 'use strict';
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 
-const { stripAnsi, AUTH_URL_RE, TUI_CHROME_RE, flushStreamLines } = require('../cli.js');
+const {
+  MODEL_CATALOG,
+  normalizeConfig,
+  deriveProviderFamily,
+  getModelCatalog,
+  parseCallbackInput,
+  decodeJwtPayload,
+  parseClaudeSetupToken,
+  buildCodexAuthProfile,
+  buildAnthropicAuthProfile,
+  generatePKCE,
+  buildOAuthUrl,
+} = require('../cli.js');
 
-// ─── stripAnsi ────────────────────────────────────────────────────────────────
+// ─── deriveProviderFamily ─────────────────────────────────────────────────────
 
-test('stripAnsi: strips standard CSI sequences', () => {
-  assert.equal(stripAnsi('\x1b[32mgreen\x1b[0m'), 'green');
-  assert.equal(stripAnsi('\x1b[1;31mbold red\x1b[0m'), 'bold red');
-  assert.equal(stripAnsi('\x1b[2Kclear line'), 'clear line');
+test('deriveProviderFamily: null/undefined returns anthropic', () => {
+  assert.equal(deriveProviderFamily(null), 'anthropic');
+  assert.equal(deriveProviderFamily(undefined), 'anthropic');
 });
 
-test('stripAnsi: strips ?-prefixed private-mode CSI sequences', () => {
-  // \x1b[?25l hide cursor, \x1b[?25h show cursor
-  assert.equal(stripAnsi('\x1b[?25lhello\x1b[?25h'), 'hello');
-  // \x1b[?2004h / \x1b[?2004l bracketed paste mode
-  assert.equal(stripAnsi('\x1b[?2004htext\x1b[?2004l'), 'text');
+test('deriveProviderFamily: openai-codex returns openai', () => {
+  assert.equal(deriveProviderFamily('openai-codex'), 'openai');
 });
 
-test('stripAnsi: strips two-char ESC sequences (0x40-0x5F range)', () => {
-  // ESC M (0x4D) — reverse index (cursor up with scroll)
-  assert.equal(stripAnsi('\x1bMline'), 'line');
-  // ESC E (0x45) — next line
-  assert.equal(stripAnsi('text\x1bEafter'), 'textafter');
-  // ESC ^ (0x5E) — privacy message (PM)
-  assert.equal(stripAnsi('before\x1b^after'), 'beforeafter');
+test('deriveProviderFamily: openai returns openai', () => {
+  assert.equal(deriveProviderFamily('openai'), 'openai');
 });
 
-test('stripAnsi: strips OSC sequences (BEL-terminated)', () => {
-  // OSC 0 ; title BEL — window title sequence
-  assert.equal(stripAnsi('\x1b]0;My Terminal Title\x07visible'), 'visible');
+test('deriveProviderFamily: openrouter returns openrouter', () => {
+  assert.equal(deriveProviderFamily('openrouter'), 'openrouter');
 });
 
-test('stripAnsi: strips OSC sequences (ST-terminated)', () => {
-  assert.equal(stripAnsi('\x1b]0;title\x1b\\visible'), 'visible');
+test('deriveProviderFamily: unknown provider returns anthropic', () => {
+  assert.equal(deriveProviderFamily('mistral'), 'anthropic');
+  assert.equal(deriveProviderFamily('google'), 'anthropic');
 });
 
-test('stripAnsi: strips bare carriage returns', () => {
-  assert.equal(stripAnsi('line1\rline2'), 'line1line2');
-  assert.equal(stripAnsi('\r'), '');
+// ─── getModelCatalog ──────────────────────────────────────────────────────────
+
+test('getModelCatalog: returns correct catalog for openai:subscription', () => {
+  const catalog = getModelCatalog('openai', 'subscription');
+  assert.ok(catalog);
+  assert.equal(catalog.provider, 'openai-codex');
 });
 
-test('stripAnsi: leaves plain text untouched', () => {
-  const plain = 'Hello, world! 123 !@#';
-  assert.equal(stripAnsi(plain), plain);
+test('getModelCatalog: returns correct catalog for openai:api-key', () => {
+  const catalog = getModelCatalog('openai', 'api-key');
+  assert.ok(catalog);
+  assert.equal(catalog.provider, 'openai');
 });
 
-test('stripAnsi: handles empty string', () => {
-  assert.equal(stripAnsi(''), '');
+test('getModelCatalog: returns correct catalog for anthropic:subscription', () => {
+  const catalog = getModelCatalog('anthropic', 'subscription');
+  assert.ok(catalog);
+  assert.equal(catalog.provider, 'anthropic');
 });
 
-test('stripAnsi: strips mixed sequences in one pass', () => {
-  // CSI (?25l hide cursor) + CSI (32m color) + OSC (window title) + bare CR
-  const input = '\x1b[?25l\x1b[32mProcessing\x1b[0m...\x1b]0;term\x07done\r';
-  assert.equal(stripAnsi(input), 'Processing...done');
-  // CSI + two-char ESC (M) mixed with real text
-  const input2 = '\x1b[1mbold\x1b[0m\x1bMnext';
-  assert.equal(stripAnsi(input2), 'boldnext');
+test('getModelCatalog: returns correct catalog for anthropic:api-key', () => {
+  const catalog = getModelCatalog('anthropic', 'api-key');
+  assert.ok(catalog);
+  assert.equal(catalog.provider, 'anthropic');
 });
 
-// ─── TUI_CHROME_RE ────────────────────────────────────────────────────────────
+test('getModelCatalog: returns correct catalog for openrouter:api-key', () => {
+  const catalog = getModelCatalog('openrouter', 'api-key');
+  assert.ok(catalog);
+  assert.equal(catalog.provider, 'openrouter');
+});
 
-test('TUI_CHROME_RE: suppresses Braille spinner chars', () => {
-  // Common clack/openclaw spinner frames
-  for (const ch of ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']) {
-    assert.equal(TUI_CHROME_RE.test(ch), true, `expected ${ch} to match TUI_CHROME_RE`);
+test('getModelCatalog: returns undefined for invalid combo', () => {
+  assert.equal(getModelCatalog('openrouter', 'subscription'), undefined);
+  assert.equal(getModelCatalog('invalid', 'api-key'), undefined);
+});
+
+// ─── MODEL_CATALOG ────────────────────────────────────────────────────────────
+
+test('MODEL_CATALOG: all entries have required fields', () => {
+  for (const [key, entry] of Object.entries(MODEL_CATALOG)) {
+    assert.ok(entry.provider, `${key} missing provider`);
+    assert.ok(entry.defaultModel, `${key} missing defaultModel`);
+    assert.ok(Array.isArray(entry.menuModels), `${key} menuModels not array`);
+    assert.ok(Array.isArray(entry.supportedModels), `${key} supportedModels not array`);
   }
 });
 
-test('TUI_CHROME_RE: suppresses box-drawing chars', () => {
-  assert.equal(TUI_CHROME_RE.test('─'), true);
-  assert.equal(TUI_CHROME_RE.test('│'), true);
-  assert.equal(TUI_CHROME_RE.test('┌┐└┘'), true);
-  assert.equal(TUI_CHROME_RE.test('═══'), true);
+// ─── normalizeConfig ──────────────────────────────────────────────────────────
+
+test('normalizeConfig: defaults for empty config', () => {
+  const result = normalizeConfig({});
+  assert.equal(result.CLI_LANGUAGE, 'en');
+  assert.equal(result.AUTH_MODE, 'api-key');
+  assert.equal(result.MODEL_PROVIDER, 'anthropic');
+  assert.equal(result.MODEL_NAME, 'claude-opus-4-6');
+  assert.equal(result.TELEGRAM_ENABLED, 'false');
+  assert.ok(result.GATEWAY_TOKEN, 'should generate a gateway token');
 });
 
-test('TUI_CHROME_RE: suppresses clack decoration chars', () => {
-  assert.equal(TUI_CHROME_RE.test('◇'), true);
-  assert.equal(TUI_CHROME_RE.test('●'), true);
-  assert.equal(TUI_CHROME_RE.test('◆'), true);
-  assert.equal(TUI_CHROME_RE.test('○'), true);
+test('normalizeConfig: cfg values override defaults', () => {
+  const result = normalizeConfig({
+    language: 'es',
+    authMode: 'subscription',
+    provider: 'openai',
+    modelName: 'gpt-5.4',
+  });
+  assert.equal(result.CLI_LANGUAGE, 'es');
+  assert.equal(result.AUTH_MODE, 'subscription');
+  assert.equal(result.MODEL_PROVIDER, 'openai');
+  assert.equal(result.MODEL_NAME, 'gpt-5.4');
 });
 
-test('TUI_CHROME_RE: suppresses whitespace-only lines', () => {
-  assert.equal(TUI_CHROME_RE.test('   '), true);
-  assert.equal(TUI_CHROME_RE.test(''), true);
-  assert.equal(TUI_CHROME_RE.test('\t'), true);
+test('normalizeConfig: provider-specific key routing for openai', () => {
+  const result = normalizeConfig({ provider: 'openai', apiKey: 'sk-test-key' });
+  assert.equal(result.OPENAI_API_KEY, 'sk-test-key');
+  assert.equal(result.ANTHROPIC_API_KEY, '');
+  assert.equal(result.LLM_API_KEY, 'sk-test-key');
 });
 
-test('TUI_CHROME_RE: suppresses mixed chrome lines (spinner + whitespace)', () => {
-  assert.equal(TUI_CHROME_RE.test('  ⠋  '), true);
-  assert.equal(TUI_CHROME_RE.test('◇  ─  ◇'), true);
+test('normalizeConfig: provider-specific key routing for anthropic', () => {
+  const result = normalizeConfig({ provider: 'anthropic', apiKey: 'sk-ant-test' });
+  assert.equal(result.ANTHROPIC_API_KEY, 'sk-ant-test');
+  assert.equal(result.OPENAI_API_KEY, '');
+  assert.equal(result.LLM_API_KEY, 'sk-ant-test');
 });
 
-test('TUI_CHROME_RE: passes lines with real text content', () => {
-  assert.equal(TUI_CHROME_RE.test('Please open this URL'), false);
-  assert.equal(TUI_CHROME_RE.test('Authenticating...'), false);
-  assert.equal(TUI_CHROME_RE.test('Press Enter to continue'), false);
-  assert.equal(TUI_CHROME_RE.test('Error: invalid token'), false);
+test('normalizeConfig: existingEnv used as fallback', () => {
+  const existing = {
+    CLI_LANGUAGE: 'es',
+    MODEL_PROVIDER: 'openai',
+    GATEWAY_TOKEN: 'existing-token',
+  };
+  const result = normalizeConfig({}, existing);
+  assert.equal(result.CLI_LANGUAGE, 'es');
+  assert.equal(result.MODEL_PROVIDER, 'openai');
+  assert.equal(result.GATEWAY_TOKEN, 'existing-token');
 });
 
-test('TUI_CHROME_RE: passes lines starting with decoration but containing text', () => {
-  // clack prompts often have a leading decoration glyph followed by text
-  assert.equal(TUI_CHROME_RE.test('◇ Enter your API key'), false);
-  assert.equal(TUI_CHROME_RE.test('● Model selected: claude-opus-4-6'), false);
+test('normalizeConfig: keepExisting preserves old keys', () => {
+  const existing = {
+    OPENAI_API_KEY: 'old-openai-key',
+    ANTHROPIC_API_KEY: 'old-anthropic-key',
+    LLM_API_KEY: 'old-llm-key',
+    TELEGRAM_BOT_TOKEN: 'old-telegram',
+  };
+  const result = normalizeConfig({ keepExisting: true }, existing);
+  assert.equal(result.OPENAI_API_KEY, 'old-openai-key');
+  assert.equal(result.ANTHROPIC_API_KEY, 'old-anthropic-key');
+  assert.equal(result.LLM_API_KEY, 'old-llm-key');
+  assert.equal(result.TELEGRAM_BOT_TOKEN, 'old-telegram');
 });
 
-// ─── AUTH_URL_RE (URL extraction) ─────────────────────────────────────────────
-
-test('AUTH_URL_RE: detects http OAuth URLs', () => {
-  const line = 'Open this URL to authenticate: http://localhost:3000/oauth/callback?code=abc123';
-  const matches = line.match(AUTH_URL_RE);
-  assert.ok(matches, 'expected URL match');
-  assert.equal(matches[0], 'http://localhost:3000/oauth/callback?code=abc123');
+test('normalizeConfig: without keepExisting clears unrelated keys', () => {
+  const existing = {
+    OPENAI_API_KEY: 'old-openai-key',
+    ANTHROPIC_API_KEY: 'old-anthropic-key',
+    LLM_API_KEY: 'old-llm-key',
+    TELEGRAM_BOT_TOKEN: 'old-telegram',
+  };
+  const result = normalizeConfig({}, existing);
+  assert.equal(result.OPENAI_API_KEY, '');
+  assert.equal(result.ANTHROPIC_API_KEY, '');
+  assert.equal(result.LLM_API_KEY, '');
+  assert.equal(result.TELEGRAM_BOT_TOKEN, '');
 });
 
-test('AUTH_URL_RE: detects https OAuth URLs', () => {
-  const line = 'Visit https://auth.anthropic.com/oauth2/authorize?client_id=limbo&state=xyz to login';
-  const matches = line.match(AUTH_URL_RE);
-  assert.ok(matches, 'expected URL match');
-  assert.equal(matches[0], 'https://auth.anthropic.com/oauth2/authorize?client_id=limbo&state=xyz');
+// ─── parseCallbackInput ──────────────────────────────────────────────────────
+
+test('parseCallbackInput: full URL with code and state', () => {
+  const result = parseCallbackInput('http://localhost:1455/auth/callback?code=abc123&state=xyz');
+  assert.equal(result.code, 'abc123');
+  assert.equal(result.state, 'xyz');
 });
 
-test('AUTH_URL_RE: does not match plain text without URL', () => {
-  const line = 'Waiting for authentication...';
-  const matches = line.match(AUTH_URL_RE);
-  assert.equal(matches, null);
+test('parseCallbackInput: URL without state', () => {
+  const result = parseCallbackInput('http://localhost:1455/auth/callback?code=abc123');
+  assert.equal(result.code, 'abc123');
+  assert.equal(result.state, null);
 });
 
-test('AUTH_URL_RE: stops URL at whitespace', () => {
-  const line = 'URL: https://example.com/auth and then some text';
-  const matches = line.match(AUTH_URL_RE);
-  assert.ok(matches);
-  assert.equal(matches[0], 'https://example.com/auth');
+test('parseCallbackInput: query string format', () => {
+  const result = parseCallbackInput('code=abc123&state=xyz');
+  assert.equal(result.code, 'abc123');
+  assert.equal(result.state, 'xyz');
 });
 
-test('AUTH_URL_RE: stops URL at angle bracket', () => {
-  const line = 'Go to <https://example.com/auth>';
-  const matches = line.match(AUTH_URL_RE);
-  assert.ok(matches);
-  assert.equal(matches[0], 'https://example.com/auth');
+test('parseCallbackInput: query string with leading ?', () => {
+  const result = parseCallbackInput('?code=abc123&state=xyz');
+  assert.equal(result.code, 'abc123');
+  assert.equal(result.state, 'xyz');
 });
 
-test('AUTH_URL_RE: extracts multiple URLs from a single line', () => {
-  const line = 'Primary: https://example.com/a Fallback: https://example.com/b';
-  const matches = line.match(AUTH_URL_RE);
-  assert.ok(matches);
-  assert.equal(matches.length, 2);
-  assert.equal(matches[0], 'https://example.com/a');
-  assert.equal(matches[1], 'https://example.com/b');
+test('parseCallbackInput: bare code string', () => {
+  const result = parseCallbackInput('abc123');
+  assert.equal(result.code, 'abc123');
+  assert.equal(result.state, null);
 });
 
-test('AUTH_URL_RE: URL deduplication — same URL seen twice is emitted once', () => {
-  // This tests the seenUrls Set logic conceptually — we verify that running AUTH_URL_RE
-  // against the same URL twice and filtering via a Set yields a single emission.
-  const url = 'https://auth.openai.com/oauth/callback?code=abc';
-  const lines = [
-    `Open: ${url}`,
-    `Retry: ${url}`,
-    'Different: https://example.com/other',
-  ];
-
-  const emitted = [];
-  const seenUrls = new Set();
-
-  for (const line of lines) {
-    const urls = line.match(AUTH_URL_RE) || [];
-    for (const u of urls) {
-      if (!seenUrls.has(u)) {
-        seenUrls.add(u);
-        emitted.push(u);
-      }
-    }
-  }
-
-  assert.equal(emitted.length, 2, 'duplicate URL should only be emitted once');
-  assert.equal(emitted[0], url);
-  assert.equal(emitted[1], 'https://example.com/other');
+test('parseCallbackInput: whitespace trimming', () => {
+  const result = parseCallbackInput('  abc123  ');
+  assert.equal(result.code, 'abc123');
+  assert.equal(result.state, null);
 });
 
-// ─── flushStreamLines (animation scatter regression) ──────────────────────────
+// ─── decodeJwtPayload ─────────────────────────────────────────────────────────
 
-test('flushStreamLines: emits only final \\r frame — suppresses scatter', () => {
-  // This is the exact pattern that caused the diagonal scatter seen in the screenshot:
-  // clack's character-by-character reveal writes each progressive state separated by \r.
-  // Before the fix, every frame was emitted as a separate line causing staircase output.
-  const buf = '│ Y\r│ Yo\r│ You\r│ Your URL: https://auth.example.com\n';
-  const { lines, remaining } = flushStreamLines(buf);
-  assert.equal(remaining, '');
-  assert.equal(lines.length, 1, 'only the final frame should be emitted');
-  assert.equal(lines[0], '│ Your URL: https://auth.example.com');
+test('decodeJwtPayload: valid 3-part JWT decodes payload', () => {
+  const payload = { sub: 'user123', email: 'test@example.com' };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const token = `header.${encoded}.signature`;
+  const result = decodeJwtPayload(token);
+  assert.deepEqual(result, payload);
 });
 
-test('flushStreamLines: handles spinner animation (pure chrome final frame)', () => {
-  // Spinner that completes and clears the line — final state is empty/chrome
-  const buf = '⠋\r⠙\r⠹\r⠸\r \n';
-  const { lines } = flushStreamLines(buf);
-  assert.equal(lines.length, 1);
-  assert.equal(lines[0], ' '); // final frame (space = cleared); TUI_CHROME_RE will suppress it
+test('decodeJwtPayload: 1-part token returns empty object', () => {
+  const result = decodeJwtPayload('single-part-token');
+  assert.deepEqual(result, {});
 });
 
-test('flushStreamLines: normalises \\r\\n to single newline', () => {
-  const buf = 'line one\r\nline two\r\n';
-  const { lines, remaining } = flushStreamLines(buf);
-  assert.equal(remaining, '');
-  assert.deepEqual(lines, ['line one', 'line two']);
+test('decodeJwtPayload: JWT with nested OpenAI auth claim', () => {
+  const payload = {
+    sub: 'user123',
+    'https://api.openai.com/auth': {
+      user_id: 'user-abc',
+    },
+  };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const token = `header.${encoded}.signature`;
+  const result = decodeJwtPayload(token);
+  assert.deepEqual(result['https://api.openai.com/auth'], { user_id: 'user-abc' });
 });
 
-test('flushStreamLines: holds incomplete segment in remaining', () => {
-  const buf = 'complete line\nstill coming';
-  const { lines, remaining } = flushStreamLines(buf);
-  assert.deepEqual(lines, ['complete line']);
-  assert.equal(remaining, 'still coming');
+// ─── parseClaudeSetupToken ────────────────────────────────────────────────────
+
+test('parseClaudeSetupToken: valid sk-ant-xxx accepted', () => {
+  const token = 'sk-ant-abc123_DEF-456';
+  assert.equal(parseClaudeSetupToken(token), token);
 });
 
-test('flushStreamLines: accumulating chunks yields same result as one chunk', () => {
-  // Simulate data arriving in two chunks mid-animation-frame
-  const chunk1 = '│ Y\r│ Yo\r';
-  const chunk2 = '│ You\r│ Your URL: https://auth.example.com\n';
-
-  // Chunk 1 alone: no complete \n-terminated line yet
-  const r1 = flushStreamLines(chunk1);
-  assert.deepEqual(r1.lines, []);
-  assert.equal(r1.remaining, '│ Y\r│ Yo\r');
-
-  // Chunk 2 appended to remaining: yields only the final frame
-  const r2 = flushStreamLines(r1.remaining + chunk2);
-  assert.equal(r2.lines.length, 1);
-  assert.equal(r2.lines[0], '│ Your URL: https://auth.example.com');
-  assert.equal(r2.remaining, '');
+test('parseClaudeSetupToken: whitespace trimmed', () => {
+  const token = '  sk-ant-abc123  ';
+  assert.equal(parseClaudeSetupToken(token), 'sk-ant-abc123');
 });
 
-test('flushStreamLines: multiple \\n-terminated lines processed independently', () => {
-  // Two different lines, each with animation frames
-  const buf = '⠋ Loading...\r⠙ Loading...\r Done!\nEnter code: \r\n';
-  const { lines } = flushStreamLines(buf);
-  assert.deepEqual(lines, [' Done!', 'Enter code: ']);
+test('parseClaudeSetupToken: invalid format sk-abc returns null', () => {
+  assert.equal(parseClaudeSetupToken('sk-abc'), null);
 });
 
-test('flushStreamLines: empty buffer returns no lines', () => {
-  const { lines, remaining } = flushStreamLines('');
-  assert.deepEqual(lines, []);
-  assert.equal(remaining, '');
+test('parseClaudeSetupToken: empty string returns null', () => {
+  assert.equal(parseClaudeSetupToken(''), null);
+});
+
+test('parseClaudeSetupToken: special chars return null', () => {
+  assert.equal(parseClaudeSetupToken('sk-ant-abc!@#'), null);
+});
+
+// ─── buildCodexAuthProfile ────────────────────────────────────────────────────
+
+test('buildCodexAuthProfile: correct ZeroClaw schema with email', () => {
+  const profile = {
+    email: 'user@example.com',
+    access: 'access-token',
+    refresh: 'refresh-token',
+    expires: 1234567890,
+    accountId: 'acct-123',
+  };
+  const result = buildCodexAuthProfile(profile);
+  assert.equal(result.schema_version, 1);
+  assert.ok(result.updated_at);
+  const profileId = 'openai-codex:user@example.com';
+  assert.deepEqual(result.active_profiles, { 'openai-codex': profileId });
+  assert.ok(result.profiles[profileId]);
+  assert.equal(result.profiles[profileId].kind, 'oauth');
+  assert.equal(result.profiles[profileId].provider, 'openai-codex');
+  assert.equal(result.profiles[profileId].profile_name, 'user@example.com');
+  assert.equal(result.profiles[profileId].access_token, 'access-token');
+  assert.equal(result.profiles[profileId].refresh_token, 'refresh-token');
+  assert.ok(result.profiles[profileId].expires_at);
+  assert.equal(result.profiles[profileId].account_id, 'acct-123');
+});
+
+test('buildCodexAuthProfile: default profileId without email', () => {
+  const profile = { access: 'tok', refresh: 'ref', expires: 0 };
+  const result = buildCodexAuthProfile(profile);
+  assert.ok(result.profiles['openai-codex:default']);
+  assert.equal(result.profiles['openai-codex:default'].profile_name, 'default');
+});
+
+// ─── buildAnthropicAuthProfile ────────────────────────────────────────────────
+
+test('buildAnthropicAuthProfile: correct ZeroClaw schema', () => {
+  const result = buildAnthropicAuthProfile('sk-ant-test-token');
+  assert.equal(result.schema_version, 1);
+  assert.ok(result.updated_at);
+  assert.ok(result.profiles['anthropic:default']);
+  assert.equal(result.profiles['anthropic:default'].kind, 'token');
+  assert.equal(result.profiles['anthropic:default'].provider, 'anthropic');
+  assert.equal(result.profiles['anthropic:default'].profile_name, 'default');
+  assert.equal(result.profiles['anthropic:default'].token, 'sk-ant-test-token');
+});
+
+test('buildAnthropicAuthProfile: active_profiles has anthropic key', () => {
+  const result = buildAnthropicAuthProfile('sk-ant-test');
+  assert.deepEqual(result.active_profiles, { anthropic: 'anthropic:default' });
+});
+
+// ─── generatePKCE ─────────────────────────────────────────────────────────────
+
+test('generatePKCE: returns verifier and challenge strings', () => {
+  const pkce = generatePKCE();
+  assert.equal(typeof pkce.verifier, 'string');
+  assert.equal(typeof pkce.challenge, 'string');
+  assert.ok(pkce.verifier.length > 0);
+  assert.ok(pkce.challenge.length > 0);
+});
+
+test('generatePKCE: challenge is sha256 of verifier', () => {
+  const pkce = generatePKCE();
+  const expected = crypto.createHash('sha256').update(pkce.verifier).digest('base64url');
+  assert.equal(pkce.challenge, expected);
+});
+
+test('generatePKCE: unique each call', () => {
+  const a = generatePKCE();
+  const b = generatePKCE();
+  assert.notEqual(a.verifier, b.verifier);
+  assert.notEqual(a.challenge, b.challenge);
+});
+
+// ─── buildOAuthUrl ────────────────────────────────────────────────────────────
+
+test('buildOAuthUrl: URL includes response_type=code', () => {
+  const pkce = generatePKCE();
+  const url = buildOAuthUrl(pkce, 'test-state');
+  assert.ok(url.includes('response_type=code'));
+});
+
+test('buildOAuthUrl: URL includes code_challenge', () => {
+  const pkce = generatePKCE();
+  const url = buildOAuthUrl(pkce, 'test-state');
+  assert.ok(url.includes(`code_challenge=${encodeURIComponent(pkce.challenge)}`));
+});
+
+test('buildOAuthUrl: URL includes state', () => {
+  const pkce = generatePKCE();
+  const url = buildOAuthUrl(pkce, 'my-state-value');
+  assert.ok(url.includes('state=my-state-value'));
+});
+
+test('buildOAuthUrl: URL includes client_id', () => {
+  const pkce = generatePKCE();
+  const url = buildOAuthUrl(pkce, 'state');
+  assert.ok(url.includes('client_id='));
 });

@@ -1,0 +1,194 @@
+{
+  "case": "remember-fact",
+  "run": 1,
+  "passRate": 1,
+  "passed": 4,
+  "total": 4,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "vault_write_note"
+      },
+      "pass": true,
+      "reason": "Tool \"vault_write_note\" was called"
+    },
+    {
+      "assertion": {
+        "type": "param_match",
+        "tool": "vault_write_note",
+        "key": "type",
+        "pattern": "fact|preference"
+      },
+      "pass": true,
+      "reason": "Param \"type\" on \"vault_write_note\" matched /fact|preference/"
+    },
+    {
+      "assertion": {
+        "type": "vault_note_created",
+        "pattern": "alerg|mani|peanut"
+      },
+      "pass": true,
+      "reason": "A created vault note matched /alerg|mani|peanut/i"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(guardé|guardado|saved|anotado|alérgico|maní)/"
+    }
+  ],
+  "judgeResults": null,
+  "response": "Guardado como `alergia-al-mani`.Lo tengo presente: sos alérgico al maní.\n\nYa existía una nota previa: `tomas-alergia-mani`. Además quedó creada una duplicada: `alergia-al-mani`. Si querés, después elimino la duplicada.",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Acordate que soy alérgico al maní",
+      "response": "Guardado como `alergia-al-mani`.Lo tengo presente: sos alérgico al maní.\n\nYa existía una nota previa: `tomas-alergia-mani`. Además quedó creada una duplicada: `alergia-al-mani`. Si querés, después elimino la duplicada.",
+      "latencyMs": 16343,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "alergia maní Tomas alérgico maní"
+          },
+          "timestamp": "2026-04-01T18:35:16.732Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T18:35:16.734Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "Tomas es alérgico al maní.\n\nContexto: dato compartido por Tomas para recordarlo en futuras conversaciones.",
+            "description": "Tomas es alérgico al maní.",
+            "id": "alergia-al-mani",
+            "title": "Alergia al maní",
+            "type": "fact"
+          },
+          "timestamp": "2026-04-01T18:35:16.737Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T18:35:16.740Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "tool_called",
+          "tool": "vault_write_note"
+        },
+        {
+          "type": "param_match",
+          "tool": "vault_write_note",
+          "key": "type",
+          "pattern": "fact|preference"
+        },
+        {
+          "type": "vault_note_created",
+          "pattern": "alerg|mani|peanut"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "fact|preference"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /fact|preference/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "alerg|mani|peanut"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /alerg|mani|peanut/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardé|guardado|saved|anotado|alérgico|maní)/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 1,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 4,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "alergia maní Tomas alérgico maní"
+      },
+      "timestamp": "2026-04-01T18:35:16.732Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T18:35:16.734Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_write_note",
+      "params": {
+        "content": "Tomas es alérgico al maní.\n\nContexto: dato compartido por Tomas para recordarlo en futuras conversaciones.",
+        "description": "Tomas es alérgico al maní.",
+        "id": "alergia-al-mani",
+        "title": "Alergia al maní",
+        "type": "fact"
+      },
+      "timestamp": "2026-04-01T18:35:16.737Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_write_note",
+      "success": true,
+      "timestamp": "2026-04-01T18:35:16.740Z"
+    }
+  ],
+  "searchTimeMs": 2,
+  "latencyMs": 16343,
+  "timestamp": "2026-04-01T18:35:23.229Z"
+}

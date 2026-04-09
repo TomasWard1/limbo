@@ -1,0 +1,56 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "${OPENCLAW_STATE_DIR}/workspace",
+      "model": {
+        "primary": "${MODEL_PROVIDER}/${MODEL_NAME}"
+      },
+      "sandbox": {
+        "mode": "off"
+      },
+      "thinkingDefault": "${RUNTIME_REASONING_EFFORT}"
+    }
+  },
+
+  "channels": {},
+
+  "cron": {
+    "enabled": true,
+    "store": "${OPENCLAW_STATE_DIR}/cron/cron.json",
+    "maxConcurrentRuns": 2
+  },
+
+  "gateway": {
+    "mode": "local",
+    "port": ${LIMBO_PORT},
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": ""
+    }
+  },
+
+  "tools": {
+    "profile": "full",
+    "exec": {
+      "timeoutSec": 1800
+    }
+  },
+
+  "mcp": {
+    "servers": {
+      "limbo-vault": {
+        "command": "node",
+        "args": ["/app/mcp-server/index.js"],
+        "env": {
+          "VAULT_PATH": "/data/vault",
+          "DB_PATH": "/data/db",
+          "OPENCLAW_STATE_DIR": "${OPENCLAW_STATE_DIR}",
+          "OPENCLAW_WORKSPACE_DIR": "${OPENCLAW_STATE_DIR}/workspace"
+        }
+      }
+    }
+  },
+
+  "env": {}
+}

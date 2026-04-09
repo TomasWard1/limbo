@@ -1,10 +1,11 @@
 {
   "name": "limbo-ai",
-  "version": "1.20.2",
+  "version": "1.26.0",
   "description": "Your personal AI memory agent — install and manage Limbo via npx",
   "type": "commonjs",
   "bin": {
-    "limbo": "cli.js"
+    "limbo": "cli.js",
+    "limbo-eval": "evals/cli.js"
   },
   "engines": {
     "node": ">=18"
@@ -12,16 +13,19 @@
   "dependencies": {
     "@clack/prompts": "^1.1.0"
   },
+  "devDependencies": {
+    "better-sqlite3": "^12.8.0"
+  },
   "scripts": {
     "start": "node cli.js start",
-    "test": "node --test test/cli-filter.test.js test/zeroclaw-migration.test.js"
+    "test": "node --test test/cli-filter.test.js test/cli-auth.test.js test/cli-compose.test.js test/openclaw-migration.test.js test/setup-server.test.js test/cli-wizard-parity.test.js test/fts.test.js test/sanitize-control-chars.test.js test/mcp-tools.test.js test/entrypoint.test.js",
+    "postinstall": "[ -d mcp-server ] && cd mcp-server && npm install --ignore-scripts && cd node_modules/better-sqlite3 && npx node-gyp rebuild --release 2>/dev/null || true"
   },
   "keywords": [
     "limbo",
     "ai",
     "memory",
     "agent",
-    "zeroclaw",
     "openclaw",
     "personal"
   ],
@@ -29,5 +33,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TomasWard1/limbo.git"
+  },
+  "devDependencies": {
+    "promptfoo": "^0.121.3"
   }
 }

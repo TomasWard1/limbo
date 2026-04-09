@@ -1,0 +1,228 @@
+{
+  "case": "medium-person-multiple-facts",
+  "run": 1,
+  "passRate": 1,
+  "passed": 5,
+  "total": 5,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "vault_write_note"
+      },
+      "pass": true,
+      "reason": "Tool \"vault_write_note\" was called"
+    },
+    {
+      "assertion": {
+        "type": "param_match",
+        "tool": "vault_write_note",
+        "key": "type",
+        "pattern": "person"
+      },
+      "pass": true,
+      "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+    },
+    {
+      "assertion": {
+        "type": "vault_note_created",
+        "pattern": "(?i)carlos"
+      },
+      "pass": true,
+      "reason": "A created vault note matched /(?i)carlos/i"
+    },
+    {
+      "assertion": {
+        "type": "vault_note_created",
+        "pattern": "(?i)ingeniero|engineer"
+      },
+      "pass": true,
+      "reason": "A created vault note matched /(?i)ingeniero|engineer/i"
+    },
+    {
+      "assertion": {
+        "type": "vault_note_created",
+        "pattern": "(?i)c[oó]rdoba"
+      },
+      "pass": true,
+      "reason": "A created vault note matched /(?i)c[oó]rdoba/i"
+    }
+  ],
+  "judgeResults": null,
+  "response": "<tool_result>\n{\"results\":[{\"name\":\"limbo-vault__vault_search\",\"description\":\"Search notes in the vault by keyword query. Recursively searches all subdirectories. Returns matching notes with titles, snippets, relevance scores, and domain (subdirectory).\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Keyword query to search note titles, descriptions, and content. Supports regex patterns.\"}},\"required\":[\"query\"]}},{\"name\":\"limbo-vault__vault_read\",\"description",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Mi viejo se llama Carlos, es ingeniero y vive en Córdoba",
+      "response": "<tool_result>\n{\"results\":[{\"name\":\"limbo-vault__vault_search\",\"description\":\"Search notes in the vault by keyword query. Recursively searches all subdirectories. Returns matching notes with titles, snippets, relevance scores, and domain (subdirectory).\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Keyword query to search note titles, descriptions, and content. Supports regex patterns.\"}},\"required\":[\"query\"]}},{\"name\":\"limbo-vault__vault_read\",\"description\":\"Read the full content of a vault note by ID. Searches recursively through subdirectories. Returns raw markdown including YAML frontmatter.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"noteId\":{\"type\":\"string\",\"description\":\"The note filename without .md extension\"}},\"required\":[\"noteId\"]}},{\"name\":\"limbo-vault__vault_write_note\",\"description\":\"Create or overwrite a vault note with YAML frontmatter. Supports subdirectory organization — creates the subdirectory if it doesn't exist.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Unique note ID (filename without .md), e.g. 'meeting-with-alex-2026-03-10' or 'persona-juan-perez'\"},\"title\":{\"type\":\"string\",\"description\":\"Human-readable title\"},\"type\":{\"type\":\"string\",\"description\":\"Note type\",\"enum\":[\"fact\",\"preference\",\"person\",\"event\",\"project\",\"decision\",\"idea\",\"question\",\"source\",\"insight\"]},\"description\":{\"type\":\"string\",\"description\":\"One-sentence summary for search and context\"},\"content\":{\"type\":\"string\",\"description\":\"Markdown body content\"},\"subdirectory\":{\"type\":\"string\",\"description\":\"Optional subdirectory under vault/notes/, e.g. 'people', 'projects', 'ideas'\"},\"status\":{\"type\":\"string\",\"description\":\"Optional status field\"},\"domain\":{\"type\":\"string\",\"description\":\"Optional domain/category\"},\"source\":{\"type\":\"string\",\"description\":\"Optional source of the information\"},\"topics\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Optional list of topics/tags\"}},\"required\":[\"id\",\"title\",\"type\",\"description\",\"content\"]}}]}\n</tool_result>\n<tool_result>\n{\"matches\":[]}\n</tool_result>\n<tool_result>\n{\"success\":true,\"note\":{\"id\":\"persona-carlos-padre-de-tomas\",\"path\":\"people/persona-carlos-padre-de-tomas.md\"}}\n</tool_result>Guardado como `persona-carlos-padre-de-tomas`.Guardado como `persona-carlos-padre-de-tomas`.",
+      "latencyMs": 19990,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Carlos ingeniero Córdoba viejo padre"
+          },
+          "timestamp": "2026-04-01T18:33:39.385Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T18:33:39.387Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "Carlos es el padre de Tomas.\n\n- Profesión: ingeniero\n- Vive en: Córdoba\n\nContexto: Tomas dijo \"Mi viejo se llama Carlos, es ingeniero y vive en Córdoba\" el 2026-04-01.",
+            "description": "Carlos es el padre de Tomas, ingeniero, y vive en Córdoba.",
+            "id": "persona-carlos-padre-de-tomas",
+            "subdirectory": "people",
+            "title": "Carlos",
+            "topics": [
+              "familia",
+              "carlos",
+              "córdoba",
+              "ingeniería"
+            ],
+            "type": "person"
+          },
+          "timestamp": "2026-04-01T18:33:39.389Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T18:33:39.392Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "tool_called",
+          "tool": "vault_write_note"
+        },
+        {
+          "type": "param_match",
+          "tool": "vault_write_note",
+          "key": "type",
+          "pattern": "person"
+        },
+        {
+          "type": "vault_note_created",
+          "pattern": "(?i)carlos"
+        },
+        {
+          "type": "vault_note_created",
+          "pattern": "(?i)ingeniero|engineer"
+        },
+        {
+          "type": "vault_note_created",
+          "pattern": "(?i)c[oó]rdoba"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "person"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)carlos"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)carlos/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)ingeniero|engineer"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)ingeniero|engineer/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)c[oó]rdoba"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)c[oó]rdoba/i"
+        }
+      ],
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 1,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 4,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "Carlos ingeniero Córdoba viejo padre"
+      },
+      "timestamp": "2026-04-01T18:33:39.385Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T18:33:39.387Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_write_note",
+      "params": {
+        "content": "Carlos es el padre de Tomas.\n\n- Profesión: ingeniero\n- Vive en: Córdoba\n\nContexto: Tomas dijo \"Mi viejo se llama Carlos, es ingeniero y vive en Córdoba\" el 2026-04-01.",
+        "description": "Carlos es el padre de Tomas, ingeniero, y vive en Córdoba.",
+        "id": "persona-carlos-padre-de-tomas",
+        "subdirectory": "people",
+        "title": "Carlos",
+        "topics": [
+          "familia",
+          "carlos",
+          "córdoba",
+          "ingeniería"
+        ],
+        "type": "person"
+      },
+      "timestamp": "2026-04-01T18:33:39.389Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_write_note",
+      "success": true,
+      "timestamp": "2026-04-01T18:33:39.392Z"
+    }
+  ],
+  "searchTimeMs": 2,
+  "latencyMs": 19990,
+  "timestamp": "2026-04-01T18:33:41.708Z"
+}

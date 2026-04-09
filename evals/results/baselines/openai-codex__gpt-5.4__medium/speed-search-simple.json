@@ -1,0 +1,132 @@
+{
+  "case": "speed-search-simple",
+  "run": 1,
+  "passRate": 1,
+  "passed": 3,
+  "total": 3,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "vault_search"
+      },
+      "pass": true,
+      "reason": "Tool \"vault_search\" was called"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(carlos|ingeniero|córdoba|cordoba)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(carlos|ingeniero|córdoba|cordoba)/"
+    },
+    {
+      "assertion": {
+        "type": "latency_under",
+        "max_ms": 30000
+      },
+      "pass": true,
+      "reason": "Latency 10652ms <= 30000ms"
+    }
+  ],
+  "judgeResults": null,
+  "response": "No results found.Sé esto sobre Carlos:\n\n- Es el padre de Tomas.\n- Es ingeniero.\n- Vive en Córdoba.\n\nAparece en dos notas: `persona-carlos-padre` y `persona-carlos-ward`, y parecen referirse a la misma persona. Si querés, puedo consolidarlas.",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Qué sabés sobre Carlos?",
+      "response": "No results found.Sé esto sobre Carlos:\n\n- Es el padre de Tomas.\n- Es ingeniero.\n- Vive en Córdoba.\n\nAparece en dos notas: `persona-carlos-padre` y `persona-carlos-ward`, y parecen referirse a la misma persona. Si querés, puedo consolidarlas.",
+      "latencyMs": 10652,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Carlos"
+          },
+          "timestamp": "2026-04-01T18:39:18.781Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T18:39:18.782Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "tool_called",
+          "tool": "vault_search"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(carlos|ingeniero|córdoba|cordoba)"
+        },
+        {
+          "type": "latency_under",
+          "max_ms": 30000
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(carlos|ingeniero|córdoba|cordoba)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(carlos|ingeniero|córdoba|cordoba)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 10652ms <= 30000ms"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 2,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "Carlos"
+      },
+      "timestamp": "2026-04-01T18:39:18.781Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T18:39:18.782Z"
+    }
+  ],
+  "searchTimeMs": 1,
+  "latencyMs": 10652,
+  "timestamp": "2026-04-01T18:39:25.778Z"
+}

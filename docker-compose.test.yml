@@ -1,0 +1,36 @@
+# Local testing — setup persists across restarts.
+# Start:  docker compose -f docker-compose.test.yml up -d
+# Logs:   docker compose -f docker-compose.test.yml logs -f
+# Stop:   docker compose -f docker-compose.test.yml down
+# Reset:  docker compose -f docker-compose.test.yml down -v  (wipes setup)
+services:
+  limbo:
+    image: ${LIMBO_IMAGE:-ghcr.io/tomasward1/limbo:latest}
+    init: true
+    restart: "no"
+    ports:
+      - "127.0.0.1:18789:18789"
+    volumes:
+      - limbo-test-data:/data
+      - limbo-test-state:/home/limbo/.openclaw
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    tmpfs:
+      - /tmp:size=100M
+    mem_limit: 1g
+    memswap_limit: 1g
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:18789/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  limbo-test-data:
+    name: limbo-test-data
+  limbo-test-state:
+    name: limbo-test-state

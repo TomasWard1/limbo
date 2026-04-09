@@ -1,0 +1,4420 @@
+{
+  "id": "run-1775046132278",
+  "timestamp": "2026-04-01T12:31:06.000Z",
+  "meta": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "reasoningEffort": "medium",
+    "authMode": "subscription",
+    "zeroclawVersion": "0.6.5",
+    "profileKey": "anthropic__claude-sonnet-4-6__medium",
+    "profileLabel": "claude-sonnet-4-6 · medium · anthropic"
+  },
+  "kind": "full",
+  "scope": {
+    "case": null,
+    "tag": null,
+    "difficulty": null,
+    "judge": false
+  },
+  "results": [
+    {
+      "case": "create-recurring-reminder",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(timezone|huso horario|zona horaria)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(timezone|huso horario|zona horaria)/"
+        },
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "agua|water|tomar",
+            "timezone": "America/Buenos_Aires",
+            "local_hour": 10,
+            "local_minute": 0
+          },
+          "pass": true,
+          "reason": "Cron job matched /agua|water|tomar/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(reminder|recordatorio|avisarte|programado|todos los días|diario|daily)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(reminder|recordatorio|avisarte|programado|todos los días|diario|daily)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Listo. Todos los días a las 10am (hora de Buenos Aires) te voy a recordar que tomes agua. 💧",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Recordame todos los días a las 10am que tengo que tomar agua",
+          "response": "Necesito tu zona horaria para crear el recordatorio a las 10am correctas. ¿Cuál es tu timezone? (por ejemplo: `America/Buenos_Aires`, `America/Mexico_City`, etc.)",
+          "latencyMs": 4576,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(timezone|huso horario|zona horaria)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(timezone|huso horario|zona horaria)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(timezone|huso horario|zona horaria)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        },
+        {
+          "index": 2,
+          "input": "America/Buenos_Aires",
+          "response": "Listo. Todos los días a las 10am (hora de Buenos Aires) te voy a recordar que tomes agua. 💧",
+          "latencyMs": 18704,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 2,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "workspace_write",
+              "params": {
+                "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+                "filename": "USER.md"
+              },
+              "timestamp": "2026-04-01T12:22:27.107Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "workspace_write",
+              "success": true,
+              "timestamp": "2026-04-01T12:22:27.109Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "cron_created",
+              "pattern": "agua|water|tomar",
+              "timezone": "America/Buenos_Aires",
+              "local_hour": 10,
+              "local_minute": 0
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(reminder|recordatorio|avisarte|programado|todos los días|diario|daily)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "cron_created",
+                "pattern": "agua|water|tomar",
+                "timezone": "America/Buenos_Aires",
+                "local_hour": 10,
+                "local_minute": 0
+              },
+              "pass": true,
+              "reason": "Cron job matched /agua|water|tomar/i"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(reminder|recordatorio|avisarte|programado|todos los días|diario|daily)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(reminder|recordatorio|avisarte|programado|todos los días|diario|daily)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": [
+            {
+              "id": "81affcc2-cd70-4276-9c37-f434af625daa",
+              "schedule": "Cron { expr: \"0 10 * * *\", tz: Some(\"America/Buenos_Aires\") } | next=2026-04-01T13:00:00+00:00 | last=never (n/a)"
+            }
+          ]
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "workspace_write",
+          "params": {
+            "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+            "filename": "USER.md"
+          },
+          "timestamp": "2026-04-01T12:22:27.107Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "workspace_write",
+          "success": true,
+          "timestamp": "2026-04-01T12:22:27.109Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 23280,
+      "timestamp": "2026-04-01T12:22:37.580Z"
+    },
+    {
+      "case": "create-reminder",
+      "run": 1,
+      "passRate": 1,
+      "passed": 4,
+      "total": 4,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(timezone|huso horario|zona horaria)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(timezone|huso horario|zona horaria)/"
+        },
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "banco|bank",
+            "timezone": "America/Buenos_Aires",
+            "local_hour": 9,
+            "local_minute": 0
+          },
+          "pass": true,
+          "reason": "Cron matched \"banco|bank\" and resolves to 9:00 in America/Buenos_Aires"
+        },
+        {
+          "assertion": {
+            "type": "user_profile_matches",
+            "pattern": "Timezone:\\*\\*\\s*America/Buenos_Aires"
+          },
+          "pass": true,
+          "reason": "USER.md matched /Timezone:\\*\\*\\s*America/Buenos_Aires/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(reminder|recordatorio|avisarte|programado|mañana)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(reminder|recordatorio|avisarte|programado|mañana)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Mañana 2 de abril a las 9:00 AM en Buenos Aires son las 12:00 UTC. Creando el recordatorio...Listo. Te recuerdo mañana **2 de abril a las 9:00 AM (Buenos Aires)** que tenés que llamar al banco.",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Recordame mañana a las 9am que tengo que llamar al banco",
+          "response": "Tu timezone no está configurada en USER.md. ¿En qué zona horaria estás?",
+          "latencyMs": 6736,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(timezone|huso horario|zona horaria)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(timezone|huso horario|zona horaria)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(timezone|huso horario|zona horaria)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        },
+        {
+          "index": 2,
+          "input": "Estoy en America/Buenos_Aires",
+          "response": "Mañana 2 de abril a las 9:00 AM en Buenos Aires son las 12:00 UTC. Creando el recordatorio...Listo. Te recuerdo mañana **2 de abril a las 9:00 AM (Buenos Aires)** que tenés que llamar al banco.",
+          "latencyMs": 32751,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "workspace_read",
+              "params": {
+                "filename": "USER.md"
+              },
+              "timestamp": "2026-04-01T12:22:54.137Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "workspace_read",
+              "success": true,
+              "timestamp": "2026-04-01T12:22:54.139Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "workspace_write",
+              "params": {
+                "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+                "filename": "USER.md"
+              },
+              "timestamp": "2026-04-01T12:23:10.411Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "workspace_write",
+              "success": true,
+              "timestamp": "2026-04-01T12:23:10.413Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "cron_created",
+              "pattern": "banco|bank",
+              "timezone": "America/Buenos_Aires",
+              "local_hour": 9,
+              "local_minute": 0
+            },
+            {
+              "type": "user_profile_matches",
+              "pattern": "Timezone:\\*\\*\\s*America/Buenos_Aires"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(reminder|recordatorio|avisarte|programado|mañana)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "cron_created",
+                "pattern": "banco|bank",
+                "timezone": "America/Buenos_Aires",
+                "local_hour": 9,
+                "local_minute": 0
+              },
+              "pass": true,
+              "reason": "Cron matched \"banco|bank\" and resolves to 9:00 in America/Buenos_Aires"
+            },
+            {
+              "assertion": {
+                "type": "user_profile_matches",
+                "pattern": "Timezone:\\*\\*\\s*America/Buenos_Aires"
+              },
+              "pass": true,
+              "reason": "USER.md matched /Timezone:\\*\\*\\s*America/Buenos_Aires/i"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(reminder|recordatorio|avisarte|programado|mañana)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(reminder|recordatorio|avisarte|programado|mañana)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": [
+            {
+              "id": "c0051c4b-1909-4d53-8c66-fbe4eb39bdb9",
+              "schedule": "At { at: 2026-04-02T12:00:00Z } | next=2026-04-02T12:00:00+00:00 | last=never (n/a)"
+            }
+          ]
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "workspace_read",
+          "params": {
+            "filename": "USER.md"
+          },
+          "timestamp": "2026-04-01T12:22:54.137Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "workspace_read",
+          "success": true,
+          "timestamp": "2026-04-01T12:22:54.139Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "workspace_write",
+          "params": {
+            "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+            "filename": "USER.md"
+          },
+          "timestamp": "2026-04-01T12:23:10.411Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "workspace_write",
+          "success": true,
+          "timestamp": "2026-04-01T12:23:10.413Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 39487,
+      "timestamp": "2026-04-01T12:23:19.369Z"
+    },
+    {
+      "case": "get-file",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_get_file"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_get_file\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(logo|imagen|image|png|archivo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(logo|imagen|image|png|archivo)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "El archivo es una imagen PNG (`eval-test-logo.png`), pero los datos devueltos corresponden a un PNG de 1×1 píxel — parece un archivo de prueba/placeholder, no una imagen real con contenido visible.\n\n¿Querés que te muestre igual la imagen o creés que puede haberse guardado con datos incorrectos?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Mostrame el archivo de la nota eval-seed-logo",
+          "response": "El archivo es una imagen PNG (`eval-test-logo.png`), pero los datos devueltos corresponden a un PNG de 1×1 píxel — parece un archivo de prueba/placeholder, no una imagen real con contenido visible.\n\n¿Querés que te muestre igual la imagen o creés que puede haberse guardado con datos incorrectos?",
+          "latencyMs": 11399,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 2,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_get_file",
+              "params": {
+                "noteId": "eval-seed-logo"
+              },
+              "timestamp": "2026-04-01T12:23:26.342Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_get_file",
+              "success": true,
+              "timestamp": "2026-04-01T12:23:26.345Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_get_file"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(logo|imagen|image|png|archivo)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_get_file"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_get_file\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(logo|imagen|image|png|archivo)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(logo|imagen|image|png|archivo)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_get_file",
+          "params": {
+            "noteId": "eval-seed-logo"
+          },
+          "timestamp": "2026-04-01T12:23:26.342Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_get_file",
+          "success": true,
+          "timestamp": "2026-04-01T12:23:26.345Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 11399,
+      "timestamp": "2026-04-01T12:23:32.245Z"
+    },
+    {
+      "case": "hard-ambiguous-request",
+      "run": 1,
+      "passRate": 1,
+      "passed": 1,
+      "total": 1,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Claro, pero no veo ningún contenido adjunto en tu mensaje. ¿Qué querés que guarde?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Guardate esto para después",
+          "response": "Claro, pero no veo ningún contenido adjunto en tu mensaje. ¿Qué querés que guarde?",
+          "latencyMs": 3404,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 3404,
+      "timestamp": "2026-04-01T12:23:37.028Z"
+    },
+    {
+      "case": "hard-complex-note",
+      "run": 1,
+      "passRate": 1,
+      "passed": 6,
+      "total": 6,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "decision|insight|meeting|project"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /decision|insight|meeting|project/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)laura"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)laura/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)kubernetes|k8s"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)kubernetes|k8s/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)(no vale la pena|not worth|scale)"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)(no vale la pena|not worth|scale)/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)(revisar|review|números|numbers|semana)"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)(revisar|review|números|numbers|semana)/i"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado en dos notas:\n\n- `persona-laura` — contacto nuevo, vinculado a la discusión.\n- `decision-kubernetes-migracion-2026-03-31` — posturas enfrentadas, con el pendiente de revisar números la semana del 7 de abril.\n\n¿Querés que te recuerde hacer esa revisión en algún momento de la semana?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Ayer hablé con Laura del tema de migrar a Kubernetes. Ella dice que no vale la pena para nuestro scale, yo creo que sí. Quedamos en revisar los números la semana que viene.",
+          "response": "Guardado en dos notas:\n\n- `persona-laura` — contacto nuevo, vinculado a la discusión.\n- `decision-kubernetes-migracion-2026-03-31` — posturas enfrentadas, con el pendiente de revisar números la semana del 7 de abril.\n\n¿Querés que te recuerde hacer esa revisión en algún momento de la semana?",
+          "latencyMs": 25046,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 8,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Laura"
+              },
+              "timestamp": "2026-04-01T12:23:44.165Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:23:44.167Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Kubernetes migración"
+              },
+              "timestamp": "2026-04-01T12:23:44.170Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:23:44.171Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Laura\n\nColega de Tomas. Han hablado sobre decisiones técnicas de infraestructura.\n\n### Interacciones\n\n- **2026-03-31** — Conversación sobre migrar a Kubernetes. Laura opina que no vale la pena para el scale actual. Ver [[decision-kubernetes-migracion-2026-03-31]].",
+                "description": "Laura es una colega de Tomas con quien discute decisiones técnicas de infraestructura.",
+                "id": "persona-laura",
+                "title": "Laura",
+                "topics": [
+                  "[[decision-kubernetes-migracion-2026-03-31]]"
+                ],
+                "type": "person"
+              },
+              "timestamp": "2026-04-01T12:23:58.595Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:23:58.602Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Migración a Kubernetes\n\n**Fecha de la conversación:** 2026-03-31  \n**Participantes:** Tomas, [[persona-laura|Laura]]\n\n### Posturas\n\n- **Laura:** No vale la pena para el scale actual.\n- **Tomas:** Cree que sí vale la pena.\n\n### Próximo paso\n\nRevisar los números juntos la semana del 2026-04-07 (semana siguiente a la conversación).\n\n### Estado\n\nPendiente de revisión — sin decisión tomada aún.",
+                "description": "Tomas y Laura tienen posturas opuestas sobre si migrar a Kubernetes vale la pena dado el scale actual; acordaron revisar números la semana del 2026-04-07.",
+                "id": "decision-kubernetes-migracion-2026-03-31",
+                "title": "Debate migración a Kubernetes",
+                "topics": [
+                  "[[persona-laura]]"
+                ],
+                "type": "decision"
+              },
+              "timestamp": "2026-04-01T12:23:58.604Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:23:58.608Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_write_note"
+            },
+            {
+              "type": "param_match",
+              "tool": "vault_write_note",
+              "key": "type",
+              "pattern": "decision|insight|meeting|project"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)laura"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)kubernetes|k8s"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)(no vale la pena|not worth|scale)"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)(revisar|review|números|numbers|semana)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_write_note"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_write_note\" was called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "vault_write_note",
+                "key": "type",
+                "pattern": "decision|insight|meeting|project"
+              },
+              "pass": true,
+              "reason": "Param \"type\" on \"vault_write_note\" matched /decision|insight|meeting|project/"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)laura"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)laura/i"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)kubernetes|k8s"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)kubernetes|k8s/i"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)(no vale la pena|not worth|scale)"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)(no vale la pena|not worth|scale)/i"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)(revisar|review|números|numbers|semana)"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)(revisar|review|números|numbers|semana)/i"
+            }
+          ],
+          "vaultDiff": {
+            "created": 2,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 2,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 8,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Laura"
+          },
+          "timestamp": "2026-04-01T12:23:44.165Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:23:44.167Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Kubernetes migración"
+          },
+          "timestamp": "2026-04-01T12:23:44.170Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:23:44.171Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Laura\n\nColega de Tomas. Han hablado sobre decisiones técnicas de infraestructura.\n\n### Interacciones\n\n- **2026-03-31** — Conversación sobre migrar a Kubernetes. Laura opina que no vale la pena para el scale actual. Ver [[decision-kubernetes-migracion-2026-03-31]].",
+            "description": "Laura es una colega de Tomas con quien discute decisiones técnicas de infraestructura.",
+            "id": "persona-laura",
+            "title": "Laura",
+            "topics": [
+              "[[decision-kubernetes-migracion-2026-03-31]]"
+            ],
+            "type": "person"
+          },
+          "timestamp": "2026-04-01T12:23:58.595Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:23:58.602Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Migración a Kubernetes\n\n**Fecha de la conversación:** 2026-03-31  \n**Participantes:** Tomas, [[persona-laura|Laura]]\n\n### Posturas\n\n- **Laura:** No vale la pena para el scale actual.\n- **Tomas:** Cree que sí vale la pena.\n\n### Próximo paso\n\nRevisar los números juntos la semana del 2026-04-07 (semana siguiente a la conversación).\n\n### Estado\n\nPendiente de revisión — sin decisión tomada aún.",
+            "description": "Tomas y Laura tienen posturas opuestas sobre si migrar a Kubernetes vale la pena dado el scale actual; acordaron revisar números la semana del 2026-04-07.",
+            "id": "decision-kubernetes-migracion-2026-03-31",
+            "title": "Debate migración a Kubernetes",
+            "topics": [
+              "[[persona-laura]]"
+            ],
+            "type": "decision"
+          },
+          "timestamp": "2026-04-01T12:23:58.604Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:23:58.608Z"
+        }
+      ],
+      "searchTimeMs": 3,
+      "latencyMs": 25046,
+      "timestamp": "2026-04-01T12:24:03.455Z"
+    },
+    {
+      "case": "hard-synthesize-knowledge",
+      "run": 1,
+      "passRate": 0.875,
+      "passed": 7,
+      "total": 8,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)mart[ií]n"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)mart[ií]n/i"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)sof[ií]a"
+          },
+          "pass": false,
+          "reason": "No created vault note matched /(?i)sof[ií]a/i"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)mart[ií]n"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)mart[ií]n/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)sof[ií]a"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)sof[ií]a/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(mercado libre|globant)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(mercado libre|globant)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "El vault no devuelve resultados — parece que las notas de Martín y Sofía no quedaron guardadas en sesiones anteriores. Déjame crearlas ahora.Las notas no estaban persistidas, así que las guardé ahora. Esto es lo que tengo:\n\n**Martín** (`persona-martin`)\n- Diseñador UX en Mercado Libre\n\n**Sofía** (`persona-sofia`)\n- Data scientist en Globant\n- La conocés del secundario",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Acordate que Martín es diseñador UX y trabaja en Mercado Libre",
+          "response": "Guardado como `persona-martin`. Martín: diseñador UX en Mercado Libre.",
+          "latencyMs": 24731,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Martín diseñador UX Mercado Libre"
+              },
+              "timestamp": "2026-04-01T12:24:11.880Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:24:11.882Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Martín\n\n- **Rol:** Diseñador UX\n- **Empresa:** Mercado Libre",
+                "description": "Martín es diseñador UX y trabaja en Mercado Libre.",
+                "id": "persona-martin",
+                "subdirectory": "personas",
+                "title": "Martín",
+                "type": "person"
+              },
+              "timestamp": "2026-04-01T12:24:25.813Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:24:25.816Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_write_note"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)mart[ií]n"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_write_note"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_write_note\" was called"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)mart[ií]n"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)mart[ií]n/i"
+            }
+          ],
+          "vaultDiff": {
+            "created": 1,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        },
+        {
+          "index": 2,
+          "input": "Guardá que Sofía es data scientist en Globant y la conozco del secundario",
+          "response": "Ya existe una nota. La actualizo con la info completa.Guardado como `persona-sofia-globant`. Sofía: data scientist en Globant, conocida del secundario.",
+          "latencyMs": 19209,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Sofía Globant"
+              },
+              "timestamp": "2026-04-01T12:24:36.603Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:24:36.606Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Sofía\n\n- **Rol:** Data scientist\n- **Empresa:** Globant\n- **Contexto:** Conocida desde el secundario",
+                "description": "Sofía es data scientist en Globant, conocida desde el secundario.",
+                "id": "persona-sofia-globant",
+                "title": "Sofía",
+                "type": "person"
+              },
+              "timestamp": "2026-04-01T12:24:41.430Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:24:41.435Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_write_note"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)sof[ií]a"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_write_note"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_write_note\" was called"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)sof[ií]a"
+              },
+              "pass": false,
+              "reason": "No created vault note matched /(?i)sof[ií]a/i"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 1,
+            "deleted": 0
+          },
+          "cronJobs": []
+        },
+        {
+          "index": 3,
+          "input": "Qué sabes de las personas que conozco?",
+          "response": "El vault no devuelve resultados — parece que las notas de Martín y Sofía no quedaron guardadas en sesiones anteriores. Déjame crearlas ahora.Las notas no estaban persistidas, así que las guardé ahora. Esto es lo que tengo:\n\n**Martín** (`persona-martin`)\n- Diseñador UX en Mercado Libre\n\n**Sofía** (`persona-sofia`)\n- Data scientist en Globant\n- La conocés del secundario",
+          "latencyMs": 23439,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 8,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "persona"
+              },
+              "timestamp": "2026-04-01T12:24:57.014Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:24:57.016Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Martín Sofía"
+              },
+              "timestamp": "2026-04-01T12:24:59.368Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:24:59.369Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Martín\n\n- **Rol:** Diseñador UX\n- **Empresa:** Mercado Libre\n",
+                "description": "Martín es diseñador UX y trabaja en Mercado Libre.",
+                "id": "persona-martin",
+                "subdirectory": "personas",
+                "title": "Martín",
+                "type": "person"
+              },
+              "timestamp": "2026-04-01T12:25:09.551Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:25:09.558Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Sofía\n\n- **Rol:** Data Scientist\n- **Empresa:** Globant\n- **Contexto:** Se conocen del secundario\n",
+                "description": "Sofía es data scientist en Globant, conocida del secundario de Tomas.",
+                "id": "persona-sofia",
+                "subdirectory": "personas",
+                "title": "Sofía",
+                "type": "person"
+              },
+              "timestamp": "2026-04-01T12:25:09.560Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:25:09.564Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_search"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)mart[ií]n"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)sof[ií]a"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(mercado libre|globant)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_search"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_search\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)mart[ií]n"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)mart[ií]n/"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)sof[ií]a"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)sof[ií]a/"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(mercado libre|globant)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(mercado libre|globant)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 1,
+            "modified": 1,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 1,
+        "modified": 1,
+        "deleted": 0
+      },
+      "mcpLogCount": 16,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Martín diseñador UX Mercado Libre"
+          },
+          "timestamp": "2026-04-01T12:24:11.880Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:24:11.882Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Martín\n\n- **Rol:** Diseñador UX\n- **Empresa:** Mercado Libre",
+            "description": "Martín es diseñador UX y trabaja en Mercado Libre.",
+            "id": "persona-martin",
+            "subdirectory": "personas",
+            "title": "Martín",
+            "type": "person"
+          },
+          "timestamp": "2026-04-01T12:24:25.813Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:24:25.816Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Sofía Globant"
+          },
+          "timestamp": "2026-04-01T12:24:36.603Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:24:36.606Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Sofía\n\n- **Rol:** Data scientist\n- **Empresa:** Globant\n- **Contexto:** Conocida desde el secundario",
+            "description": "Sofía es data scientist en Globant, conocida desde el secundario.",
+            "id": "persona-sofia-globant",
+            "title": "Sofía",
+            "type": "person"
+          },
+          "timestamp": "2026-04-01T12:24:41.430Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:24:41.435Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "persona"
+          },
+          "timestamp": "2026-04-01T12:24:57.014Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:24:57.016Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Martín Sofía"
+          },
+          "timestamp": "2026-04-01T12:24:59.368Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:24:59.369Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Martín\n\n- **Rol:** Diseñador UX\n- **Empresa:** Mercado Libre\n",
+            "description": "Martín es diseñador UX y trabaja en Mercado Libre.",
+            "id": "persona-martin",
+            "subdirectory": "personas",
+            "title": "Martín",
+            "type": "person"
+          },
+          "timestamp": "2026-04-01T12:25:09.551Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:25:09.558Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Sofía\n\n- **Rol:** Data Scientist\n- **Empresa:** Globant\n- **Contexto:** Se conocen del secundario\n",
+            "description": "Sofía es data scientist en Globant, conocida del secundario de Tomas.",
+            "id": "persona-sofia",
+            "subdirectory": "personas",
+            "title": "Sofía",
+            "type": "person"
+          },
+          "timestamp": "2026-04-01T12:25:09.560Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:25:09.564Z"
+        }
+      ],
+      "searchTimeMs": 8,
+      "latencyMs": 67379,
+      "timestamp": "2026-04-01T12:25:13.435Z"
+    },
+    {
+      "case": "medium-file-retrieval-implicit",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_get_file"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_get_file\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(logo|imagen|image|encontr)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(logo|imagen|image|encontr)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Sí, hay un logo guardado: **\"Company logo\"** (`eval-seed-logo`), un PNG. Acá está:\n\n![Company logo](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==)\n\nEs un PNG de 1×1 píxel — parece un archivo de prueba más que un logo real. ¿Es este o quizás tenés otro guardado con otro nombre?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Tenés guardado algún logo? Mostrámelo",
+          "response": "Sí, hay un logo guardado: **\"Company logo\"** (`eval-seed-logo`), un PNG. Acá está:\n\n![Company logo](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==)\n\nEs un PNG de 1×1 píxel — parece un archivo de prueba más que un logo real. ¿Es este o quizás tenés otro guardado con otro nombre?",
+          "latencyMs": 43241,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "logo"
+              },
+              "timestamp": "2026-04-01T12:25:45.209Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:25:45.211Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_get_file",
+              "params": {
+                "noteId": "eval-seed-logo"
+              },
+              "timestamp": "2026-04-01T12:25:50.547Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_get_file",
+              "success": true,
+              "timestamp": "2026-04-01T12:25:50.550Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_search"
+            },
+            {
+              "type": "tool_called",
+              "tool": "vault_get_file"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(logo|imagen|image|encontr)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_search"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_search\" was called"
+            },
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_get_file"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_get_file\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(logo|imagen|image|encontr)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(logo|imagen|image|encontr)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "logo"
+          },
+          "timestamp": "2026-04-01T12:25:45.209Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:25:45.211Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_get_file",
+          "params": {
+            "noteId": "eval-seed-logo"
+          },
+          "timestamp": "2026-04-01T12:25:50.547Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_get_file",
+          "success": true,
+          "timestamp": "2026-04-01T12:25:50.550Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 43241,
+      "timestamp": "2026-04-01T12:25:58.005Z"
+    },
+    {
+      "case": "medium-note-type-inference",
+      "run": 1,
+      "passRate": 1,
+      "passed": 5,
+      "total": 5,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "decision"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /decision/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)postgresql|postgres"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)postgresql|postgres/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)mongodb|mongo"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)mongodb|mongo/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardé|guardado|anotado|decisión|decision)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardé|guardado|anotado|decisión|decision)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado como `decision-postgresql-sobre-mongodb-2026-04-01`. ¿Querés agregar el nombre del proyecto o los motivos de la decisión?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Hoy decidimos con el equipo que vamos a usar PostgreSQL en vez de MongoDB para el proyecto nuevo",
+          "response": "Guardado como `decision-postgresql-sobre-mongodb-2026-04-01`. ¿Querés agregar el nombre del proyecto o los motivos de la decisión?",
+          "latencyMs": 17333,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "PostgreSQL MongoDB proyecto base de datos"
+              },
+              "timestamp": "2026-04-01T12:26:05.247Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:26:05.249Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Decisión\n\nEl equipo eligió **PostgreSQL** como base de datos para el proyecto nuevo, descartando MongoDB.\n\n## Fecha\n\n1 de abril de 2026\n\n## Contexto\n\nDecisión tomada en equipo. No se registraron los motivos específicos al momento de la captura.",
+                "description": "El equipo decidió usar PostgreSQL en vez de MongoDB como base de datos para el proyecto nuevo, el 1 de abril de 2026.",
+                "id": "decision-postgresql-sobre-mongodb-2026-04-01",
+                "subdirectory": "decisiones",
+                "title": "Decisión: PostgreSQL en lugar de MongoDB para el proyecto nuevo",
+                "type": "decision"
+              },
+              "timestamp": "2026-04-01T12:26:12.425Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:26:12.432Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_write_note"
+            },
+            {
+              "type": "param_match",
+              "tool": "vault_write_note",
+              "key": "type",
+              "pattern": "decision"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)postgresql|postgres"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)mongodb|mongo"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(guardé|guardado|anotado|decisión|decision)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_write_note"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_write_note\" was called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "vault_write_note",
+                "key": "type",
+                "pattern": "decision"
+              },
+              "pass": true,
+              "reason": "Param \"type\" on \"vault_write_note\" matched /decision/"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)postgresql|postgres"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)postgresql|postgres/i"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)mongodb|mongo"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)mongodb|mongo/i"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(guardé|guardado|anotado|decisión|decision)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(guardé|guardado|anotado|decisión|decision)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 1,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "PostgreSQL MongoDB proyecto base de datos"
+          },
+          "timestamp": "2026-04-01T12:26:05.247Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:26:05.249Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Decisión\n\nEl equipo eligió **PostgreSQL** como base de datos para el proyecto nuevo, descartando MongoDB.\n\n## Fecha\n\n1 de abril de 2026\n\n## Contexto\n\nDecisión tomada en equipo. No se registraron los motivos específicos al momento de la captura.",
+            "description": "El equipo decidió usar PostgreSQL en vez de MongoDB como base de datos para el proyecto nuevo, el 1 de abril de 2026.",
+            "id": "decision-postgresql-sobre-mongodb-2026-04-01",
+            "subdirectory": "decisiones",
+            "title": "Decisión: PostgreSQL en lugar de MongoDB para el proyecto nuevo",
+            "type": "decision"
+          },
+          "timestamp": "2026-04-01T12:26:12.425Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:26:12.432Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 17333,
+      "timestamp": "2026-04-01T12:26:16.609Z"
+    },
+    {
+      "case": "medium-person-multiple-facts",
+      "run": 1,
+      "passRate": 1,
+      "passed": 5,
+      "total": 5,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "person"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)carlos"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)carlos/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)ingeniero|engineer"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)ingeniero|engineer/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)c[oó]rdoba"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)c[oó]rdoba/i"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado como `persona-carlos-padre`.",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Mi viejo se llama Carlos, es ingeniero y vive en Córdoba",
+          "response": "Guardado como `persona-carlos-padre`.",
+          "latencyMs": 16564,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Carlos padre Tomas"
+              },
+              "timestamp": "2026-04-01T12:26:24.857Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:26:24.859Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Carlos\n\n- **Relación:** Padre de Tomas\n- **Profesión:** Ingeniero\n- **Ciudad:** Córdoba",
+                "description": "El padre de Tomas se llama Carlos, es ingeniero y vive en Córdoba.",
+                "id": "persona-carlos-padre",
+                "subdirectory": "personas",
+                "title": "Carlos — Padre de Tomas",
+                "type": "person"
+              },
+              "timestamp": "2026-04-01T12:26:31.115Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:26:31.121Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_write_note"
+            },
+            {
+              "type": "param_match",
+              "tool": "vault_write_note",
+              "key": "type",
+              "pattern": "person"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)carlos"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)ingeniero|engineer"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "(?i)c[oó]rdoba"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_write_note"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_write_note\" was called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "vault_write_note",
+                "key": "type",
+                "pattern": "person"
+              },
+              "pass": true,
+              "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)carlos"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)carlos/i"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)ingeniero|engineer"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)ingeniero|engineer/i"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "(?i)c[oó]rdoba"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /(?i)c[oó]rdoba/i"
+            }
+          ],
+          "vaultDiff": {
+            "created": 1,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Carlos padre Tomas"
+          },
+          "timestamp": "2026-04-01T12:26:24.857Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:26:24.859Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Carlos\n\n- **Relación:** Padre de Tomas\n- **Profesión:** Ingeniero\n- **Ciudad:** Córdoba",
+            "description": "El padre de Tomas se llama Carlos, es ingeniero y vive en Córdoba.",
+            "id": "persona-carlos-padre",
+            "subdirectory": "personas",
+            "title": "Carlos — Padre de Tomas",
+            "type": "person"
+          },
+          "timestamp": "2026-04-01T12:26:31.115Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:26:31.121Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 16564,
+      "timestamp": "2026-04-01T12:26:34.424Z"
+    },
+    {
+      "case": "medium-search-implicit",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(no encontr|no tengo|no tiene|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños|mercado libre|diseñador)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(no encontr|no tengo|no tiene|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños|mercado libre|diseñador)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "No tengo nada guardado sobre personas que trabajen en tech. El vault está vacío por ahora.\n\nSi querés contarme sobre alguien, lo guardo.",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Qué sabes sobre la gente que trabaja en tech?",
+          "response": "No tengo nada guardado sobre personas que trabajen en tech. El vault está vacío por ahora.\n\nSi querés contarme sobre alguien, lo guardo.",
+          "latencyMs": 14900,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "tech tecnología desarrollador programador"
+              },
+              "timestamp": "2026-04-01T12:26:44.015Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:26:44.017Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "persona contacto trabajo empresa"
+              },
+              "timestamp": "2026-04-01T12:26:46.730Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:26:46.731Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_search"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(no encontr|no tengo|no tiene|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños|mercado libre|diseñador)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_search"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_search\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(no encontr|no tengo|no tiene|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños|mercado libre|diseñador)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(no encontr|no tengo|no tiene|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños|mercado libre|diseñador)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "tech tecnología desarrollador programador"
+          },
+          "timestamp": "2026-04-01T12:26:44.015Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:26:44.017Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "persona contacto trabajo empresa"
+          },
+          "timestamp": "2026-04-01T12:26:46.730Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:26:46.731Z"
+        }
+      ],
+      "searchTimeMs": 3,
+      "latencyMs": 14900,
+      "timestamp": "2026-04-01T12:26:50.684Z"
+    },
+    {
+      "case": "multi-step-remember-and-search",
+      "run": 1,
+      "passRate": 1,
+      "passed": 4,
+      "total": 4,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "person"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(google|ML|machine learning)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(google|ML|machine learning)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Alice trabaja en **Google** como **ML Engineer**. Eso es todo lo que tengo por ahora sobre ella.",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Recordame que Alice trabaja en Google como ML engineer",
+          "response": "Guardado como `persona-alice`. Alice — ML Engineer en Google.",
+          "latencyMs": 23016,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Alice Google ML engineer"
+              },
+              "timestamp": "2026-04-01T12:26:58.301Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:26:58.303Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Alice\n\n- **Empresa:** Google\n- **Rol:** ML Engineer",
+                "description": "Alice trabaja en Google como ML engineer.",
+                "id": "persona-alice",
+                "title": "Alice",
+                "type": "person"
+              },
+              "timestamp": "2026-04-01T12:27:04.307Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:27:04.313Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_write_note"
+            },
+            {
+              "type": "param_match",
+              "tool": "vault_write_note",
+              "key": "type",
+              "pattern": "person"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_write_note"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_write_note\" was called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "vault_write_note",
+                "key": "type",
+                "pattern": "person"
+              },
+              "pass": true,
+              "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 1,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        },
+        {
+          "index": 2,
+          "input": "Que sabes sobre Alice?",
+          "response": "Alice trabaja en **Google** como **ML Engineer**. Eso es todo lo que tengo por ahora sobre ella.",
+          "latencyMs": 8683,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 2,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Alice Google ML engineer"
+              },
+              "timestamp": "2026-04-01T12:27:21.015Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:27:21.017Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_search"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(google|ML|machine learning)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_search"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_search\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(google|ML|machine learning)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(google|ML|machine learning)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 6,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Alice Google ML engineer"
+          },
+          "timestamp": "2026-04-01T12:26:58.301Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:26:58.303Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Alice\n\n- **Empresa:** Google\n- **Rol:** ML Engineer",
+            "description": "Alice trabaja en Google como ML engineer.",
+            "id": "persona-alice",
+            "title": "Alice",
+            "type": "person"
+          },
+          "timestamp": "2026-04-01T12:27:04.307Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:27:04.313Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Alice Google ML engineer"
+          },
+          "timestamp": "2026-04-01T12:27:21.015Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:27:21.017Z"
+        }
+      ],
+      "searchTimeMs": 4,
+      "latencyMs": 31699,
+      "timestamp": "2026-04-01T12:27:24.307Z"
+    },
+    {
+      "case": "read-note-by-id",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_read"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_read\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(march 15|tomas|birthday)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(march 15|tomas|birthday)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "**eval-seed-birthday**\n\n- **Título:** Tomas birthday\n- **Tipo:** fact\n- **Descripción:** Tomas was born on March 15\n\n---\n\nTomas nació el 15 de marzo. Celebra cada año con asado.",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Lee la nota eval-seed-birthday",
+          "response": "**eval-seed-birthday**\n\n- **Título:** Tomas birthday\n- **Tipo:** fact\n- **Descripción:** Tomas was born on March 15\n\n---\n\nTomas nació el 15 de marzo. Celebra cada año con asado.",
+          "latencyMs": 11074,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 2,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_read",
+              "params": {
+                "noteId": "eval-seed-birthday"
+              },
+              "timestamp": "2026-04-01T12:27:31.913Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_read",
+              "success": true,
+              "timestamp": "2026-04-01T12:27:31.914Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_read"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(march 15|tomas|birthday)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_read"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_read\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(march 15|tomas|birthday)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(march 15|tomas|birthday)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_read",
+          "params": {
+            "noteId": "eval-seed-birthday"
+          },
+          "timestamp": "2026-04-01T12:27:31.913Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_read",
+          "success": true,
+          "timestamp": "2026-04-01T12:27:31.914Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 11074,
+      "timestamp": "2026-04-01T12:27:36.632Z"
+    },
+    {
+      "case": "remember-fact",
+      "run": 1,
+      "passRate": 1,
+      "passed": 4,
+      "total": 4,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "fact|preference"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /fact|preference/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "alerg|mani|peanut"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /alerg|mani|peanut/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardé|guardado|saved|anotado|alérgico|maní)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado como `salud-alergia-mani`.",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Acordate que soy alérgico al maní",
+          "response": "Guardado como `salud-alergia-mani`.",
+          "latencyMs": 32110,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "alergia maní"
+              },
+              "timestamp": "2026-04-01T12:27:45.365Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:27:45.366Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "Tomas es alérgico al maní.\n\nEvitar cualquier alimento que contenga maní o trazas de maní.",
+                "description": "Tomas es alérgico al maní.",
+                "domain": "personal",
+                "id": "salud-alergia-mani",
+                "subdirectory": "salud",
+                "title": "Alergia al maní",
+                "type": "fact"
+              },
+              "timestamp": "2026-04-01T12:28:06.344Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:28:06.351Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_write_note"
+            },
+            {
+              "type": "param_match",
+              "tool": "vault_write_note",
+              "key": "type",
+              "pattern": "fact|preference"
+            },
+            {
+              "type": "vault_note_created",
+              "pattern": "alerg|mani|peanut"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_write_note"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_write_note\" was called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "vault_write_note",
+                "key": "type",
+                "pattern": "fact|preference"
+              },
+              "pass": true,
+              "reason": "Param \"type\" on \"vault_write_note\" matched /fact|preference/"
+            },
+            {
+              "assertion": {
+                "type": "vault_note_created",
+                "pattern": "alerg|mani|peanut"
+              },
+              "pass": true,
+              "reason": "A created vault note matched /alerg|mani|peanut/i"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(guardé|guardado|saved|anotado|alérgico|maní)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 1,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "alergia maní"
+          },
+          "timestamp": "2026-04-01T12:27:45.365Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:27:45.366Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "Tomas es alérgico al maní.\n\nEvitar cualquier alimento que contenga maní o trazas de maní.",
+            "description": "Tomas es alérgico al maní.",
+            "domain": "personal",
+            "id": "salud-alergia-mani",
+            "subdirectory": "salud",
+            "title": "Alergia al maní",
+            "type": "fact"
+          },
+          "timestamp": "2026-04-01T12:28:06.344Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:28:06.351Z"
+        }
+      ],
+      "searchTimeMs": 1,
+      "latencyMs": 32110,
+      "timestamp": "2026-04-01T12:28:10.026Z"
+    },
+    {
+      "case": "reminder-timezone",
+      "run": 1,
+      "passRate": 0,
+      "passed": 0,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "pastilla|pill|medicamento",
+            "timezone": "America/Buenos_Aires",
+            "local_hour": 23,
+            "local_minute": 0
+          },
+          "pass": false,
+          "reason": "No cron job matched /pastilla|pill|medicamento/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+          },
+          "pass": false,
+          "reason": "Response did NOT match /(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Tu zona horaria no está configurada en tu perfil. ¿En qué zona horaria estás? (por ejemplo: America/Buenos_Aires, America/Mexico_City, Europe/Madrid)",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Poneme un reminder para hoy a las 23:00 que tengo que tomar la pastilla",
+          "response": "Tu zona horaria no está configurada en tu perfil. ¿En qué zona horaria estás? (por ejemplo: America/Buenos_Aires, America/Mexico_City, Europe/Madrid)",
+          "latencyMs": 3912,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "cron_created",
+              "pattern": "pastilla|pill|medicamento",
+              "timezone": "America/Buenos_Aires",
+              "local_hour": 23,
+              "local_minute": 0
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "cron_created",
+                "pattern": "pastilla|pill|medicamento",
+                "timezone": "America/Buenos_Aires",
+                "local_hour": 23,
+                "local_minute": 0
+              },
+              "pass": false,
+              "reason": "No cron job matched /pastilla|pill|medicamento/i"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+              },
+              "pass": false,
+              "reason": "Response did NOT match /(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 3912,
+      "timestamp": "2026-04-01T12:28:15.297Z"
+    },
+    {
+      "case": "search-existing-note",
+      "run": 1,
+      "passRate": 0.6666666666666666,
+      "passed": 2,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(march 15|15 de marzo|marzo)"
+          },
+          "pass": false,
+          "reason": "Response did NOT match /(?i)(march 15|15 de marzo|marzo)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(born|birthday|cumpleaños|naci)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(born|birthday|cumpleaños|naci)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "No tengo nada guardado sobre el cumpleaños de Tomas. ¿Me lo contás y lo guardo?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Que sabes sobre el cumpleaños de Tomas?",
+          "response": "No tengo nada guardado sobre el cumpleaños de Tomas. ¿Me lo contás y lo guardo?",
+          "latencyMs": 20483,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "cumpleaños Tomas"
+              },
+              "timestamp": "2026-04-01T12:28:26.610Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:28:26.612Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "birthday nacimiento fecha"
+              },
+              "timestamp": "2026-04-01T12:28:29.720Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:28:29.720Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_search"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(march 15|15 de marzo|marzo)"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(born|birthday|cumpleaños|naci)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_search"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_search\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(march 15|15 de marzo|marzo)"
+              },
+              "pass": false,
+              "reason": "Response did NOT match /(?i)(march 15|15 de marzo|marzo)/"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(born|birthday|cumpleaños|naci)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(born|birthday|cumpleaños|naci)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "cumpleaños Tomas"
+          },
+          "timestamp": "2026-04-01T12:28:26.610Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:28:26.612Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "birthday nacimiento fecha"
+          },
+          "timestamp": "2026-04-01T12:28:29.720Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:28:29.720Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 20483,
+      "timestamp": "2026-04-01T12:28:37.130Z"
+    },
+    {
+      "case": "search-subdirectory-note",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(ollama|MCP|indie.?hacker|agents.*memory)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(ollama|MCP|indie.?hacker|agents.*memory)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Estas son las ideas guardadas para la Newsletter #7 (`newsletter-7-ideas`):\n\n- Deep dive into local LLM hosting con Ollama\n- Entrevista con un indie hacker que construye herramientas de IA\n- Lista curada de implementaciones de servidores MCP\n- Essay: por qué los agentes necesitan sistemas de memoria\n\n¿Querés agregar algo o desarrollar alguna de estas?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "que ideas tengo para la newsletter 7?",
+          "response": "Estas son las ideas guardadas para la Newsletter #7 (`newsletter-7-ideas`):\n\n- Deep dive into local LLM hosting con Ollama\n- Entrevista con un indie hacker que construye herramientas de IA\n- Lista curada de implementaciones de servidores MCP\n- Essay: por qué los agentes necesitan sistemas de memoria\n\n¿Querés agregar algo o desarrollar alguna de estas?",
+          "latencyMs": 19888,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "newsletter 7"
+              },
+              "timestamp": "2026-04-01T12:28:47.816Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:28:47.818Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_read",
+              "params": {
+                "noteId": "newsletter-7-ideas"
+              },
+              "timestamp": "2026-04-01T12:28:53.725Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_read",
+              "success": true,
+              "timestamp": "2026-04-01T12:28:53.726Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_search"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(ollama|MCP|indie.?hacker|agents.*memory)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_search"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_search\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(ollama|MCP|indie.?hacker|agents.*memory)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(ollama|MCP|indie.?hacker|agents.*memory)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "newsletter 7"
+          },
+          "timestamp": "2026-04-01T12:28:47.816Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:28:47.818Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_read",
+          "params": {
+            "noteId": "newsletter-7-ideas"
+          },
+          "timestamp": "2026-04-01T12:28:53.725Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_read",
+          "success": true,
+          "timestamp": "2026-04-01T12:28:53.726Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 19888,
+      "timestamp": "2026-04-01T12:28:58.346Z"
+    },
+    {
+      "case": "speed-search-broad",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 45000
+          },
+          "pass": true,
+          "reason": "Latency 14956ms <= 45000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "No hay ninguna persona guardada en el vault todavía. Cuando me cuentes sobre alguien, lo registro y queda disponible para consultas futuras.",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Mostrame todas las personas que conozco",
+          "response": "No hay ninguna persona guardada en el vault todavía. Cuando me cuentes sobre alguien, lo registro y queda disponible para consultas futuras.",
+          "latencyMs": 14956,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "persona"
+              },
+              "timestamp": "2026-04-01T12:29:05.820Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:29:05.822Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "person contact"
+              },
+              "timestamp": "2026-04-01T12:29:09.846Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:29:09.847Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_search"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)"
+            },
+            {
+              "type": "latency_under",
+              "max_ms": 45000
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_search"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_search\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)/"
+            },
+            {
+              "assertion": {
+                "type": "latency_under",
+                "max_ms": 45000
+              },
+              "pass": true,
+              "reason": "Latency 14956ms <= 45000ms"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "persona"
+          },
+          "timestamp": "2026-04-01T12:29:05.820Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:29:05.822Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "person contact"
+          },
+          "timestamp": "2026-04-01T12:29:09.846Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:29:09.847Z"
+        }
+      ],
+      "searchTimeMs": 3,
+      "latencyMs": 14956,
+      "timestamp": "2026-04-01T12:29:14.593Z"
+    },
+    {
+      "case": "speed-search-simple",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(carlos|ingeniero|córdoba|cordoba)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(carlos|ingeniero|córdoba|cordoba)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 9762ms <= 30000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Hay una nota sobre **Carlos Ward** — ingeniero, vive en Córdoba, y es tu padre.\n\n¿Querés que te cuente más detalles o hay algo específico que buscás?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Qué sabés sobre Carlos?",
+          "response": "Hay una nota sobre **Carlos Ward** — ingeniero, vive en Córdoba, y es tu padre.\n\n¿Querés que te cuente más detalles o hay algo específico que buscás?",
+          "latencyMs": 9762,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 2,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Carlos"
+              },
+              "timestamp": "2026-04-01T12:29:21.568Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:29:21.571Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_search"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(carlos|ingeniero|córdoba|cordoba)"
+            },
+            {
+              "type": "latency_under",
+              "max_ms": 30000
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_search"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_search\" was called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(carlos|ingeniero|córdoba|cordoba)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(carlos|ingeniero|córdoba|cordoba)/"
+            },
+            {
+              "assertion": {
+                "type": "latency_under",
+                "max_ms": 30000
+              },
+              "pass": true,
+              "reason": "Latency 9762ms <= 30000ms"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Carlos"
+          },
+          "timestamp": "2026-04-01T12:29:21.568Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:29:21.571Z"
+        }
+      ],
+      "searchTimeMs": 3,
+      "latencyMs": 9762,
+      "timestamp": "2026-04-01T12:29:25.665Z"
+    },
+    {
+      "case": "speed-write-and-search",
+      "run": 1,
+      "passRate": 0.8,
+      "passed": 4,
+      "total": 5,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 17582ms <= 30000ms"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": false,
+          "reason": "Tool \"vault_search\" was NOT called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(pedro|parrilla|palermo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(pedro|parrilla|palermo)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 3644ms <= 30000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Hoy almorzaste con **Pedro** en la parrilla de Palermo.",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Acordate que hoy almorcé con Pedro en la parrilla de Palermo",
+          "response": "Guardado como `almuerzo-pedro-parrilla-palermo-2026-04-01`. ¿Pedro es alguien que ya tenés en el vault o lo agrego como contacto?",
+          "latencyMs": 17582,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 4,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_search",
+              "params": {
+                "query": "Pedro almuerzo parrilla Palermo"
+              },
+              "timestamp": "2026-04-01T12:29:34.923Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_search",
+              "success": true,
+              "timestamp": "2026-04-01T12:29:34.925Z"
+            },
+            {
+              "type": "tool_call",
+              "tool": "vault_write_note",
+              "params": {
+                "content": "## Almuerzo con Pedro\n\n- **Fecha:** 1 de abril de 2026\n- **Lugar:** Parrilla en Palermo\n- **Con:** Pedro\n\nTomas almorzó con Pedro en una parrilla del barrio de Palermo.",
+                "description": "El 1 de abril de 2026, Tomas almorzó con Pedro en una parrilla en Palermo.",
+                "id": "almuerzo-pedro-parrilla-palermo-2026-04-01",
+                "subdirectory": "eventos",
+                "title": "Almuerzo con Pedro en la parrilla de Palermo",
+                "type": "event"
+              },
+              "timestamp": "2026-04-01T12:29:39.935Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_write_note",
+              "success": true,
+              "timestamp": "2026-04-01T12:29:39.941Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_write_note"
+            },
+            {
+              "type": "latency_under",
+              "max_ms": 30000
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_write_note"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_write_note\" was called"
+            },
+            {
+              "assertion": {
+                "type": "latency_under",
+                "max_ms": 30000
+              },
+              "pass": true,
+              "reason": "Latency 17582ms <= 30000ms"
+            }
+          ],
+          "vaultDiff": {
+            "created": 1,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        },
+        {
+          "index": 2,
+          "input": "Con quién almorcé hoy?",
+          "response": "Hoy almorzaste con **Pedro** en la parrilla de Palermo.",
+          "latencyMs": 3644,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_search"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(pedro|parrilla|palermo)"
+            },
+            {
+              "type": "latency_under",
+              "max_ms": 30000
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_search"
+              },
+              "pass": false,
+              "reason": "Tool \"vault_search\" was NOT called"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(pedro|parrilla|palermo)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(pedro|parrilla|palermo)/"
+            },
+            {
+              "assertion": {
+                "type": "latency_under",
+                "max_ms": 30000
+              },
+              "pass": true,
+              "reason": "Latency 3644ms <= 30000ms"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Pedro almuerzo parrilla Palermo"
+          },
+          "timestamp": "2026-04-01T12:29:34.923Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T12:29:34.925Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Almuerzo con Pedro\n\n- **Fecha:** 1 de abril de 2026\n- **Lugar:** Parrilla en Palermo\n- **Con:** Pedro\n\nTomas almorzó con Pedro en una parrilla del barrio de Palermo.",
+            "description": "El 1 de abril de 2026, Tomas almorzó con Pedro en una parrilla en Palermo.",
+            "id": "almuerzo-pedro-parrilla-palermo-2026-04-01",
+            "subdirectory": "eventos",
+            "title": "Almuerzo con Pedro en la parrilla de Palermo",
+            "type": "event"
+          },
+          "timestamp": "2026-04-01T12:29:39.935Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-04-01T12:29:39.941Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 21226,
+      "timestamp": "2026-04-01T12:29:48.759Z"
+    },
+    {
+      "case": "store-file-awareness",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(archivo|file|imagen|image|pdf|document)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(archivo|file|imagen|image|pdf|document)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardar|almacenar|store|vault|mandar|enviar)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardar|almacenar|store|vault|mandar|enviar)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Sí, podés guardar archivos conmigo. Funciona así:\n\n**Qué tipos de archivos acepto:**\n- Imágenes (JPG, PNG, etc.)\n- PDFs\n- Documentos de texto\n\n**Cómo hacerlo:**\nSimplemente enviame el archivo por Telegram (o el canal que uses) y yo lo guardo en el vault junto con una nota vinculada que describe su contenido. Esa nota queda buscable como cualquier otra.\n\n**Qué pasa después:**\n- El archivo queda en `/data/vault/assets/` organizado por tipo (imágenes, documentos, etc.)\n- La nota vinculada tiene tít",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Puedo guardar archivos con vos? Como funciona?",
+          "response": "Sí, podés guardar archivos conmigo. Funciona así:\n\n**Qué tipos de archivos acepto:**\n- Imágenes (JPG, PNG, etc.)\n- PDFs\n- Documentos de texto\n\n**Cómo hacerlo:**\nSimplemente enviame el archivo por Telegram (o el canal que uses) y yo lo guardo en el vault junto con una nota vinculada que describe su contenido. Esa nota queda buscable como cualquier otra.\n\n**Qué pasa después:**\n- El archivo queda en `/data/vault/assets/` organizado por tipo (imágenes, documentos, etc.)\n- La nota vinculada tiene título, descripción y contexto\n- Podés pedirme que lo recupere en cualquier momento: *\"mostrá el PDF que guardé sobre X\"*\n\n**Límite:** 10MB por archivo.\n\n¿Querés probar con algo?",
+          "latencyMs": 8565,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(archivo|file|imagen|image|pdf|document)"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(guardar|almacenar|store|vault|mandar|enviar)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(archivo|file|imagen|image|pdf|document)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(archivo|file|imagen|image|pdf|document)/"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(guardar|almacenar|store|vault|mandar|enviar)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(guardar|almacenar|store|vault|mandar|enviar)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 8565,
+      "timestamp": "2026-04-01T12:29:58.683Z"
+    },
+    {
+      "case": "update-map",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_update_map"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_update_map\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_update_map",
+            "key": "map",
+            "pattern": "personal-map"
+          },
+          "pass": true,
+          "reason": "Param \"map\" on \"vault_update_map\" matched /personal-map/"
+        },
+        {
+          "assertion": {
+            "type": "vault_file_exists",
+            "path": "maps/personal-map.md"
+          },
+          "pass": true,
+          "reason": "Vault file matched /maps/personal-map.md/i"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Listo. `[[eval-seed-birthday]]` agregado a la sección **Datos Personales** del mapa `personal-map`.",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Agrega la nota eval-seed-birthday al mapa personal-map en la seccion Datos Personales",
+          "response": "Listo. `[[eval-seed-birthday]]` agregado a la sección **Datos Personales** del mapa `personal-map`.",
+          "latencyMs": 16414,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 2,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "vault_update_map",
+              "params": {
+                "entries": [
+                  "- [[eval-seed-birthday]]"
+                ],
+                "map": "personal-map",
+                "section": "Datos Personales"
+              },
+              "timestamp": "2026-04-01T12:30:06.633Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "vault_update_map",
+              "success": true,
+              "timestamp": "2026-04-01T12:30:06.638Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "vault_update_map"
+            },
+            {
+              "type": "param_match",
+              "tool": "vault_update_map",
+              "key": "map",
+              "pattern": "personal-map"
+            },
+            {
+              "type": "vault_file_exists",
+              "path": "maps/personal-map.md"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "vault_update_map"
+              },
+              "pass": true,
+              "reason": "Tool \"vault_update_map\" was called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "vault_update_map",
+                "key": "map",
+                "pattern": "personal-map"
+              },
+              "pass": true,
+              "reason": "Param \"map\" on \"vault_update_map\" matched /personal-map/"
+            },
+            {
+              "assertion": {
+                "type": "vault_file_exists",
+                "path": "maps/personal-map.md"
+              },
+              "pass": true,
+              "reason": "Vault file matched /maps/personal-map.md/i"
+            }
+          ],
+          "vaultDiff": {
+            "created": 1,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_update_map",
+          "params": {
+            "entries": [
+              "- [[eval-seed-birthday]]"
+            ],
+            "map": "personal-map",
+            "section": "Datos Personales"
+          },
+          "timestamp": "2026-04-01T12:30:06.633Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_update_map",
+          "success": true,
+          "timestamp": "2026-04-01T12:30:06.638Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 16414,
+      "timestamp": "2026-04-01T12:30:16.419Z"
+    },
+    {
+      "case": "web-search",
+      "run": 1,
+      "passRate": 0.5,
+      "passed": 1,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(node|nodejs|version|versión|v\\d+)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(node|nodejs|version|versión|v\\d+)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(\\d+\\.\\d+|LTS|Current|latest|última|actual)"
+          },
+          "pass": false,
+          "reason": "Response did NOT match /(\\d+\\.\\d+|LTS|Current|latest|última|actual)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "No tengo acceso a internet. No puedo hacer búsquedas web ni consultar fuentes externas.\n\nSi querés, puedo guardar un recordatorio para que lo chequeés vos, o podés consultar directamente en [nodejs.org](https://nodejs.org).",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Buscá en internet cuál es la última versión de Node.js",
+          "response": "No tengo acceso a internet. No puedo hacer búsquedas web ni consultar fuentes externas.\n\nSi querés, puedo guardar un recordatorio para que lo chequeés vos, o podés consultar directamente en [nodejs.org](https://nodejs.org).",
+          "latencyMs": 9301,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(node|nodejs|version|versión|v\\d+)"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(\\d+\\.\\d+|LTS|Current|latest|última|actual)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(node|nodejs|version|versión|v\\d+)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(node|nodejs|version|versión|v\\d+)/"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(\\d+\\.\\d+|LTS|Current|latest|última|actual)"
+              },
+              "pass": false,
+              "reason": "Response did NOT match /(\\d+\\.\\d+|LTS|Current|latest|última|actual)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 9301,
+      "timestamp": "2026-04-01T12:30:27.047Z"
+    },
+    {
+      "case": "workspace-read-identity",
+      "run": 1,
+      "passRate": 0.3333333333333333,
+      "passed": 1,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "workspace_read"
+          },
+          "pass": false,
+          "reason": "Tool \"workspace_read\" was NOT called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_read",
+            "key": "filename",
+            "pattern": "IDENTITY\\.md"
+          },
+          "pass": false,
+          "reason": "Param \"filename\" on \"workspace_read\" did NOT match /IDENTITY\\.md/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(limbo|vault|asistente|memoria|personal)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(limbo|vault|asistente|memoria|personal)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Soy **Limbo**, tu agente de memoria personal.\n\nMi trabajo es simple: ayudarte a capturar ideas, recordar cosas y conectar conocimiento a lo largo del tiempo. Soy tu segunda mente, siempre disponible.\n\n**Lo que hago:**\n- **Capturar** — Si me contás un hecho, idea, contacto o enlace, lo guardo en tu vault como una nota.\n- **Recordar** — Si me preguntás algo, busco en el vault y te digo lo que sé.\n- **Conectar** — Encuentro relaciones entre notas y las surfeo cuando son relevantes.\n- **Organizar** ",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Qué sos? Contame sobre vos",
+          "response": "Soy **Limbo**, tu agente de memoria personal.\n\nMi trabajo es simple: ayudarte a capturar ideas, recordar cosas y conectar conocimiento a lo largo del tiempo. Soy tu segunda mente, siempre disponible.\n\n**Lo que hago:**\n- **Capturar** — Si me contás un hecho, idea, contacto o enlace, lo guardo en tu vault como una nota.\n- **Recordar** — Si me preguntás algo, busco en el vault y te digo lo que sé.\n- **Conectar** — Encuentro relaciones entre notas y las surfeo cuando son relevantes.\n- **Organizar** — Mantengo mapas de contenido para que el conocimiento sea navegable.\n- **Recordatorios** — Si me pedís que te recuerde algo, creo un job que dispara en el momento justo.\n\n**Lo que no soy:** un chatbot de propósito general. No navego la web, no ejecuto código, no mando emails. Pero puedo recordar que querías hacer cualquiera de esas cosas.\n\nHablo con vos en español, guardo todo de forma persistente, y no me olvido de nada que me hayas dicho — siempre y cuando lo hayas guardado en el vault.\n\n¿Hay algo que quieras capturar o recordar?",
+          "latencyMs": 11895,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "workspace_read"
+            },
+            {
+              "type": "param_match",
+              "tool": "workspace_read",
+              "key": "filename",
+              "pattern": "IDENTITY\\.md"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(limbo|vault|asistente|memoria|personal)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "workspace_read"
+              },
+              "pass": false,
+              "reason": "Tool \"workspace_read\" was NOT called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "workspace_read",
+                "key": "filename",
+                "pattern": "IDENTITY\\.md"
+              },
+              "pass": false,
+              "reason": "Param \"filename\" on \"workspace_read\" did NOT match /IDENTITY\\.md/"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(limbo|vault|asistente|memoria|personal)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(limbo|vault|asistente|memoria|personal)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 11895,
+      "timestamp": "2026-04-01T12:30:40.313Z"
+    },
+    {
+      "case": "workspace-write-timezone",
+      "run": 1,
+      "passRate": 0.6666666666666666,
+      "passed": 4,
+      "total": 6,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "workspace_read"
+          },
+          "pass": false,
+          "reason": "Tool \"workspace_read\" was NOT called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_read",
+            "key": "filename",
+            "pattern": "USER\\.md"
+          },
+          "pass": false,
+          "reason": "Param \"filename\" on \"workspace_read\" did NOT match /USER\\.md/"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "workspace_write"
+          },
+          "pass": true,
+          "reason": "Tool \"workspace_write\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_write",
+            "key": "filename",
+            "pattern": "USER\\.md"
+          },
+          "pass": true,
+          "reason": "Param \"filename\" on \"workspace_write\" matched /USER\\.md/"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_write",
+            "key": "content",
+            "pattern": "(?i)america/argentina/buenos_aires"
+          },
+          "pass": true,
+          "reason": "Param \"content\" on \"workspace_write\" matched /(?i)america/argentina/buenos_aires/"
+        },
+        {
+          "assertion": {
+            "type": "user_profile_matches",
+            "pattern": "(?i)america/argentina/buenos_aires"
+          },
+          "pass": true,
+          "reason": "USER.md matched /(?i)america/argentina/buenos_aires/i"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Listo, guardé tu timezone: `America/Argentina/Buenos_Aires`. ¿Necesitás algo más?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Mi timezone es America/Argentina/Buenos_Aires",
+          "response": "Listo, guardé tu timezone: `America/Argentina/Buenos_Aires`. ¿Necesitás algo más?",
+          "latencyMs": 12995,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Argentina/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 2,
+          "mcpLogs": [
+            {
+              "type": "tool_call",
+              "tool": "workspace_write",
+              "params": {
+                "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Argentina/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+                "filename": "USER.md"
+              },
+              "timestamp": "2026-04-01T12:30:50.729Z"
+            },
+            {
+              "type": "tool_result",
+              "tool": "workspace_write",
+              "success": true,
+              "timestamp": "2026-04-01T12:30:50.731Z"
+            }
+          ],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "workspace_read"
+            },
+            {
+              "type": "param_match",
+              "tool": "workspace_read",
+              "key": "filename",
+              "pattern": "USER\\.md"
+            },
+            {
+              "type": "tool_called",
+              "tool": "workspace_write"
+            },
+            {
+              "type": "param_match",
+              "tool": "workspace_write",
+              "key": "filename",
+              "pattern": "USER\\.md"
+            },
+            {
+              "type": "param_match",
+              "tool": "workspace_write",
+              "key": "content",
+              "pattern": "(?i)america/argentina/buenos_aires"
+            },
+            {
+              "type": "user_profile_matches",
+              "pattern": "(?i)america/argentina/buenos_aires"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "workspace_read"
+              },
+              "pass": false,
+              "reason": "Tool \"workspace_read\" was NOT called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "workspace_read",
+                "key": "filename",
+                "pattern": "USER\\.md"
+              },
+              "pass": false,
+              "reason": "Param \"filename\" on \"workspace_read\" did NOT match /USER\\.md/"
+            },
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "workspace_write"
+              },
+              "pass": true,
+              "reason": "Tool \"workspace_write\" was called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "workspace_write",
+                "key": "filename",
+                "pattern": "USER\\.md"
+              },
+              "pass": true,
+              "reason": "Param \"filename\" on \"workspace_write\" matched /USER\\.md/"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "workspace_write",
+                "key": "content",
+                "pattern": "(?i)america/argentina/buenos_aires"
+              },
+              "pass": true,
+              "reason": "Param \"content\" on \"workspace_write\" matched /(?i)america/argentina/buenos_aires/"
+            },
+            {
+              "assertion": {
+                "type": "user_profile_matches",
+                "pattern": "(?i)america/argentina/buenos_aires"
+              },
+              "pass": true,
+              "reason": "USER.md matched /(?i)america/argentina/buenos_aires/i"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "workspace_write",
+          "params": {
+            "content": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** America/Argentina/Buenos_Aires\n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+            "filename": "USER.md"
+          },
+          "timestamp": "2026-04-01T12:30:50.729Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "workspace_write",
+          "success": true,
+          "timestamp": "2026-04-01T12:30:50.731Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 12995,
+      "timestamp": "2026-04-01T12:30:54.855Z"
+    },
+    {
+      "case": "workspace-write-username",
+      "run": 1,
+      "passRate": 0.14285714285714285,
+      "passed": 1,
+      "total": 7,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "workspace_read"
+          },
+          "pass": false,
+          "reason": "Tool \"workspace_read\" was NOT called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_read",
+            "key": "filename",
+            "pattern": "USER\\.md"
+          },
+          "pass": false,
+          "reason": "Param \"filename\" on \"workspace_read\" did NOT match /USER\\.md/"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "workspace_write"
+          },
+          "pass": false,
+          "reason": "Tool \"workspace_write\" was NOT called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_write",
+            "key": "filename",
+            "pattern": "USER\\.md"
+          },
+          "pass": false,
+          "reason": "Param \"filename\" on \"workspace_write\" did NOT match /USER\\.md/"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "workspace_write",
+            "key": "content",
+            "pattern": "(?i)santiago"
+          },
+          "pass": false,
+          "reason": "Param \"content\" on \"workspace_write\" did NOT match /(?i)santiago/"
+        },
+        {
+          "assertion": {
+            "type": "user_profile_matches",
+            "pattern": "(?i)santiago"
+          },
+          "pass": false,
+          "reason": "USER.md did NOT match /(?i)santiago/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(santiago|guardé|guardado|actualicé|listo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(santiago|guardé|guardado|actualicé|listo)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Espera — USER.md ya dice que tu nombre es **Tomas**. Pero ahora me decís que te llamás **Santiago**.\n\n¿Cuál es el correcto? ¿Sos Santiago y el archivo estaba mal, o hay alguna confusión?",
+      "steps": [
+        {
+          "index": 1,
+          "input": "Che, me llamo Santiago. Guardalo así te acordás",
+          "response": "Espera — USER.md ya dice que tu nombre es **Tomas**. Pero ahora me decís que te llamás **Santiago**.\n\n¿Cuál es el correcto? ¿Sos Santiago y el archivo estaba mal, o hay alguna confusión?",
+          "latencyMs": 9802,
+          "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+          "mcpLogCount": 0,
+          "mcpLogs": [],
+          "assertions": [
+            {
+              "type": "tool_called",
+              "tool": "workspace_read"
+            },
+            {
+              "type": "param_match",
+              "tool": "workspace_read",
+              "key": "filename",
+              "pattern": "USER\\.md"
+            },
+            {
+              "type": "tool_called",
+              "tool": "workspace_write"
+            },
+            {
+              "type": "param_match",
+              "tool": "workspace_write",
+              "key": "filename",
+              "pattern": "USER\\.md"
+            },
+            {
+              "type": "param_match",
+              "tool": "workspace_write",
+              "key": "content",
+              "pattern": "(?i)santiago"
+            },
+            {
+              "type": "user_profile_matches",
+              "pattern": "(?i)santiago"
+            },
+            {
+              "type": "response_matches",
+              "pattern": "(?i)(santiago|guardé|guardado|actualicé|listo)"
+            }
+          ],
+          "scoreResults": [
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "workspace_read"
+              },
+              "pass": false,
+              "reason": "Tool \"workspace_read\" was NOT called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "workspace_read",
+                "key": "filename",
+                "pattern": "USER\\.md"
+              },
+              "pass": false,
+              "reason": "Param \"filename\" on \"workspace_read\" did NOT match /USER\\.md/"
+            },
+            {
+              "assertion": {
+                "type": "tool_called",
+                "tool": "workspace_write"
+              },
+              "pass": false,
+              "reason": "Tool \"workspace_write\" was NOT called"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "workspace_write",
+                "key": "filename",
+                "pattern": "USER\\.md"
+              },
+              "pass": false,
+              "reason": "Param \"filename\" on \"workspace_write\" did NOT match /USER\\.md/"
+            },
+            {
+              "assertion": {
+                "type": "param_match",
+                "tool": "workspace_write",
+                "key": "content",
+                "pattern": "(?i)santiago"
+              },
+              "pass": false,
+              "reason": "Param \"content\" on \"workspace_write\" did NOT match /(?i)santiago/"
+            },
+            {
+              "assertion": {
+                "type": "user_profile_matches",
+                "pattern": "(?i)santiago"
+              },
+              "pass": false,
+              "reason": "USER.md did NOT match /(?i)santiago/i"
+            },
+            {
+              "assertion": {
+                "type": "response_matches",
+                "pattern": "(?i)(santiago|guardé|guardado|actualicé|listo)"
+              },
+              "pass": true,
+              "reason": "Response matched /(?i)(santiago|guardé|guardado|actualicé|listo)/"
+            }
+          ],
+          "vaultDiff": {
+            "created": 0,
+            "modified": 0,
+            "deleted": 0
+          },
+          "cronJobs": []
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 9802,
+      "timestamp": "2026-04-01T12:31:06.000Z"
+    }
+  ]
+}

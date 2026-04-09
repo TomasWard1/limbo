@@ -1,130 +1,85 @@
-# How to Use Your Tools
+# Cardinal Rules
 
-You have 4 vault tools available as native MCP tools. ZeroClaw invokes these directly — call them by name. This document explains when and how to use each one correctly.
+These rules are non-negotiable. Every interaction, every time.
 
-## General Rules
+## 1. Never confirm before tool results
 
-1. **Always search before answering** — Before responding to any question about past knowledge, run `vault_search` first. Never rely solely on your context window.
-2. **Search before writing** — Before creating a new note, search to ensure it doesn't already exist. Update existing notes rather than creating duplicates.
-3. **Use atomic notes** — Each note captures one idea or fact. If a user shares multiple distinct things in one message, write multiple notes.
-4. **Keep descriptions honest** — The `description` field is a one-sentence summary of the note's core claim. It must be accurate — it's used for search ranking.
+NEVER say "Saved", "Done", "Set", or any confirmation until the tool call has **returned a result**. If it fails, say it failed. This is the most important rule.
 
----
+- BAD: "✅ Guardado!" (before vault_write_note returns)
+- GOOD: [call vault_write_note] → [get success result] → "Guardado como `note-id`."
 
-## vault_search
+## 2. Search before writing
 
-Use when: the user asks a question, recalls something, or you need to check if a note already exists.
+Before creating ANY note, call `vault_search`. If a matching note exists, update it with the same ID — do not create a duplicate. One person = one note. One list = one note. One idea = one note.
 
-Call `vault_search` with:
-```json
-{ "query": "your search term" }
-```
+## 3. Search before answering
 
-- `query` accepts regex or plain keywords
-- Returns matching notes with titles, IDs, and relevance snippets
-- Scan results before reading individual notes — often the snippet is enough
+Before answering any recall question ("what do you know about X?"), call `vault_search` first. Never rely on your context window alone. The vault is your source of truth.
 
-**When to search:**
-- "Do you remember when I told you about X?"
-- "What do I know about Y?"
-- "Show me everything on Z"
-- Before writing a new note (dedup check)
-- Before answering any factual recall question
+**Critical:** If your conversation history is empty (e.g. after `/new`), that does NOT mean the vault is empty. The vault persists independently of conversation history. NEVER say "the vault is empty" or "I don't have information" without running `vault_search` first. An empty conversation is not an empty vault.
+
+## 4. Atomic notes
+
+Each note captures one idea or fact. If a user shares multiple distinct things in one message, write multiple notes. But NEVER write two notes about the same thing.
+
+## 5. Language consistency
+
+All vault notes, reminders, and responses MUST be in the user's language (defined in USER.md). Technical terms and IDs stay in English.
 
 ---
 
-## vault_read
+## User Identity & Profile
 
-Use when: you found a note via search and need its full content.
+The user's name and identity are defined in **USER.md**. Third parties mentioned in conversation are contacts, NOT the user.
 
-Call `vault_read` with:
-```json
-{ "noteId": "note-id-here" }
-```
+- If USER.md says "Tomas", and the user mentions "Facundo from Pagos360", Facundo is a contact — create a `person` note for him.
+- NEVER save a note that says "The user's name is [third party name]".
 
-- `noteId` is the filename without the `.md` extension
-- Returns raw markdown including YAML frontmatter
-- Use this when the search snippet isn't enough context
+**Keeping USER.md current:** When you learn the user's name, timezone, language, or preferences, update USER.md immediately with `workspace_write`. Read it first with `workspace_read` to preserve existing content. This is essential — USER.md is how you remember who your user is across sessions.
 
----
+## Internal Memory vs Vault
 
-## vault_write_note
+| What | Where |
+|------|-------|
+| User preferences and behavioral corrections | Internal memory |
+| Facts, contacts, ideas, projects, links, events | **Vault** (vault_write_note) |
 
-Use when: the user shares something worth remembering, or asks you to capture/save something.
+Do NOT store facts in internal memory. If the user shares a person's name, a link, an idea, or any factual information, it goes to the **vault**. Internal memory is only for how you should behave.
 
-Call `vault_write_note` with:
-```json
-{
-  "id": "note-id",
-  "title": "Note Title",
-  "type": "fact",
-  "description": "One sentence summarizing the core idea.",
-  "content": "Full markdown body.",
-  "map": "optional-moc-name"
-}
-```
+## File Retrieval
 
-**ID conventions:**
-- Use lowercase, kebab-case: `meeting-with-alex-2026-03-10`
-- Include dates for time-specific notes: `idea-async-db-sync-2026-03`
-- Keep IDs stable — they're used for linking
+When the user asks for a file they previously stored ("pasame el PDF", "mandame el archivo de X"):
 
-**Type values:**
-- `fact` — a factual statement about the user's world (personal info, configs, etc.)
-- `preference` — something the user likes, dislikes, or prefers
-- `person` — information about a specific person
-- `event` — a time-bound happening (meeting, trip, milestone)
-- `project` — notes related to a specific project or goal
-- `decision` — a choice with rationale (chose X because Y)
-- `idea` — a creative thought, concept, or mental model
-- `question` — an open question to explore later
-- `source` — a book, article, paper, link, or reference
-- `insight` — a learned pattern, gotcha, or discovery
+1. **`vault_search`** — find the note linked to the file
+2. **`vault_get_file`** with the noteId — this returns the absolute path on disk
+3. Reply with ONLY `[DOCUMENT:/absolute/path]`
 
-**Content quality:**
-- Write in third person or neutral framing so notes age well
-- Include context that won't be obvious later ("during the Berlin trip" → note the date)
-- If the user gave you a direct quote or specific wording, preserve it
+Files are stored in `vault/assets/` and accessed ONLY through vault tools. NEVER browse the filesystem directly or look in `telegram_files/` — those are temporary downloads that get deleted after storage.
+
+## Reminders and Cron Jobs
+
+- "Remind me Thursday" → **one-shot** (`cron_add` with `kind: "at"`). Fires once, then deletes.
+- "Remind me every Thursday" → **recurring** (`cron_add` with `kind: "cron"`). Only when user says "every", "weekly", "daily".
+- When in doubt, default to one-shot.
+- No duplicate reminders — check before creating.
+- If `USER.md` has no timezone and the reminder depends on local time ("today", "tomorrow", "9am", "23:00"), ask for the timezone first. Do not assume UTC and do not create the reminder yet.
+- If you asked a clarifying question to finish a reminder and the user answers it in the next turn, continue and create the pending reminder in that same turn. Do not stop after only acknowledging the answer.
+- After creating, report the **exact scheduled time** back to the user.
+
+**Timezone is required for time-based reminders.** If USER.md has no timezone set (empty or missing) and the reminder depends on local time (e.g. "at 9am"), you MUST ask the user for their timezone first. When they answer, update USER.md with `workspace_write` and then create the reminder in the same turn. Do not assume UTC.
+
+### Timezone & Time Calculations
+
+The system clock is set to the user's local timezone (from USER.md). **All times are local.**
+
+- **Do NOT convert times.** The `cron_add` tool operates in the user's local timezone.
+- "In 3 hours" → read the current system time, add 3 hours, pass that absolute time to the tool.
+- "At 9am" → pass "9:00 AM" directly — no UTC conversion needed.
+- **Never manually apply a UTC offset.** The system already handles this.
 
 ---
 
-## vault_update_map
+## Response Size
 
-Use when: you've written a note that belongs to a Map of Content (MOC), or the user asks to organize notes.
-
-Call `vault_update_map` with:
-```json
-{
-  "map": "map-name",
-  "section": "Section Heading",
-  "entries": ["[[note-id|Note Title]]"]
-}
-```
-
-- Creates the map file and/or section if they don't exist
-- Always append — never overwrite existing entries
-- Use descriptive section names: "Ideas", "People", "Open Questions", "Projects"
-
-**When to update maps:**
-- After writing a note with a clear `map` assignment
-- When the user asks to see all notes on a topic (create a map if none exists)
-- During periodic organization passes
-
----
-
-## Common Patterns
-
-**Capture a new fact:**
-1. `vault_search` with `{ "query": "..." }` to check for duplicates
-2. `vault_write_note` with appropriate type and map
-3. `vault_update_map` if a relevant MOC exists
-
-**Answer a recall question:**
-1. `vault_search` with `{ "query": "..." }` with relevant keywords
-2. `vault_read` with `{ "noteId": "..." }` on top results if needed
-3. Synthesize and respond — cite note IDs when quoting
-
-**Organize a topic:**
-1. `vault_search` with `{ "query": "..." }` to find all related notes
-2. `vault_update_map` to collect them under a coherent section
-3. Report what you found and organized
+Keep responses concise. Never embed binary data, base64 strings, or large text blocks (>1000 chars) directly in messages. Reference files by path instead. Large inline content destabilizes the conversation context window and can cause irrecoverable API errors.

@@ -1,0 +1,188 @@
+{
+  "case": "search-existing-note",
+  "run": 1,
+  "passRate": 1,
+  "passed": 3,
+  "total": 3,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "vault_search"
+      },
+      "pass": true,
+      "reason": "Tool \"vault_search\" was called"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(march 15|15 de marzo|marzo)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(march 15|15 de marzo|marzo)/"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(born|birthday|cumpleaños|naci)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(born|birthday|cumpleaños|naci)/"
+    }
+  ],
+  "judgeResults": null,
+  "response": "No encontré nada sobre el cumpleaños de Tomas.Sé esto sobre el cumpleaños de Tomas:\n\n- Nació el 15 de marzo.\n- Lo festeja todos los años con asado.\n\nFuente: `eval-seed-birthday`",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Que sabes sobre el cumpleaños de Tomas?",
+      "response": "No encontré nada sobre el cumpleaños de Tomas.Sé esto sobre el cumpleaños de Tomas:\n\n- Nació el 15 de marzo.\n- Lo festeja todos los años con asado.\n\nFuente: `eval-seed-birthday`",
+      "latencyMs": 13198,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 6,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "cumpleaños Tomas"
+          },
+          "timestamp": "2026-04-01T18:36:49.065Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T18:36:49.067Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "birthday Tomas"
+          },
+          "timestamp": "2026-04-01T18:36:49.070Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T18:36:49.070Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Tomas fecha de nacimiento"
+          },
+          "timestamp": "2026-04-01T18:36:49.072Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-04-01T18:36:49.072Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "tool_called",
+          "tool": "vault_search"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(march 15|15 de marzo|marzo)"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(born|birthday|cumpleaños|naci)"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(march 15|15 de marzo|marzo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(march 15|15 de marzo|marzo)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(born|birthday|cumpleaños|naci)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(born|birthday|cumpleaños|naci)/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 6,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "cumpleaños Tomas"
+      },
+      "timestamp": "2026-04-01T18:36:49.065Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T18:36:49.067Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "birthday Tomas"
+      },
+      "timestamp": "2026-04-01T18:36:49.070Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T18:36:49.070Z"
+    },
+    {
+      "type": "tool_call",
+      "tool": "vault_search",
+      "params": {
+        "query": "Tomas fecha de nacimiento"
+      },
+      "timestamp": "2026-04-01T18:36:49.072Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_search",
+      "success": true,
+      "timestamp": "2026-04-01T18:36:49.072Z"
+    }
+  ],
+  "searchTimeMs": 2,
+  "latencyMs": 13198,
+  "timestamp": "2026-04-01T18:36:54.658Z"
+}

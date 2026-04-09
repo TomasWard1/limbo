@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    reviewers:
+      - TomasWard1
+    labels:
+      - dependencies
+      - docker
+    allow:
+      - dependency-name: ghcr.io/zeroclaw-labs/zeroclaw
