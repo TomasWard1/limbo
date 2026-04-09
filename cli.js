@@ -1046,18 +1046,32 @@ async function collectConfig(existingEnv = {}) {
   };
 }
 
-// Migrate state from old ZeroClaw named volume (limbo_limbo-zeroclaw-state or
-// limbo-zeroclaw-state) to the new bind-mount directory at OPENCLAW_STATE_DIR.
-// Only runs if the bind-mount dir is empty and the named volume exists.
+// Migrate state from old ZeroClaw to new OpenClaw state directory.
+// Handles two cases:
+//   1. Bind-mount dir: ~/.limbo/zeroclaw-state/ → ~/.limbo/openclaw-state/
+//   2. Named Docker volume: limbo-zeroclaw-state → ~/.limbo/openclaw-state/
+// Only runs if openclaw-state/ is empty. Preserves the old data (copy, not move).
 // Legacy migration — can be removed once all production instances have migrated.
-function migrateLegacyStateVolume() {
+function migrateLegacyState() {
   // Skip if bind-mount dir already has content
   try {
     const entries = fs.readdirSync(OPENCLAW_STATE_DIR);
     if (entries.length > 0) return;
   } catch { return; }
 
-  // Check whether the old named volume exists (Docker may prefix with project name)
+  // Case 1: bind-mount directory on disk (newer installs used this)
+  const legacyDir = path.join(LIMBO_DIR, 'zeroclaw-state');
+  try {
+    const legacyEntries = fs.readdirSync(legacyDir);
+    if (legacyEntries.length > 0) {
+      log(`Migrating state from ${legacyDir} to ${OPENCLAW_STATE_DIR} ...`);
+      fs.cpSync(legacyDir, OPENCLAW_STATE_DIR, { recursive: true });
+      log('Migration complete. Old directory preserved at: ' + legacyDir);
+      return;
+    }
+  } catch { /* dir doesn't exist — try Docker volume next */ }
+
+  // Case 2: named Docker volume (older installs used this)
   const candidateVolumes = ['limbo_limbo-zeroclaw-state', 'limbo-zeroclaw-state'];
   let foundVolume = null;
   try {
@@ -1091,7 +1105,7 @@ function ensureComposeFile(hardened = false) {
   fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'maps'), { recursive: true });
   fs.mkdirSync(OPENCLAW_STATE_DIR, { recursive: true });
-  migrateLegacyStateVolume();
+  migrateLegacyState();
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
   // Ensure secret files exist (Docker Compose secrets require the files to be present)
   for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
@@ -1597,44 +1611,34 @@ function writeAuthProfilesToDocker(store) {
   });
 }
 
+// OpenClaw auth-profiles format — must match setup-server/server.js
 function buildCodexAuthProfile(profile) {
   const profileName = profile.email || 'default';
   const profileId = `openai-codex:${profileName}`;
-  const now = new Date().toISOString();
   return {
-    schema_version: 1,
-    updated_at: now,
-    active_profiles: { 'openai-codex': profileId },
+    version: 1,
     profiles: {
       [profileId]: {
+        type: 'oauth',
         provider: 'openai-codex',
-        profile_name: profileName,
-        kind: 'oauth',
-        account_id: profile.accountId || null,
-        access_token: profile.access,
-        refresh_token: profile.refresh,
-        expires_at: new Date(profile.expires).toISOString(),
-        created_at: now,
-        updated_at: now,
+        access: profile.access,
+        refresh: profile.refresh,
+        expires: profile.expires,
+        email: profile.email || '',
+        accountId: profile.accountId || '',
       },
     },
   };
 }
 
 function buildAnthropicAuthProfile(token) {
-  const now = new Date().toISOString();
   return {
-    schema_version: 1,
-    updated_at: now,
-    active_profiles: { anthropic: 'anthropic:default' },
+    version: 1,
     profiles: {
       'anthropic:default': {
+        type: 'token',
         provider: 'anthropic',
-        profile_name: 'default',
-        kind: 'token',
         token,
-        created_at: now,
-        updated_at: now,
       },
     },
   };
