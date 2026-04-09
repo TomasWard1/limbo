@@ -1,5 +1,6 @@
 import { writeFile, mkdir } from "fs/promises";
-import { join, resolve } from "path";
+import { join, resolve, relative } from "path";
+import { updateEntry } from "../vault-index.js";
 
 const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const NOTES_DIR = join(VAULT_PATH, "notes");
@@ -32,6 +33,12 @@ function buildFrontmatter(note) {
   lines.push(`created: "${note.created || new Date().toISOString().split("T")[0]}"`);
   if (note.source) {
     lines.push(`source: ${note.source}`);
+  }
+  if (note.asset_path) {
+    lines.push(`asset_path: "${escapeYaml(note.asset_path)}"`);
+  }
+  if (note.asset_type) {
+    lines.push(`asset_type: "${escapeYaml(note.asset_type)}"`);
   }
   if (note.topics && note.topics.length > 0) {
     lines.push("topics:");
@@ -91,5 +98,10 @@ export async function vaultWriteNote(note) {
   }
 
   await writeFile(filePath, fileContent, "utf8");
+
+  // Update in-memory index immediately — no re-scan needed
+  const domain = relative(NOTES_DIR, resolve(targetDir)) || null;
+  updateEntry(safe, filePath, fileContent, domain);
+
   return { id: safe, path: filePath };
 }

@@ -1,0 +1,1489 @@
+{
+  "id": "run-1774644299624",
+  "timestamp": "2026-03-27T20:49:56.901Z",
+  "meta": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "reasoningEffort": "medium",
+    "authMode": "subscription",
+    "zeroclawVersion": "0.6.3",
+    "profileKey": "anthropic__claude-sonnet-4-6__medium",
+    "profileLabel": "claude-sonnet-4-6 · medium · anthropic"
+  },
+  "kind": "full",
+  "scope": {
+    "case": null,
+    "tag": null,
+    "difficulty": null,
+    "judge": false
+  },
+  "results": [
+    {
+      "case": "create-reminder",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "banco|bank"
+          },
+          "pass": true,
+          "reason": "Cron job matched /banco|bank/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(reminder|recordatorio|avisarte|cron|programado|mañana)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(reminder|recordatorio|avisarte|cron|programado|mañana)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Listo. Te recuerdo mañana a las **9:00 AM UTC** que tenés que llamar al banco.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 10655,
+      "timestamp": "2026-03-27T20:45:10.807Z"
+    },
+    {
+      "case": "get-file",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_get_file"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_get_file\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(logo|imagen|image|png|archivo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(logo|imagen|image|png|archivo)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "No existe ninguna nota con el ID `eval-seed-logo` en el vault. Es posible que el ID sea diferente — ¿querés que busque notas relacionadas con \"seed\" o \"logo\"?",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_get_file",
+          "params": {
+            "noteId": "eval-seed-logo"
+          },
+          "timestamp": "2026-03-27T20:45:15.732Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_get_file",
+          "success": false,
+          "error": "Note not found: eval-seed-logo",
+          "timestamp": "2026-03-27T20:45:15.733Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 7201,
+      "timestamp": "2026-03-27T20:45:18.781Z"
+    },
+    {
+      "case": "hard-ambiguous-request",
+      "run": 1,
+      "passRate": 1,
+      "passed": 1,
+      "total": 1,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(qu[eé]|what|cu[aá]l|especific|clarif|decime|contame|refer|exactamente|guardar)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Parece que el mensaje llegó sin contenido adjunto — solo el texto \"Guardate esto para después\".\n\n¿Qué querés que guarde?",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 2796,
+      "timestamp": "2026-03-27T20:45:22.124Z"
+    },
+    {
+      "case": "hard-complex-note",
+      "run": 1,
+      "passRate": 1,
+      "passed": 6,
+      "total": 6,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "decision|insight|meeting|project"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /decision|insight|meeting|project/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)laura"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)laura/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)kubernetes|k8s"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)kubernetes|k8s/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)(no vale la pena|not worth|scale)"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)(no vale la pena|not worth|scale)/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)(revisar|review|números|numbers|semana)"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)(revisar|review|números|numbers|semana)/i"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado como `decision-kubernetes-migration-2026-03`. Tenés pendiente revisar los números con Laura la semana que viene.",
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Laura Kubernetes migración"
+          },
+          "timestamp": "2026-03-27T20:45:28.636Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:45:28.636Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Contexto\n\nEl 26 de marzo de 2026, hubo una conversación con Laura sobre la posibilidad de migrar la infraestructura a Kubernetes.\n\n## Posiciones\n\n- **Laura:** No vale la pena para el scale actual.\n- **Usuario:** Cree que sí vale la pena migrar.\n\n## Próximo paso\n\nQuedaron en revisar los números juntos la semana del 30 de marzo de 2026.\n\n## Estado\n\nPendiente de revisión.",
+            "description": "Laura considera que migrar a Kubernetes no vale la pena para el scale actual; el usuario cree que sí, y quedaron en revisar los números la semana del 30 de marzo de 2026.",
+            "domain": "infrastructure",
+            "id": "decision-kubernetes-migration-2026-03",
+            "subdirectory": "decisions",
+            "title": "Debate sobre migrar a Kubernetes",
+            "type": "decision"
+          },
+          "timestamp": "2026-03-27T20:45:33.994Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-03-27T20:45:34.002Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 16046,
+      "timestamp": "2026-03-27T20:45:38.700Z"
+    },
+    {
+      "case": "hard-synthesize-knowledge",
+      "run": 1,
+      "passRate": 0.875,
+      "passed": 7,
+      "total": 8,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)mart[ií]n"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)mart[ií]n/i"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)sof[ií]a"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)sof[ií]a/i"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)mart[ií]n"
+          },
+          "pass": false,
+          "reason": "Response did NOT match /(?i)mart[ií]n/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)sof[ií]a"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)sof[ií]a/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(mercado libre|globant)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(mercado libre|globant)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "El vault no tiene notas guardadas sobre personas todavía.\n\nLo que sí tengo del contexto de esta sesión:\n\n- **Sofía** — data scientist en Globant, la conocés del secundario.\n- **Laura** — hablaron ayer sobre migrar a Kubernetes. Ella opina que no vale la pena para el scale actual; vos creés que sí. Quedaron en revisar los números la semana que viene.\n\nEsas dos conversaciones no llegaron a guardarse como notas en el vault. ¿Querés que las guarde ahora?",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 12,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Martín diseñador Mercado Libre"
+          },
+          "timestamp": "2026-03-27T20:45:49.723Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:45:49.724Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Martín\n\n- **Rol:** Diseñador UX\n- **Empresa:** Mercado Libre\n",
+            "description": "Martín es diseñador UX y trabaja en Mercado Libre.",
+            "id": "persona-martin",
+            "subdirectory": "personas",
+            "title": "Martín",
+            "type": "person"
+          },
+          "timestamp": "2026-03-27T20:45:52.754Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-03-27T20:45:52.761Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Sofía Globant"
+          },
+          "timestamp": "2026-03-27T20:46:02.453Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:46:02.454Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Sofía\n\n- **Rol:** Data Scientist\n- **Empresa:** Globant\n- **Contexto:** Conocida del secundario",
+            "description": "Sofía es data scientist en Globant, conocida del secundario.",
+            "domain": "personal",
+            "id": "persona-sofia",
+            "subdirectory": "personas",
+            "title": "Sofía",
+            "type": "person"
+          },
+          "timestamp": "2026-03-27T20:46:06.819Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-03-27T20:46:06.825Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "persona contacto"
+          },
+          "timestamp": "2026-03-27T20:46:20.002Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:46:20.004Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Sofía Laura persona"
+          },
+          "timestamp": "2026-03-27T20:46:21.547Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:46:21.547Z"
+        }
+      ],
+      "searchTimeMs": 4,
+      "latencyMs": 47171,
+      "timestamp": "2026-03-27T20:46:27.216Z"
+    },
+    {
+      "case": "medium-file-retrieval-implicit",
+      "run": 1,
+      "passRate": 0.6666666666666666,
+      "passed": 2,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_get_file"
+          },
+          "pass": false,
+          "reason": "Tool \"vault_get_file\" was NOT called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(logo|imagen|image|encontr)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(logo|imagen|image|encontr)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "No tengo ningún logo guardado en el vault. Si querés guardar uno, mandámelo y lo almaceno.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "logo"
+          },
+          "timestamp": "2026-03-27T20:46:33.273Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:46:33.274Z"
+        }
+      ],
+      "searchTimeMs": 1,
+      "latencyMs": 8075,
+      "timestamp": "2026-03-27T20:46:35.859Z"
+    },
+    {
+      "case": "medium-note-type-inference",
+      "run": 1,
+      "passRate": 1,
+      "passed": 5,
+      "total": 5,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "decision"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /decision/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)postgresql|postgres"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)postgresql|postgres/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)mongodb|mongo"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)mongodb|mongo/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardé|guardado|anotado|decisión|decision)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardé|guardado|anotado|decisión|decision)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado como `decision-postgresql-sobre-mongodb-2026-03-27`. ¿Querés agregar los motivos de la decisión?",
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "PostgreSQL MongoDB proyecto base de datos"
+          },
+          "timestamp": "2026-03-27T20:46:46.104Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:46:46.106Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Decisión\n\nEl equipo eligió **PostgreSQL** como base de datos para el proyecto nuevo, descartando **MongoDB**.\n\n- **Fecha:** 2026-03-27\n- **Quién decidió:** el equipo (decisión colectiva)\n\n## Contexto\n\nNo se registraron los motivos específicos en el momento. Actualizar esta nota si se documentan las razones.",
+            "description": "El equipo decidió usar PostgreSQL en lugar de MongoDB como base de datos para el proyecto nuevo, el 27 de marzo de 2026.",
+            "domain": "tech",
+            "id": "decision-postgresql-sobre-mongodb-2026-03-27",
+            "subdirectory": "decisiones",
+            "title": "Decisión: PostgreSQL en vez de MongoDB para el proyecto nuevo",
+            "type": "decision"
+          },
+          "timestamp": "2026-03-27T20:46:52.208Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-03-27T20:46:52.214Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 18578,
+      "timestamp": "2026-03-27T20:46:54.976Z"
+    },
+    {
+      "case": "medium-person-multiple-facts",
+      "run": 1,
+      "passRate": 1,
+      "passed": 5,
+      "total": 5,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "person"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)carlos"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)carlos/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)ingeniero|engineer"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)ingeniero|engineer/i"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "(?i)c[oó]rdoba"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /(?i)c[oó]rdoba/i"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado como `persona-carlos-padre`.",
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Carlos padre ingeniero Córdoba"
+          },
+          "timestamp": "2026-03-27T20:47:00.413Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:47:00.415Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Carlos\n\n- **Relación:** padre del usuario\n- **Profesión:** ingeniero\n- **Ciudad:** Córdoba\n",
+            "description": "El padre del usuario se llama Carlos, es ingeniero y vive en Córdoba.",
+            "domain": "personal",
+            "id": "persona-carlos-padre",
+            "subdirectory": "personas",
+            "title": "Carlos (padre)",
+            "type": "person"
+          },
+          "timestamp": "2026-03-27T20:47:03.705Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-03-27T20:47:03.710Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 10489,
+      "timestamp": "2026-03-27T20:47:05.989Z"
+    },
+    {
+      "case": "medium-search-implicit",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(no encontr|no tengo|no tiene|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños|mercado libre|diseñador)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(no encontr|no tengo|no tiene|no hay|nothing|google|engineer|ML|machine learning|birthday|cumpleaños|mercado libre|diseñador)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "El vault no tiene notas guardadas todavía. Tengo contexto de esta conversación con algunas personas:\n\n- **Martín** — diseñador UX en Mercado Libre\n- **Sofía** — data scientist en Globant, la conocés del secundario\n- **Laura** — trabaja en tech (discutieron migrar a Kubernetes; ella considera que no vale la pena para el scale actual, vos creés que sí; quedaron en revisar los números la semana que viene)\n\n¿Querés que guarde estas notas en el vault?",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "tech tecnología trabajo"
+          },
+          "timestamp": "2026-03-27T20:47:10.383Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:47:10.385Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "persona diseñador data scientist developer"
+          },
+          "timestamp": "2026-03-27T20:47:17.635Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:47:17.635Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 18817,
+      "timestamp": "2026-03-27T20:47:25.333Z"
+    },
+    {
+      "case": "multi-step-remember-and-search",
+      "run": 1,
+      "passRate": 1,
+      "passed": 4,
+      "total": 4,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "person"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /person/"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(google|ML|machine learning)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(google|ML|machine learning)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Alice trabaja en Google como ML Engineer.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 6,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Alice Google"
+          },
+          "timestamp": "2026-03-27T20:47:30.946Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:47:30.948Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Alice\n\n- **Empresa:** Google\n- **Rol:** ML Engineer",
+            "description": "Alice trabaja en Google como ML engineer.",
+            "id": "persona-alice",
+            "subdirectory": "personas",
+            "title": "Alice",
+            "type": "person"
+          },
+          "timestamp": "2026-03-27T20:47:34.524Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-03-27T20:47:34.529Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Alice"
+          },
+          "timestamp": "2026-03-27T20:47:45.716Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:47:45.718Z"
+        }
+      ],
+      "searchTimeMs": 4,
+      "latencyMs": 21248,
+      "timestamp": "2026-03-27T20:47:47.508Z"
+    },
+    {
+      "case": "read-note-by-id",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_read"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_read\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(march 15|tomas|birthday)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(march 15|tomas|birthday)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "---\n**eval-seed-birthday**\n\n**Título:** Tomas birthday\n**Tipo:** fact\n**Descripción:** Tomas was born on March 15\n\n---\n\nTomas was born on March 15. He celebrates every year with asado.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_read",
+          "params": {
+            "noteId": "eval-seed-birthday"
+          },
+          "timestamp": "2026-03-27T20:47:52.353Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_read",
+          "success": true,
+          "timestamp": "2026-03-27T20:47:52.354Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 7884,
+      "timestamp": "2026-03-27T20:47:55.913Z"
+    },
+    {
+      "case": "remember-fact",
+      "run": 1,
+      "passRate": 1,
+      "passed": 4,
+      "total": 4,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_write_note",
+            "key": "type",
+            "pattern": "fact|preference"
+          },
+          "pass": true,
+          "reason": "Param \"type\" on \"vault_write_note\" matched /fact|preference/"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "alerg|mani|peanut"
+          },
+          "pass": true,
+          "reason": "A created vault note matched /alerg|mani|peanut/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardé|guardado|saved|anotado|alérgico|maní)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardé|guardado|saved|anotado|alérgico|maní)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Guardado como `alergia-mani`.",
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "alérgico maní alergia"
+          },
+          "timestamp": "2026-03-27T20:48:00.450Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:48:00.451Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "El usuario es alérgico al maní. Dato de salud importante a tener en cuenta.",
+            "description": "El usuario es alérgico al maní.",
+            "domain": "personal",
+            "id": "alergia-mani",
+            "subdirectory": "personal",
+            "title": "Alergia al maní",
+            "type": "fact"
+          },
+          "timestamp": "2026-03-27T20:48:05.566Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-03-27T20:48:05.571Z"
+        }
+      ],
+      "searchTimeMs": 1,
+      "latencyMs": 11364,
+      "timestamp": "2026-03-27T20:48:07.814Z"
+    },
+    {
+      "case": "reminder-timezone",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "cron_created",
+            "pattern": "pastilla|pill|medicamento"
+          },
+          "pass": true,
+          "reason": "Cron job matched /pastilla|pill|medicamento/i"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(23:00|23hs|11.*pm|reminder|recordatorio|programado)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Listo. Te aviso hoy a las **23:00 UTC** para tomar la pastilla.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 9969,
+      "timestamp": "2026-03-27T20:48:18.320Z"
+    },
+    {
+      "case": "search-existing-note",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(march 15|15 de marzo|marzo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(march 15|15 de marzo|marzo)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(born|birthday|cumpleaños|naci)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(born|birthday|cumpleaños|naci)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Según la nota `eval-seed-birthday`: Tomas nació el **15 de marzo** y celebra cada año con asado.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "cumpleaños Tomas"
+          },
+          "timestamp": "2026-03-27T20:48:43.502Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:48:43.504Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Tomas birthday"
+          },
+          "timestamp": "2026-03-27T20:48:45.935Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:48:45.936Z"
+        }
+      ],
+      "searchTimeMs": 3,
+      "latencyMs": 30007,
+      "timestamp": "2026-03-27T20:48:49.017Z"
+    },
+    {
+      "case": "speed-search-broad",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(carlos|sof[ií]a|lucas|mar[ií]a|persona)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 45000
+          },
+          "pass": true,
+          "reason": "Latency 13022ms <= 45000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Solo hay una persona en el vault:\n\n- **Sofía** — Data Scientist en Globant, conocida del secundario (`persona-sofia`)\n\n¿Querés ver más detalles o agregar alguien más?",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 4,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "persona person"
+          },
+          "timestamp": "2026-03-27T20:48:53.830Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:48:53.831Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Sofía Globant secundario"
+          },
+          "timestamp": "2026-03-27T20:48:56.461Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:48:56.462Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 13022,
+      "timestamp": "2026-03-27T20:49:02.585Z"
+    },
+    {
+      "case": "speed-search-simple",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(carlos|ingeniero|córdoba|cordoba)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(carlos|ingeniero|córdoba|cordoba)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 10875ms <= 30000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Tu viejo Carlos, ingeniero, vive en Córdoba. Eso es lo que tengo (`persona-carlos-padre`).",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Carlos"
+          },
+          "timestamp": "2026-03-27T20:49:11.204Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:49:11.206Z"
+        }
+      ],
+      "searchTimeMs": 2,
+      "latencyMs": 10875,
+      "timestamp": "2026-03-27T20:49:13.995Z"
+    },
+    {
+      "case": "speed-write-and-search",
+      "run": 1,
+      "passRate": 1,
+      "passed": 5,
+      "total": 5,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_write_note"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_write_note\" was called"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 12066ms <= 30000ms"
+        },
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_search"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_search\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(pedro|parrilla|palermo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(pedro|parrilla|palermo)/"
+        },
+        {
+          "assertion": {
+            "type": "latency_under",
+            "max_ms": 30000
+          },
+          "pass": true,
+          "reason": "Latency 8458ms <= 30000ms"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Hoy almorzaste con **Pedro** en la parrilla de Palermo.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 6,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "Pedro almuerzo parrilla Palermo"
+          },
+          "timestamp": "2026-03-27T20:49:19.808Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:49:19.809Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_write_note",
+          "params": {
+            "content": "## Almuerzo con Pedro — 27 de marzo de 2026\n\n- **Lugar:** Parrilla en Palermo\n- **Con quién:** Pedro\n- **Fecha:** 2026-03-27\n",
+            "description": "El 27 de marzo de 2026 almorzó con Pedro en una parrilla en Palermo.",
+            "id": "evento-almuerzo-pedro-parrilla-palermo-2026-03-27",
+            "subdirectory": "eventos",
+            "title": "Almuerzo con Pedro en la parrilla de Palermo",
+            "type": "event"
+          },
+          "timestamp": "2026-03-27T20:49:23.784Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_write_note",
+          "success": true,
+          "timestamp": "2026-03-27T20:49:23.792Z"
+        },
+        {
+          "type": "tool_call",
+          "tool": "vault_search",
+          "params": {
+            "query": "almuerzo Pedro parrilla Palermo"
+          },
+          "timestamp": "2026-03-27T20:49:33.730Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_search",
+          "success": true,
+          "timestamp": "2026-03-27T20:49:33.732Z"
+        }
+      ],
+      "searchTimeMs": 3,
+      "latencyMs": 20524,
+      "timestamp": "2026-03-27T20:49:35.414Z"
+    },
+    {
+      "case": "store-file-awareness",
+      "run": 1,
+      "passRate": 1,
+      "passed": 2,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(archivo|file|imagen|image|pdf|document)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(archivo|file|imagen|image|pdf|document)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(guardar|almacenar|store|vault|mandar|enviar)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(guardar|almacenar|store|vault|mandar|enviar)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Sí, podés guardar archivos conmigo. Así funciona:\n\n**Qué puedo guardar**\n- Imágenes (JPG, PNG, etc.)\n- PDFs\n- Documentos\n- Hasta 10MB por archivo\n\n**Cómo funciona**\nCuando me mandás un archivo, lo guardo en el vault junto con una nota vinculada que describe su contenido y contexto. Después podés pedirme que lo recupere por su ID.\n\n**Para guardar:** mandame el archivo y una descripción de qué es o por qué lo guardás.\n\n**Para recuperar:** pedime \"mostrá el archivo [descripción o ID]\" y te lo devue",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 7925,
+      "timestamp": "2026-03-27T20:49:43.865Z"
+    },
+    {
+      "case": "update-map",
+      "run": 1,
+      "passRate": 1,
+      "passed": 3,
+      "total": 3,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_update_map"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_update_map\" was called"
+        },
+        {
+          "assertion": {
+            "type": "param_match",
+            "tool": "vault_update_map",
+            "key": "map",
+            "pattern": "personal-map"
+          },
+          "pass": true,
+          "reason": "Param \"map\" on \"vault_update_map\" matched /personal-map/"
+        },
+        {
+          "assertion": {
+            "type": "vault_file_exists",
+            "path": "maps/personal-map.md"
+          },
+          "pass": true,
+          "reason": "Vault file matched /maps/personal-map.md/i"
+        }
+      ],
+      "judgeResults": null,
+      "response": "Listo. `[[eval-seed-birthday]]` agregada a la sección **Datos Personales** del mapa `personal-map`.",
+      "vaultDiff": {
+        "created": 1,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_update_map",
+          "params": {
+            "entries": [
+              "- [[eval-seed-birthday]]"
+            ],
+            "map": "personal-map",
+            "section": "Datos Personales"
+          },
+          "timestamp": "2026-03-27T20:49:49.514Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_update_map",
+          "success": true,
+          "timestamp": "2026-03-27T20:49:49.518Z"
+        }
+      ],
+      "searchTimeMs": null,
+      "latencyMs": 8182,
+      "timestamp": "2026-03-27T20:49:52.591Z"
+    },
+    {
+      "case": "web-search",
+      "run": 1,
+      "passRate": 0,
+      "passed": 0,
+      "total": 2,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(node|nodejs|version|versión|v\\d+)"
+          },
+          "pass": false,
+          "reason": "Response did NOT match /(?i)(node|nodejs|version|versión|v\\d+)/"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(\\d+\\.\\d+|LTS|Current|latest|última|actual)"
+          },
+          "pass": false,
+          "reason": "Response did NOT match /(\\d+\\.\\d+|LTS|Current|latest|última|actual)/"
+        }
+      ],
+      "judgeResults": null,
+      "response": "No tengo acceso a internet. No puedo hacer búsquedas web.\n\nPuedo recordarte que querías buscarlo, si querés.",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 3771,
+      "timestamp": "2026-03-27T20:49:56.901Z"
+    }
+  ]
+}

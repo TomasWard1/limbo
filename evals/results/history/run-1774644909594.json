@@ -1,0 +1,58 @@
+{
+  "id": "run-1774644909594",
+  "timestamp": "2026-03-27T20:56:40.850Z",
+  "results": [
+    {
+      "case": "telegram-pdf",
+      "run": 1,
+      "passRate": 0,
+      "passed": 0,
+      "total": 4,
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_store_file"
+          },
+          "pass": false,
+          "reason": "Timeout waiting for Telegram processing"
+        },
+        {
+          "assertion": {
+            "type": "vault_file_exists",
+            "pattern": "assets/.*\\.pdf$"
+          },
+          "pass": false,
+          "reason": "Timeout waiting for Telegram processing"
+        },
+        {
+          "assertion": {
+            "type": "vault_note_created",
+            "pattern": "asset_path.*\\.pdf|asset_type.*application/pdf"
+          },
+          "pass": false,
+          "reason": "Timeout waiting for Telegram processing"
+        },
+        {
+          "assertion": {
+            "type": "response_no_error"
+          },
+          "pass": false,
+          "reason": "Timeout waiting for Telegram processing"
+        }
+      ],
+      "judgeResults": null,
+      "response": "",
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "mcpLogCount": 0,
+      "mcpLogs": [],
+      "searchTimeMs": null,
+      "latencyMs": 0,
+      "timestamp": "2026-03-27T20:56:40.849Z"
+    }
+  ]
+}

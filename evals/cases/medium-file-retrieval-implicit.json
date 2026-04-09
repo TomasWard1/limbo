@@ -1,0 +1,14 @@
+{
+  "name": "medium-file-retrieval-implicit",
+  "description": "User asks for a file without specifying the note ID — must search first, then get file",
+  "input": "Tenés guardado algún logo? Mostrámelo",
+  "assertions": [
+    { "type": "tool_called", "tool": "vault_search" },
+    { "type": "tool_called", "tool": "vault_get_file" },
+    { "type": "response_matches", "pattern": "(?i)(logo|imagen|image|encontr)" }
+  ],
+  "difficulty": "medium",
+  "runs": 1,
+  "pass_threshold": 1.0,
+  "tags": ["multi-tool", "vault_search", "vault_get_file", "file-tools"]
+}

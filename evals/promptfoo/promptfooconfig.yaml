@@ -1,0 +1,106 @@
+# Limbo agent evals — powered by promptfoo
+# Run: npx promptfoo eval -c evals/promptfoo/promptfooconfig.yaml
+# View: npx promptfoo view
+#
+# IMPORTANT: tests share a single container. Order matters.
+# Read-only tests first, then writes, then destructive (cron/user).
+# Run with -j 1 to enforce sequential execution.
+
+description: Limbo core agent evals
+
+prompts:
+  - "{{prompt}}"
+
+providers:
+  - file://./provider.js
+
+# Sequential execution — tests share container state and are ordered to avoid conflicts
+maxConcurrency: 1
+
+tests:
+  # ── READ-ONLY TESTS (depend on seed, don't modify vault) ──────────────────
+
+  # 1. find-and-read-note: searches and reads a pre-seeded birthday note
+  - description: "find-and-read-note: finds and reads a seeded note about a birthday"
+    vars:
+      prompt: "Que sabes sobre el cumpleaños de Tomas?"
+    assert:
+      - type: javascript
+        value: file://./assertions.js:toolCalled
+        config:
+          tool: vault_search
+      - type: javascript
+        value: file://./assertions.js:toolCalled
+        config:
+          tool: vault_read
+      - type: javascript
+        value: file://./assertions.js:responseMatches
+        config:
+          pattern: "15"
+
+  # ── WRITE TESTS (create new notes, don't touch seeds) ─────────────────────
+
+  # 3. write-note: saves a new fact (unique ID, won't collide with seeds)
+  - description: "write-note: saves a personal fact to the vault"
+    vars:
+      prompt: "Acordate que soy alérgico al maní"
+    assert:
+      - type: javascript
+        value: file://./assertions.js:responseMatches
+        config:
+          pattern: "(?i)(guard[eé]|saved|anot[eé]|listo|hecho|mani|maní)"
+      - type: javascript
+        value: file://./assertions.js:vaultNoteCreated
+        config:
+          count: 1
+          pattern: "mani"
+
+  # ── CRON TESTS ─────────────────────────────────────────────────────────────
+
+  # 3a. set-timezone (turn 1): agent asks for timezone
+  #     toolCalled: workspace_read works because it's an MCP tool
+  - description: "set-timezone-turn1: asks for timezone when not configured"
+    vars:
+      prompt: "Recordame mañana a las 9am que tengo que llamar al banco"
+      __sessionGroup: "tz-flow"
+    assert:
+      - type: javascript
+        value: file://./assertions.js:toolCalled
+        config:
+          tool: workspace_read
+      - type: javascript
+        value: file://./assertions.js:responseMatches
+        config:
+          pattern: "(?i)(timezone|huso horario|zona horaria|qu[eé] hora|d[oó]nde)"
+
+  # 3b. set-timezone-and-create-reminder (turn 2): user provides timezone,
+  #     agent saves tz to USER.md AND creates the reminder in one shot.
+  - description: "set-timezone-and-create-reminder: saves tz + creates cron in one turn"
+    vars:
+      prompt: "ART"
+      __sessionGroup: "tz-flow"
+    assert:
+      - type: javascript
+        value: file://./assertions.js:toolCalled
+        config:
+          tool: workspace_write
+      - type: javascript
+        value: file://./assertions.js:userProfileMatches
+        config:
+          pattern: "(?i)(ART|argentina|buenos.aires)"
+      - type: javascript
+        value: file://./assertions.js:cronCountIncreased
+        config:
+          by: 1
+
+  # ── USER PROFILE TESTS (modifies USER.md — runs last) ─────────────────────
+
+  # 5. write-user-name: persists name to USER.md
+  - description: "write-user-name: persists user name to USER.md"
+    vars:
+      prompt: "Che, me llamo Santiago. Guardalo así te acordás"
+    assert:
+      - type: javascript
+        value: file://./assertions.js:userProfileMatches
+        config:
+          pattern: "(?i)santiago"

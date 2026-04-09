@@ -1,0 +1,16 @@
+{
+  "name": "medium-note-type-inference",
+  "description": "User describes a team decision — the note type should be 'decision', not 'fact'",
+  "input": "Hoy decidimos con el equipo que vamos a usar PostgreSQL en vez de MongoDB para el proyecto nuevo",
+  "assertions": [
+    { "type": "tool_called", "tool": "vault_write_note" },
+    { "type": "param_match", "tool": "vault_write_note", "key": "type", "pattern": "decision" },
+    { "type": "vault_note_created", "pattern": "(?i)postgresql|postgres" },
+    { "type": "vault_note_created", "pattern": "(?i)mongodb|mongo" },
+    { "type": "response_matches", "pattern": "(?i)(guardé|guardado|anotado|decisión|decision)" }
+  ],
+  "runs": 1,
+  "pass_threshold": 1.0,
+  "tags": ["tool-calling", "vault_write_note", "type-inference"],
+  "difficulty": "medium"
+}

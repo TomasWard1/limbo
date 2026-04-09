@@ -6,24 +6,35 @@
 const { execSync, spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
+const https = require('https');
 const os = require('os');
 const path = require('path');
 const readline = require('readline');
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const LIMBO_DIR = path.join(os.homedir(), '.limbo');
+// --home flag or LIMBO_HOME env var overrides the default ~/.limbo directory.
+// Useful for testing without affecting the production install.
+const LIMBO_DIR = (() => {
+  const idx = process.argv.indexOf('--home');
+  if (idx !== -1 && idx + 1 < process.argv.length) return path.resolve(process.argv[idx + 1]);
+  if (process.env.LIMBO_HOME) return path.resolve(process.env.LIMBO_HOME);
+  return path.join(os.homedir(), '.limbo');
+})();
 const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
+const OPENCLAW_STATE_DIR = path.join(LIMBO_DIR, 'openclaw-state');
 const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
-const GHCR_IMAGE = 'ghcr.io/tomasward1/limbo';
+const DEFAULT_REGISTRY = 'registry.gitlab.com/tomas209/limbo';
+const REGISTRY_IMAGE = process.env.LIMBO_REGISTRY || DEFAULT_REGISTRY;
 const DEFAULT_TAG = 'latest';
+const IMAGE_OVERRIDE = process.env.LIMBO_IMAGE || null;
 const DEFAULT_PORT = 18789;
 const COEXIST_PORT = 18900;
 let PORT = DEFAULT_PORT;
 
-// ─── ZeroClaw Detection ─────────────────────────────────────────────────────
+// ─── Port Conflict Detection ────────────────────────────────────────────────
 
 function isPortInUse(port) {
   try {
@@ -37,7 +48,7 @@ function isPortInUse(port) {
   }
 }
 
-function detectExistingZeroClaw() {
+function detectPortConflict() {
   if (!isPortInUse(DEFAULT_PORT)) return null;
 
   let processInfo = 'unknown process';
@@ -46,7 +57,7 @@ function detectExistingZeroClaw() {
     if (lsof) {
       const pid = lsof.split('\n')[0];
       const cmdline = execSync(`ps -p ${pid} -o command= 2>/dev/null`, { encoding: 'utf8', stdio: 'pipe' }).trim();
-      if (cmdline.includes('zeroclaw')) processInfo = 'ZeroClaw';
+      if (cmdline.includes('openclaw')) processInfo = 'OpenClaw';
       else if (cmdline.includes('docker')) processInfo = 'Docker container';
       else processInfo = cmdline.slice(0, 60);
     }
@@ -57,7 +68,7 @@ function detectExistingZeroClaw() {
 
 function findExistingApiKeys() {
   const searchPaths = [
-    path.join(os.homedir(), '.zeroclaw', '.env'),
+    path.join(os.homedir(), '.openclaw', '.env'),
     '/opt/openclaw/.env',
     '/opt/openclaw/secrets/llm_api_key',
     path.join(os.homedir(), '.openclaw', '.env'),
@@ -89,10 +100,7 @@ function findExistingApiKeys() {
   return null;
 }
 
-// ZeroClaw compatibility snapshots from official docs:
-// - https://docs.zeroclaw.dev/providers/openai
-// - https://docs.zeroclaw.dev/providers/anthropic
-// - https://docs.zeroclaw.dev/start/wizard-cli-reference
+// OpenClaw compatibility snapshots from official docs:
 const MODEL_CATALOG = {
   'openai:subscription': {
     provider: 'openai-codex',
@@ -134,11 +142,29 @@ const ASCII_ART = String.raw`
 |_____|___|_|  |_|____/ \___/
 `;
 
+function resolveImage() {
+  return IMAGE_OVERRIDE || parseFlag('--image') || `${REGISTRY_IMAGE}:${DEFAULT_TAG}`;
+}
+
+function resolveExtraEnv() {
+  const extra = [];
+  const args = process.argv;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--env' && i + 1 < args.length) {
+      extra.push(args[i + 1]);
+      i++;
+    }
+  }
+  if (!extra.length) return '';
+  return extra.map(e => `      ${e.split('=')[0]}: "${e.split('=').slice(1).join('=')}"`).join('\n') + '\n';
+}
+
 // docker-compose.yml written to ~/.limbo on install
 function composeContent() {
   return `services:
   limbo:
-    image: ${GHCR_IMAGE}:${DEFAULT_TAG}
+    image: ${resolveImage()}
+    init: true
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -151,29 +177,28 @@ function composeContent() {
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
-      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
-      - "${isServerEnvironment() ? '0.0.0.0' : '127.0.0.1'}:${PORT}:${PORT}"
+      - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
-      - limbo-zeroclaw-state:/home/limbo/.zeroclaw
+      - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
     secrets:
-      - source: llm_api_key
-        mode: 0444
-      - source: telegram_bot_token
-        mode: 0444
-      - source: gateway_token
-        mode: 0444
+      - llm_api_key
+      - telegram_bot_token
+      - gateway_token
+      - groq_api_key
+      - brave_api_key
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
-    healthcheck:
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
+${resolveExtraEnv()}    healthcheck:
       test:
         - CMD-SHELL
-        - zeroclaw status --format=exit-code 2>/dev/null || node -e "require('http').get('http://127.0.0.1:'\${LIMBO_PORT:-18789}'/',r=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))"
+        - node -e "fetch('http://localhost:'\${LIMBO_PORT:-18789}'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 3
@@ -186,10 +211,13 @@ secrets:
     file: ${SECRETS_DIR}/telegram_bot_token
   gateway_token:
     file: ${SECRETS_DIR}/gateway_token
+  groq_api_key:
+    file: ${SECRETS_DIR}/groq_api_key
+  brave_api_key:
+    file: ${SECRETS_DIR}/brave_api_key
 
 volumes:
   limbo-data:
-  limbo-zeroclaw-state:
 `;
 }
 
@@ -197,7 +225,8 @@ volumes:
 function composeContentHardened() {
   return `services:
   limbo:
-    image: ${GHCR_IMAGE}:${DEFAULT_TAG}
+    image: ${resolveImage()}
+    init: true
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -210,34 +239,33 @@ function composeContentHardened() {
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
-      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
-      - "${isServerEnvironment() ? '0.0.0.0' : '127.0.0.1'}:${PORT}:${PORT}"
+      - "127.0.0.1:${PORT}:${PORT}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
-      - limbo-zeroclaw-state:/home/limbo/.zeroclaw
+      - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
     secrets:
-      - source: llm_api_key
-        mode: 0444
-      - source: telegram_bot_token
-        mode: 0444
-      - source: gateway_token
-        mode: 0444
+      - llm_api_key
+      - telegram_bot_token
+      - gateway_token
+      - groq_api_key
+      - brave_api_key
     env_file:
       - ${LIMBO_DIR}/.env
     environment:
       LIMBO_PORT: "${PORT}"
-      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
+      NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
       NO_PROXY: "127.0.0.1,localhost"
-    networks:
+${resolveExtraEnv()}    networks:
       - internal
     healthcheck:
       test:
         - CMD-SHELL
-        - zeroclaw status --format=exit-code 2>/dev/null || node -e "require('http').get('http://127.0.0.1:'\${LIMBO_PORT:-18789}'/',r=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))"
+        - node -e "fetch('http://localhost:'\${LIMBO_PORT:-18789}'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 3
@@ -276,10 +304,13 @@ secrets:
     file: ${SECRETS_DIR}/telegram_bot_token
   gateway_token:
     file: ${SECRETS_DIR}/gateway_token
+  groq_api_key:
+    file: ${SECRETS_DIR}/groq_api_key
+  brave_api_key:
+    file: ${SECRETS_DIR}/brave_api_key
 
 volumes:
   limbo-data:
-  limbo-zeroclaw-state:
 `;
 }
 
@@ -311,6 +342,18 @@ const TEXT = {
     openRouterKeyHint: 'Get your key at: https://openrouter.ai/keys',
     openRouterModelPrompt: '  Model name (blank = auto-routing): ',
     openRouterModelHint: 'Examples: anthropic/claude-sonnet-4-6, openai/gpt-4o, google/gemini-2.5-pro',
+    optionalFeatures: 'Optional features',
+    voiceQuestion: 'Enable voice transcription? (Requires Groq API key)',
+    groqApiKeyPrompt: '  Groq API key (gsk_...): ',
+    groqApiKeyHint: 'Get your free key at: https://console.groq.com/keys',
+    invalidGroqKey: 'Groq API keys usually start with "gsk_". Proceeding anyway.',
+    webSearchQuestion: 'Enable web search? (Requires Brave Search API key)',
+    braveApiKeyPrompt: '  Brave API key (BSA...): ',
+    braveApiKeyHint: 'Get your key at: https://brave.com/search/api/',
+    invalidBraveKey: 'Brave API keys usually start with "BSA". Proceeding anyway.',
+    reviewHeader: 'Review your configuration',
+    reviewConfirm: 'Proceed with this configuration?',
+    reviewStartOver: 'Start over',
     telegramQuestion: 'Want to speak to Limbo through Telegram?',
     telegramBotFatherSteps: [
       'To create a Telegram bot:',
@@ -336,7 +379,7 @@ const TEXT = {
     imagePulled: 'Image pulled.',
     pullFailed: 'Could not pull from GHCR. Trying local build fallback...',
     buildingFallback: 'Building from local Dockerfile...',
-    buildOk: (tag) => `Built: ${GHCR_IMAGE}:${tag}`,
+    buildOk: (tag) => `Built: ${REGISTRY_IMAGE}:${tag}`,
     starting: 'Starting Limbo...',
     healthy: 'Limbo started.',
     subscriptionSetup: 'Provider authentication',
@@ -427,6 +470,18 @@ const TEXT = {
     openRouterKeyHint: 'Consegui tu key en: https://openrouter.ai/keys',
     openRouterModelPrompt: '  Nombre del modelo (vacio = auto-routing): ',
     openRouterModelHint: 'Ejemplos: anthropic/claude-sonnet-4-6, openai/gpt-4o, google/gemini-2.5-pro',
+    optionalFeatures: 'Funciones opcionales',
+    voiceQuestion: 'Habilitar transcripcion de voz? (Requiere API key de Groq)',
+    groqApiKeyPrompt: '  Groq API key (gsk_...): ',
+    groqApiKeyHint: 'Consegui tu key gratis en: https://console.groq.com/keys',
+    invalidGroqKey: 'Las API keys de Groq normalmente empiezan con "gsk_". Continuando igual.',
+    webSearchQuestion: 'Habilitar busqueda web? (Requiere API key de Brave Search)',
+    braveApiKeyPrompt: '  Brave API key (BSA...): ',
+    braveApiKeyHint: 'Consegui tu key en: https://brave.com/search/api/',
+    invalidBraveKey: 'Las API keys de Brave normalmente empiezan con "BSA". Continuando igual.',
+    reviewHeader: 'Revisa tu configuracion',
+    reviewConfirm: 'Continuar con esta configuracion?',
+    reviewStartOver: 'Empezar de nuevo',
     telegramQuestion: 'Quieres hablar con Limbo por Telegram?',
     telegramBotFatherSteps: [
       'Para crear un bot de Telegram:',
@@ -452,7 +507,7 @@ const TEXT = {
     imagePulled: 'Imagen descargada.',
     pullFailed: 'No se pudo bajar la imagen desde GHCR. Probando build local...',
     buildingFallback: 'Construyendo desde el Dockerfile local...',
-    buildOk: (tag) => `Imagen construida: ${GHCR_IMAGE}:${tag}`,
+    buildOk: (tag) => `Imagen construida: ${REGISTRY_IMAGE}:${tag}`,
     starting: 'Arrancando Limbo...',
     healthy: 'Limbo arrancó.',
     subscriptionSetup: 'Autenticacion del provider',
@@ -705,6 +760,8 @@ function normalizeConfig(cfg, existingEnv = {}) {
     TELEGRAM_BOT_TOKEN: cfg.telegramToken || (cfg.keepExisting ? existingEnv.TELEGRAM_BOT_TOKEN || '' : ''),
     TELEGRAM_AUTO_PAIR_FIRST_DM: cfg.telegramAutoPair || existingEnv.TELEGRAM_AUTO_PAIR_FIRST_DM || 'false',
     GATEWAY_TOKEN: gatewayToken,
+    VOICE_ENABLED: cfg.voiceEnabled || existingEnv.VOICE_ENABLED || 'false',
+    WEB_SEARCH_ENABLED: cfg.webSearchEnabled || existingEnv.WEB_SEARCH_ENABLED || 'false',
   };
 
   return base;
@@ -713,7 +770,10 @@ function normalizeConfig(cfg, existingEnv = {}) {
 function writeSecretFile(name, value) {
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
   const filePath = path.join(SECRETS_DIR, name);
-  fs.writeFileSync(filePath, value || '', { mode: 0o600 });
+  // Use 0644 so any container user can read the mounted file.
+  // Docker Compose file-based secrets ignore uid/gid/mode settings,
+  // so the host file permissions are what the container sees.
+  fs.writeFileSync(filePath, value || '', { mode: 0o644 });
 }
 
 function writeSecrets(cfg, existingEnv = {}) {
@@ -721,6 +781,8 @@ function writeSecrets(cfg, existingEnv = {}) {
   writeSecretFile('llm_api_key', normalized.LLM_API_KEY);
   writeSecretFile('telegram_bot_token', normalized.TELEGRAM_BOT_TOKEN);
   writeSecretFile('gateway_token', normalized.GATEWAY_TOKEN);
+  writeSecretFile('groq_api_key', cfg.groqApiKey || readSecretFile('groq_api_key'));
+  writeSecretFile('brave_api_key', cfg.braveApiKey || readSecretFile('brave_api_key'));
 }
 
 const SECRET_KEYS = new Set([
@@ -786,7 +848,7 @@ async function chooseModel(lang, providerFamily, authMode) {
 async function collectConfig(existingEnv = {}) {
   console.log(`${c.cyan}${ASCII_ART}${c.reset}`);
 
-  // Check for existing API keys from another ZeroClaw installation
+  // Check for existing API keys from another installation
   const existingKeys = findExistingApiKeys();
   if (existingKeys && !existingEnv.LLM_API_KEY && !existingEnv.ANTHROPIC_API_KEY && !existingEnv.OPENAI_API_KEY) {
     const keyValue = existingKeys.keys.LLM_API_KEY || existingKeys.keys.ANTHROPIC_API_KEY || existingKeys.keys.OPENAI_API_KEY || existingKeys.keys.OPENROUTER_API_KEY || '';
@@ -888,7 +950,6 @@ async function collectConfig(existingEnv = {}) {
   ], language);
 
   let telegramToken = '';
-  let telegramAutoPair = 'false';
   if (telegramChoice.value === 'true') {
     console.log('');
     TEXT[language].telegramBotFatherSteps.forEach((line) => console.log(`  ${c.dim}${line}${c.reset}`));
@@ -898,11 +959,73 @@ async function collectConfig(existingEnv = {}) {
       t(language, 'telegramTokenPrompt'),
       (value) => value ? { ok: true, value } : { ok: false, message: t(language, 'requiredField') },
     );
-    const autoPairChoice = await selectMenu(t(language, 'telegramAutoPairQuestion'), [
-      { label: t(language, 'no'), value: 'false' },
-      { label: t(language, 'yes'), value: 'true' },
-    ], language);
-    telegramAutoPair = autoPairChoice.value;
+  }
+
+  // ── Optional features ────────────────────────────────────────────────────
+  header(t(language, 'optionalFeatures'));
+
+  let voiceEnabled = 'false';
+  let groqApiKey = '';
+  const voiceChoice = await selectMenu(t(language, 'voiceQuestion'), [
+    { label: t(language, 'no'), value: 'false' },
+    { label: t(language, 'yes'), value: 'true' },
+  ], language);
+  if (voiceChoice.value === 'true') {
+    console.log(`  ${c.dim}${t(language, 'groqApiKeyHint')}${c.reset}`);
+    groqApiKey = await promptValidated(
+      t(language, 'groqApiKeyPrompt'),
+      (value) => {
+        if (!value) return { ok: false, message: t(language, 'requiredField') };
+        if (!value.startsWith('gsk_')) warn(t(language, 'invalidGroqKey'));
+        return { ok: true, value };
+      },
+    );
+    voiceEnabled = 'true';
+  }
+
+  let webSearchEnabled = 'false';
+  let braveApiKey = '';
+  const webSearchChoice = await selectMenu(t(language, 'webSearchQuestion'), [
+    { label: t(language, 'no'), value: 'false' },
+    { label: t(language, 'yes'), value: 'true' },
+  ], language);
+  if (webSearchChoice.value === 'true') {
+    console.log(`  ${c.dim}${t(language, 'braveApiKeyHint')}${c.reset}`);
+    braveApiKey = await promptValidated(
+      t(language, 'braveApiKeyPrompt'),
+      (value) => {
+        if (!value) return { ok: false, message: t(language, 'requiredField') };
+        if (!value.startsWith('BSA')) warn(t(language, 'invalidBraveKey'));
+        return { ok: true, value };
+      },
+    );
+    webSearchEnabled = 'true';
+  }
+
+  // ── Review step ──────────────────────────────────────────────────────────
+  const providerLabel = providerFamily === 'openai' ? 'OpenAI'
+    : providerFamily === 'anthropic' ? 'Anthropic' : 'OpenRouter';
+  const authLabel = accessMethod === 'subscription' ? 'Subscription' : 'API key';
+  const enabledLabel = language === 'es' ? 'habilitado' : 'enabled';
+  const disabledLabel = language === 'es' ? 'deshabilitado' : 'disabled';
+
+  header(t(language, 'reviewHeader'));
+  console.log(`
+  ${c.bold}Provider:${c.reset}      ${providerLabel}
+  ${c.bold}Model:${c.reset}         ${modelName}
+  ${c.bold}Auth:${c.reset}          ${authLabel}
+  ${c.bold}Telegram:${c.reset}      ${telegramChoice.value === 'true' ? `${c.green}${enabledLabel}${c.reset}` : `${c.dim}${disabledLabel}${c.reset}`}
+  ${c.bold}Voice:${c.reset}         ${voiceEnabled === 'true' ? `${c.green}${enabledLabel}${c.reset}` : `${c.dim}${disabledLabel}${c.reset}`}
+  ${c.bold}Web search:${c.reset}    ${webSearchEnabled === 'true' ? `${c.green}${enabledLabel}${c.reset}` : `${c.dim}${disabledLabel}${c.reset}`}
+`);
+
+  const confirmChoice = await selectMenu(t(language, 'reviewConfirm'), [
+    { label: t(language, 'yes'), value: 'confirm' },
+    { label: t(language, 'reviewStartOver'), value: 'restart' },
+  ], language);
+
+  if (confirmChoice.value === 'restart') {
+    return collectConfig(existingEnv);
   }
 
   return {
@@ -914,20 +1037,66 @@ async function collectConfig(existingEnv = {}) {
     apiKey,
     telegramEnabled: telegramChoice.value,
     telegramToken,
-    telegramAutoPair,
+    telegramAutoPair: 'true',
+    voiceEnabled,
+    groqApiKey,
+    webSearchEnabled,
+    braveApiKey,
     gatewayToken: existingEnv.GATEWAY_TOKEN || generateGatewayToken(),
   };
+}
+
+// Migrate state from old ZeroClaw named volume (limbo_limbo-zeroclaw-state or
+// limbo-zeroclaw-state) to the new bind-mount directory at OPENCLAW_STATE_DIR.
+// Only runs if the bind-mount dir is empty and the named volume exists.
+// Legacy migration — can be removed once all production instances have migrated.
+function migrateLegacyStateVolume() {
+  // Skip if bind-mount dir already has content
+  try {
+    const entries = fs.readdirSync(OPENCLAW_STATE_DIR);
+    if (entries.length > 0) return;
+  } catch { return; }
+
+  // Check whether the old named volume exists (Docker may prefix with project name)
+  const candidateVolumes = ['limbo_limbo-zeroclaw-state', 'limbo-zeroclaw-state'];
+  let foundVolume = null;
+  try {
+    const result = spawnSync('docker', ['volume', 'ls', '--format', '{{.Name}}'], { encoding: 'utf8', stdio: 'pipe' });
+    if (result.status === 0) {
+      const existing = result.stdout.split('\n').map(s => s.trim());
+      foundVolume = candidateVolumes.find(v => existing.includes(v)) || null;
+    }
+  } catch { /* docker not available yet */ }
+
+  if (!foundVolume) return;
+
+  log(`Migrating legacy state from volume "${foundVolume}" to ${OPENCLAW_STATE_DIR} ...`);
+  const migrate = spawnSync('docker', [
+    'run', '--rm',
+    '-v', `${foundVolume}:/src:ro`,
+    '-v', `${OPENCLAW_STATE_DIR}:/dst`,
+    'alpine',
+    'sh', '-c', 'cp -a /src/. /dst/',
+  ], { stdio: 'pipe' });
+
+  if (migrate.status === 0) {
+    log('Migration complete. Old volume data is preserved and can be removed with: docker volume rm ' + foundVolume);
+  } else {
+    warn('Migration from old volume failed — continuing with empty state. Run `limbo start` again after verifying Docker is available.');
+  }
 }
 
 function ensureComposeFile(hardened = false) {
   fs.mkdirSync(LIMBO_DIR, { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'maps'), { recursive: true });
+  fs.mkdirSync(OPENCLAW_STATE_DIR, { recursive: true });
+  migrateLegacyStateVolume();
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
   // Ensure secret files exist (Docker Compose secrets require the files to be present)
-  for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token']) {
+  for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
     const fp = path.join(SECRETS_DIR, name);
-    if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o600 });
+    if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o644 });
   }
   if (hardened) {
     // Copy squid config files for egress filtering
@@ -961,11 +1130,18 @@ function ensureGatewayToken(existingEnv) {
 }
 
 function pullOrBuildImage(lang) {
+  // --image or LIMBO_IMAGE: user provided a pre-built image, skip build/pull entirely.
+  if (IMAGE_OVERRIDE || parseFlag('--image')) {
+    const img = resolveImage();
+    ok(`Using image: ${img}`);
+    return;
+  }
+
   // When running from the repo (npx .), prefer local build over registry pull.
   const repoDockerfile = path.join(__dirname, 'Dockerfile');
   if (fs.existsSync(repoDockerfile)) {
     header(t(lang, 'buildingFallback'));
-    execSync(`docker build -t ${GHCR_IMAGE}:${DEFAULT_TAG} .`, { stdio: 'inherit', cwd: __dirname });
+    execSync(`docker build -t ${REGISTRY_IMAGE}:${DEFAULT_TAG} .`, { stdio: 'inherit', cwd: __dirname });
     ok(t(lang, 'buildOk', DEFAULT_TAG));
     return;
   }
@@ -990,28 +1166,195 @@ function ensureVolumePermissions() {
     '--cap-add', 'DAC_OVERRIDE',
     '--entrypoint', 'sh',
     'limbo',
-    '-c', 'chown -R limbo:limbo /data /home/limbo/.zeroclaw 2>/dev/null; true',
+    '-c', 'chown -R limbo:limbo /data /home/limbo/.openclaw 2>/dev/null; true',
   ], { stdio: 'pipe' });
 }
 
-// ─── Server detection & Cloudflare tunnel for remote wizard access ──────────
+// ─── Server detection & tunnel for remote wizard access ─────────────────────
 
 function isServerEnvironment() {
   return !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT ||
     (os.platform() === 'linux' && !process.env.DISPLAY));
 }
 
-// Creates a public HTTPS tunnel via localhost.run (SSH-based, zero install).
-// Falls back gracefully if SSH is unavailable or the service is down.
-async function createSetupTunnel(port) {
+const CF_CERT_PATH = path.join(os.homedir(), '.cloudflared', 'cert.pem');
+const CF_TUNNEL_CONFIG = path.join(LIMBO_DIR, 'tunnel-config.json');
+
+function hasCloudflared() {
+  try { execSync('cloudflared --version', { stdio: 'pipe' }); return true; } // hardcoded, safe
+  catch { return false; }
+}
+
+function isCloudflareLoggedIn() {
+  return fs.existsSync(CF_CERT_PATH);
+}
+
+// Interactive prompt: choose tunnel type
+async function promptTunnelChoice() {
+  const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+
+  console.log(`
+  ${c.bold}Setup wizard needs a public URL for your client.${c.reset}
+
+  ${c.green}1)${c.reset} Cloudflare tunnel ${c.dim}(stable URL under your domain, recommended)${c.reset}
+  ${c.green}2)${c.reset} Quick tunnel      ${c.dim}(instant, temporary URL via localhost.run)${c.reset}
+`);
+  const choice = (await ask('  Choose [1/2]: ')).trim();
+  rl.close();
+  return choice === '2' ? 'quick' : 'cloudflare';
+}
+
+// cloudflared login (interactive, opens browser or prints URL)
+async function ensureCloudflareLogin() {
+  if (isCloudflareLoggedIn()) return true;
+
+  log('Logging in to Cloudflare...');
+  log('A browser window will open (or a URL will be printed). Select your domain.\n');
+
+  const result = spawnSync('cloudflared', ['login'], { stdio: 'inherit' });
+  if (result.status !== 0 || !isCloudflareLoggedIn()) {
+    warn('Cloudflare login failed or was cancelled.');
+    return false;
+  }
+  ok('Cloudflare login successful.');
+  return true;
+}
+
+// Tunnel hostnames are always setup-<slug>.heylimbo.com
+const CF_TUNNEL_BASE_DOMAIN = 'heylimbo.com';
+
+// Create a named CF tunnel using cloudflared CLI (requires cert.pem from login)
+async function createNamedCfTunnel(port) {
+  const slug = crypto.randomBytes(4).toString('hex').slice(0, 7);
+  const tunnelName = 'limbo-setup-' + slug;
+  const hostname = 'setup-' + slug + '.' + CF_TUNNEL_BASE_DOMAIN;
+
+  try {
+    // 1. Create tunnel
+    spinnerWrite('Creating tunnel...');
+    const createResult = spawnSync('cloudflared', ['tunnel', 'create', tunnelName], {
+      stdio: 'pipe', encoding: 'utf8',
+    });
+    if (createResult.status !== 0) {
+      spinnerClear();
+      warn('Failed to create tunnel: ' + (createResult.stderr || '').trim());
+      return null;
+    }
+
+    // Extract tunnel ID from output ("Created tunnel <name> with id <uuid>")
+    const idMatch = (createResult.stdout + createResult.stderr).match(/with id ([0-9a-f-]+)/i);
+    if (!idMatch) {
+      spinnerClear();
+      warn('Could not parse tunnel ID from cloudflared output.');
+      return null;
+    }
+    const tunnelId = idMatch[1];
+
+    // 2. Route DNS
+    spinnerWrite('Configuring DNS...');
+    const dnsResult = spawnSync('cloudflared', ['tunnel', 'route', 'dns', tunnelName, hostname], {
+      stdio: 'pipe', encoding: 'utf8',
+    });
+    if (dnsResult.status !== 0) {
+      // Non-fatal: might already exist, or we can continue anyway
+      const stderr = (dnsResult.stderr || '').trim();
+      if (!stderr.includes('already exists')) {
+        warn('DNS routing warning: ' + stderr);
+      }
+    }
+
+    // 3. Write minimal config file for this tunnel
+    const cfCredPath = path.join(os.homedir(), '.cloudflared', tunnelId + '.json');
+    const tunnelConfig = path.join(LIMBO_DIR, 'tunnel-cloudflared.yml');
+    const configContent = [
+      'tunnel: ' + tunnelId,
+      'credentials-file: ' + cfCredPath,
+      'ingress:',
+      '  - hostname: ' + hostname,
+      '    service: http://localhost:' + port,
+      '  - service: http_status:404',
+      '',
+    ].join('\n');
+    fs.writeFileSync(tunnelConfig, configContent, { mode: 0o600 });
+
+    // 4. Run tunnel
+    const logFile = path.join(LIMBO_DIR, 'tunnel-setup.log');
+    const tunnelProc = spawn('cloudflared', [
+      'tunnel', '--config', tunnelConfig, 'run', tunnelName,
+    ], {
+      detached: true,
+      stdio: ['ignore', fs.openSync(logFile, 'w'), fs.openSync(logFile, 'a')],
+    });
+    tunnelProc.unref();
+
+    // Wait for connection
+    let connected = false;
+    for (let i = 0; i < 15; i++) {
+      spinnerWrite('Connecting tunnel...');
+      sleep(1000);
+      try {
+        const logs = fs.readFileSync(logFile, 'utf8');
+        if (logs.includes('Registered tunnel connection') || logs.includes('INF Registered')) {
+          connected = true;
+          break;
+        }
+      } catch {}
+    }
+    spinnerClear();
+
+    if (!connected) {
+      warn('Cloudflare tunnel did not connect in time.');
+      try { tunnelProc.kill(); } catch {}
+      spawnSync('cloudflared', ['tunnel', 'delete', '-f', tunnelName], { stdio: 'pipe' });
+      return null;
+    }
+
+    // Wait for DNS propagation (Chromium caches negative DNS lookups aggressively)
+    const https = require('https');
+    for (let i = 0; i < 15; i++) {
+      spinnerWrite('Waiting for DNS (' + (i + 1) + 's)...');
+      try {
+        await new Promise((resolve, reject) => {
+          const req = https.get('https://' + hostname + '/healthz', (res) => {
+            resolve(res.statusCode);
+          });
+          req.on('error', reject);
+          req.setTimeout(3000, () => { req.destroy(); reject(new Error('timeout')); });
+        });
+        break; // DNS resolved and tunnel responded
+      } catch {
+        sleep(1000);
+      }
+    }
+    spinnerClear();
+
+    // Save metadata for cleanup
+    const meta = { tunnelName, tunnelId, hostname, type: 'cloudflare-named' };
+    fs.writeFileSync(CF_TUNNEL_CONFIG, JSON.stringify(meta), { mode: 0o600 });
+
+    return {
+      type: 'cloudflare-named',
+      url: 'https://' + hostname,
+      pid: tunnelProc.pid,
+      logFile,
+      tunnelName,
+    };
+  } catch (err) {
+    spinnerClear();
+    warn('Cloudflare tunnel failed: ' + err.message);
+    return null;
+  }
+}
+
+// Fallback: localhost.run SSH tunnel (ephemeral, no install needed)
+async function createQuickTunnel(port) {
   try {
     const logFile = path.join(LIMBO_DIR, 'tunnel-setup.log');
-    // localhost.run provides instant HTTPS URLs via SSH reverse tunneling.
-    // No binary to install, no DNS propagation delay, no Chrome caching issues.
     const tunnelProc = spawn('ssh', [
       '-o', 'StrictHostKeyChecking=accept-new',
       '-o', 'ServerAliveInterval=30',
-      '-R', `80:localhost:${port}`,
+      '-R', '80:localhost:' + port,
       'nokey@localhost.run',
     ], {
       detached: true,
@@ -1019,7 +1362,6 @@ async function createSetupTunnel(port) {
     });
     tunnelProc.unref();
 
-    // localhost.run prints the URL almost instantly (no DNS propagation needed)
     let tunnelUrl = null;
     for (let i = 0; i < 10; i++) {
       spinnerWrite('Securing tunnel...');
@@ -1044,16 +1386,78 @@ async function createSetupTunnel(port) {
   }
 }
 
+// Interactive tunnel creation: prompts admin for choice
+async function createSetupTunnel(port) {
+  const hasCf = hasCloudflared();
+
+  // If cloudflared is available, offer the choice
+  if (hasCf) {
+    const choice = await promptTunnelChoice();
+
+    if (choice === 'cloudflare') {
+      const loggedIn = await ensureCloudflareLogin();
+      if (loggedIn) {
+        const tunnel = await createNamedCfTunnel(port);
+        if (tunnel) return tunnel;
+        warn('Falling back to quick tunnel...');
+      }
+    }
+  }
+
+  return createQuickTunnel(port);
+}
+
+// Clean up tunnel process and CF resources
 function teardownSetupTunnel(tunnel) {
   if (!tunnel) return;
   try { process.kill(tunnel.pid); } catch {}
   if (tunnel.logFile) try { fs.unlinkSync(tunnel.logFile); } catch {}
 }
 
+// Clean up leftover CF tunnels from previous runs
+function cleanupCfTunnel() {
+  try {
+    const meta = JSON.parse(fs.readFileSync(CF_TUNNEL_CONFIG, 'utf8'));
+    if (meta.tunnelName) {
+      spawnSync('cloudflared', ['tunnel', 'cleanup', meta.tunnelName], { stdio: 'pipe' });
+      spawnSync('cloudflared', ['tunnel', 'delete', '-f', meta.tunnelName], { stdio: 'pipe' });
+    }
+    fs.unlinkSync(CF_TUNNEL_CONFIG);
+    const tunnelConfig = path.join(LIMBO_DIR, 'tunnel-cloudflared.yml');
+    try { fs.unlinkSync(tunnelConfig); } catch {}
+  } catch {}
+}
+
+// Read a single env var from ~/.limbo/.env
+function loadEnvVar(name) {
+  try {
+    const content = fs.readFileSync(ENV_FILE, 'utf8');
+    const match = content.match(new RegExp('^' + name + '=(.+)$', 'm'));
+    return match ? match[1].trim() : null;
+  } catch { return null; }
+}
+
+// Append or update env vars in ~/.limbo/.env without overwriting existing ones
+function persistEnvVars(vars) {
+  try {
+    let content = '';
+    try { content = fs.readFileSync(ENV_FILE, 'utf8'); } catch {}
+    for (const [key, value] of Object.entries(vars)) {
+      const re = new RegExp('^' + key + '=.*$', 'm');
+      if (re.test(content)) {
+        content = content.replace(re, key + '=' + value);
+      } else {
+        content = content.trimEnd() + '\n' + key + '=' + value + '\n';
+      }
+    }
+    fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
+  } catch {}
+}
+
 function installGlobalAlias() {
   // Create a `limbo` shell wrapper so users don't have to type `npx limbo-ai` every time.
   // Tries /usr/local/bin first (macOS, Linux with sudo), falls back to ~/.local/bin (no sudo).
-  const wrapper = '#!/bin/sh\nexec npx limbo-ai "$@"\n';
+  const wrapper = '#!/bin/sh\nexec npx limbo-ai@latest "$@"\n';
   const candidates = [
     path.join(os.homedir(), '.local', 'bin', 'limbo'),
     '/usr/local/bin/limbo',
@@ -1061,10 +1465,10 @@ function installGlobalAlias() {
 
   for (const target of candidates) {
     try {
-      // Skip if already installed and current
+      // Skip if already installed and current (must include @latest)
       if (fs.existsSync(target)) {
         const existing = fs.readFileSync(target, 'utf8');
-        if (existing.includes('limbo-ai')) return;
+        if (existing.includes('limbo-ai@latest')) return;
       }
       const dir = path.dirname(target);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -1101,7 +1505,7 @@ function stopExistingContainers(lang) {
 
 
 // ─── Native OAuth (PKCE) for OpenAI Codex ───────────────────────────────────
-// Implements the full OAuth flow locally so we never need ZeroClaw's interactive TUI.
+// Implements the full OAuth flow locally so we never need an interactive TUI.
 
 const OPENAI_OAUTH = {
   clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
@@ -1180,7 +1584,7 @@ function decodeJwtPayload(token) {
 
 function writeAuthProfilesToDocker(store) {
   const json = JSON.stringify(store, null, 2);
-  const destDir = '/home/limbo/.zeroclaw/agents/main/agent';
+  const destDir = '/home/limbo/.openclaw';
   const destFile = `${destDir}/auth-profiles.json`;
   spawnSync('docker', [
     'compose', 'run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
@@ -1194,38 +1598,45 @@ function writeAuthProfilesToDocker(store) {
 }
 
 function buildCodexAuthProfile(profile) {
-  const profileId = profile.email ? `openai-codex:${profile.email}` : 'openai-codex:default';
+  const profileName = profile.email || 'default';
+  const profileId = `openai-codex:${profileName}`;
+  const now = new Date().toISOString();
   return {
-    version: 1,
+    schema_version: 1,
+    updated_at: now,
+    active_profiles: { 'openai-codex': profileId },
     profiles: {
       [profileId]: {
-        type: 'oauth',
         provider: 'openai-codex',
-        access: profile.access,
-        refresh: profile.refresh,
-        expires: profile.expires,
-        accountId: profile.accountId,
+        profile_name: profileName,
+        kind: 'oauth',
+        account_id: profile.accountId || null,
+        access_token: profile.access,
+        refresh_token: profile.refresh,
+        expires_at: new Date(profile.expires).toISOString(),
+        created_at: now,
+        updated_at: now,
       },
     },
-    order: {},
-    lastGood: {},
-    usageStats: {},
   };
 }
 
 function buildAnthropicAuthProfile(token) {
+  const now = new Date().toISOString();
   return {
-    version: 1,
+    schema_version: 1,
+    updated_at: now,
+    active_profiles: { anthropic: 'anthropic:default' },
     profiles: {
-      'anthropic:token': {
-        type: 'token',
+      'anthropic:default': {
         provider: 'anthropic',
+        profile_name: 'default',
+        kind: 'token',
         token,
+        created_at: now,
+        updated_at: now,
       },
     },
-    order: { anthropic: ['anthropic:token'] },
-    lastGood: {},
-    usageStats: {},
   };
 }
 
@@ -1378,7 +1789,7 @@ function installDocker() {
   }
 }
 
-function extractWizardUrl(maxWaitSecs = 15) {
+function extractWizardUrl(maxWaitSecs = 30) {
   const deadline = Date.now() + maxWaitSecs * 1000;
   while (Date.now() < deadline) {
     try {
@@ -1401,7 +1812,7 @@ function printWizardUrl(url, tunnel) {
   // Extract token from the original URL
   const tokenMatch = url.match(/[?&]token=([^&\s]+)/);
   const token = tokenMatch ? tokenMatch[1] : '';
-  const localUrl = url.replace('0.0.0.0', '127.0.0.1');
+  const localUrl = url;
   const isSSH = !!(process.env.SSH_CONNECTION || process.env.SSH_CLIENT);
 
   console.log(`
@@ -1411,7 +1822,7 @@ ${c.green}${c.bold}╚═══════════════════�
 `);
 
   if (tunnel) {
-    const tunnelUrl = `${tunnel.url}/?token=${token}`;
+    const tunnelUrl = token ? `${tunnel.url}/?token=${token}` : tunnel.url;
     console.log(`  ${c.green}Public URL (works from any browser):${c.reset}
   ${c.cyan}${c.bold}${tunnelUrl}${c.reset}
 `);
@@ -1459,6 +1870,9 @@ function writeMinimalEnv() {
 // ─── Commands ────────────────────────────────────────────────────────────────
 
 async function cmdStart() {
+  // Clean up any leftover CF tunnel from a previous setup run
+  cleanupCfTunnel();
+
   // ── Auto-install Docker if missing ────────────────────────────────────────
   if (!hasDocker()) {
     installDocker();
@@ -1470,7 +1884,7 @@ async function cmdStart() {
   const cliMode = process.argv.includes('--cli');
   const reconfig = process.argv.includes('--reconfigure');
 
-  // ── Detect existing ZeroClaw / port selection ─────────────────────────────
+  // ── Detect existing instance / port selection ──────────────────────────────
   const existingEnv = parseEnvFile();
   const alreadyHasEnv = fs.existsSync(ENV_FILE);
   const hasProviderConfig = alreadyHasEnv && existingEnv.MODEL_PROVIDER;
@@ -1483,13 +1897,13 @@ async function cmdStart() {
       PORT = parsed;
     }
   } else {
-    const existing = detectExistingZeroClaw();
+    const existing = detectPortConflict();
     if (existing) {
       console.log(`
-  ${c.yellow}${c.bold}Existing ZeroClaw detected${c.reset}
+  ${c.yellow}${c.bold}Existing instance detected${c.reset}
   ${c.dim}Port ${existing.port} is in use (${existing.processInfo})${c.reset}
 
-  Limbo will run its own ZeroClaw instance on port ${c.bold}${COEXIST_PORT}${c.reset}.
+  Limbo will run its own instance on port ${c.bold}${COEXIST_PORT}${c.reset}.
   Both can coexist safely — separate containers, separate data.
 `);
       PORT = COEXIST_PORT;
@@ -1503,7 +1917,7 @@ async function cmdStart() {
   const flagApiKey = parseFlag('--api-key');
   const flagModel = parseFlag('--model');
   const flagLang = parseFlag('--language') || 'en';
-  const flagTunnelDomain = parseFlag('--tunnel-domain');
+  // CF tunnel flags parsed by createSetupTunnel() via parseFlag() — no local var needed
 
   if (flagProvider) {
     const validProviders = ['openai', 'anthropic', 'openrouter'];
@@ -1564,24 +1978,20 @@ async function cmdStart() {
     return startContainerWithConfig(cfg, existingEnv, alreadyHasEnv);
   }
 
-  // ── Route: Wizard reconfigure (--reconfigure, no --cli) ───────────────────
-  if (reconfig && hasProviderConfig) {
+  // ── Route: Wizard reconfigure or fresh install ─────────────────────────────
+  // For --reconfigure: always write FORCE_SETUP_MODE so the entrypoint clears
+  // internal config. The host .env may not have MODEL_PROVIDER (wizard-configured
+  // users store config only inside the Docker volume), so we can't gate on
+  // hasProviderConfig — the user explicitly asked to reconfigure.
+  if (reconfig) {
     log('Resetting configuration for setup wizard...');
-    // Remove provider config from .env so container enters setup mode
-    const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\n`;
+    const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\nFORCE_SETUP_MODE=true\n`;
     fs.writeFileSync(ENV_FILE, minimalContent, { mode: 0o600 });
-    // Keep gateway token secret intact
     ensureGatewayToken(existingEnv);
-    // Clean config inside the Docker volume so entrypoint re-enters setup mode
-    try {
-      runDockerCompose(['run', '--rm', '--no-deps', '--entrypoint', 'sh', 'limbo',
-        '-c', 'rm -f /data/config/.env /home/limbo/.zeroclaw/config.toml'], { stdio: 'pipe' });
-    } catch {}
   }
 
-  // ── Route: Wizard (default for fresh install or wizard reconfigure) ───────
   log('Starting Limbo with setup wizard...');
-  if (!alreadyHasEnv || (reconfig && hasProviderConfig)) {
+  if (!alreadyHasEnv && !reconfig) {
     writeMinimalEnv();
   }
 
@@ -1599,16 +2009,29 @@ async function cmdStart() {
   // Extract wizard URL from container logs (polls briefly, no healthcheck needed)
   const wizardUrl = extractWizardUrl();
 
-  // On servers, try to create a public tunnel (non-blocking — show localhost/SSH first)
+  // Create a public tunnel (auto on servers, or with --tunnel flag)
   let tunnel = null;
-  if (isServerEnvironment()) {
+  if (isServerEnvironment() || process.argv.includes('--tunnel')) {
     tunnel = await createSetupTunnel(PORT);
   }
 
   // Always show the wizard URL with tunnel/SSH info, even if we couldn't
   // extract the token-authenticated URL from logs.
   const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
+  if (!wizardUrl) {
+    warn('Could not extract setup token from container logs. The wizard may need a moment to start.');
+    warn(`If the URL below doesn't work, try: ${c.cyan}limbo logs${c.reset} to check container status.`);
+  }
   printWizardUrl(displayUrl, tunnel);
+
+  // Remove FORCE_SETUP_MODE from .env so the container doesn't re-enter setup
+  // mode on restart after the wizard completes. The entrypoint uses a marker
+  // file as a safety net, but cleaning the env is the primary mechanism.
+  try {
+    const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+    const cleaned = envContent.replace(/^FORCE_SETUP_MODE=.*\n?/m, '');
+    if (cleaned !== envContent) fs.writeFileSync(ENV_FILE, cleaned, { mode: 0o600 });
+  } catch {}
 }
 
 // Shared path for headless, CLI-prompt, and existing-config routes
@@ -1656,25 +2079,84 @@ function cmdLogs() {
   run('docker compose logs -f');
 }
 
+// Returns true if the CLI was updated on disk (caller should re-exec).
+function selfUpdateCli() {
+  const pkg = require('./package.json');
+  try {
+    const latest = execSync('npm view limbo-ai version', { encoding: 'utf8', timeout: 10000 }).trim();
+    if (!latest || latest === pkg.version) return false;
+    const cur = pkg.version.split('.').map(Number);
+    const lat = latest.split('.').map(Number);
+    const isNewer = lat[0] > cur[0] || (lat[0] === cur[0] && lat[1] > cur[1]) ||
+      (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
+    if (!isNewer) return false;
+
+    const isGlobal = !process.argv[1].includes('npx') && !process.argv[1].includes('node_modules/.cache');
+
+    if (isGlobal) {
+      log(`Updating CLI: ${pkg.version} → ${latest}...`);
+      execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
+      ok(`CLI updated to ${latest}.`);
+      try { fs.unlinkSync(UPDATE_CHECK_FILE); } catch {}
+      return true;
+    } else {
+      warn(`CLI is outdated (${pkg.version} → ${latest}). npx served a cached version.`);
+      try {
+        const npxCacheBase = path.join(os.homedir(), '.npm', '_npx');
+        if (fs.existsSync(npxCacheBase)) {
+          for (const entry of fs.readdirSync(npxCacheBase)) {
+            const pkgPath = path.join(npxCacheBase, entry, 'node_modules', 'limbo-ai');
+            if (fs.existsSync(pkgPath)) {
+              fs.rmSync(path.join(npxCacheBase, entry), { recursive: true, force: true });
+              log('Cleared stale npx cache.');
+              break;
+            }
+          }
+        }
+      } catch {}
+      log(`Re-run: ${c.cyan}npx limbo-ai@latest update${c.reset}`);
+      return false;
+    }
+  } catch {
+    warn('Could not check for CLI updates. Run: npm install -g limbo-ai@latest');
+    return false;
+  }
+}
+
 function cmdUpdate() {
   if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
 
+  // Always attempt CLI self-update, regardless of install method.
+  // If updated, re-exec so the new code (with possibly a new default registry) runs.
+  const cliWasUpdated = selfUpdateCli();
+  if (cliWasUpdated) {
+    log('Re-executing with updated CLI...');
+    const { execFileSync } = require('child_process');
+    execFileSync(process.execPath, process.argv.slice(1), { stdio: 'inherit' });
+    return;
+  }
+
   // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
   let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
+  // Migrate from any old registry (ghcr.io, pinned tags) to current REGISTRY_IMAGE
   const patched = compose.replace(
-    /image:\s*ghcr\.io\/tomasward1\/limbo:\S+/g,
-    `image: ${GHCR_IMAGE}:${DEFAULT_TAG}`
+    /image:\s*(?:ghcr\.io\/tomasward1\/limbo|registry\.gitlab\.com\/tomas209\/limbo):\S+/g,
+    `image: ${REGISTRY_IMAGE}:${DEFAULT_TAG}`
   );
   if (patched !== compose) {
     compose = patched;
     fs.writeFileSync(COMPOSE_FILE, compose);
-    log('Patched compose image tag to :latest');
+    log(`Patched compose image to ${REGISTRY_IMAGE}:${DEFAULT_TAG}`);
   }
 
   log('Pulling latest image...');
   run(`docker compose -f "${COMPOSE_FILE}" pull -q`);
   log('Restarting...');
   run(`docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans`);
+
+  // Clear update-check cache so the banner doesn't persist after a successful update
+  try { fs.unlinkSync(UPDATE_CHECK_FILE); } catch {}
+
   ok('Updated and restarted.');
 }
 
@@ -1684,6 +2166,98 @@ function cmdStatus() {
     return;
   }
   run('docker compose ps');
+}
+
+function cmdConfig() {
+  const args = process.argv.slice(3);
+  const feature = args[0];
+
+  if (!feature || !['voice', 'web-search'].includes(feature)) {
+    console.log(`
+${c.bold}Usage:${c.reset}
+  limbo config voice --enable --api-key <key>
+  limbo config voice --disable
+  limbo config voice --status
+  limbo config web-search --enable --api-key <key>
+  limbo config web-search --disable
+  limbo config web-search --status
+`);
+    return;
+  }
+
+  if (!fs.existsSync(ENV_FILE)) {
+    die('Limbo is not configured. Run "limbo start" first.');
+  }
+
+  const existingEnv = {};
+  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+  for (const line of envContent.split('\n')) {
+    const match = line.match(/^([A-Z_]+)=(.*)$/);
+    if (match) existingEnv[match[1]] = match[2].replace(/^"|"$/g, '');
+  }
+
+  const isVoice = feature === 'voice';
+  const envKey = isVoice ? 'VOICE_ENABLED' : 'WEB_SEARCH_ENABLED';
+  const secretName = isVoice ? 'groq_api_key' : 'brave_api_key';
+  const featureLabel = isVoice ? 'Voice transcription' : 'Web search';
+
+  const hasEnable = args.includes('--enable');
+  const hasDisable = args.includes('--disable');
+  const hasStatus = args.includes('--status');
+  const apiKeyIdx = args.indexOf('--api-key');
+  const apiKey = apiKeyIdx !== -1 ? args[apiKeyIdx + 1] : null;
+
+  if (hasStatus) {
+    const enabled = existingEnv[envKey] === 'true';
+    const key = readSecretFile(secretName);
+    console.log(`${featureLabel}: ${enabled ? `${c.green}enabled${c.reset}` : `${c.dim}disabled${c.reset}`}`);
+    if (key) {
+      const masked = key.length > 8 ? key.substring(0, 4) + '...' + key.slice(-4) : '***';
+      console.log(`API Key: ${masked}`);
+    }
+    return;
+  }
+
+  if (!hasEnable && !hasDisable) {
+    die('Specify --enable, --disable, or --status');
+  }
+
+  if (hasEnable) {
+    if (apiKey) {
+      if (isVoice && !apiKey.startsWith('gsk_')) {
+        warn('Groq API keys typically start with gsk_');
+      }
+      if (!isVoice && !apiKey.startsWith('BSA')) {
+        warn('Brave API keys typically start with BSA');
+      }
+      writeSecretFile(secretName, apiKey);
+      ok(`${featureLabel} API key saved.`);
+    } else {
+      const existing = readSecretFile(secretName);
+      if (!existing) {
+        die(`No API key found. Use --api-key <key> to set one.`);
+      }
+    }
+    existingEnv[envKey] = 'true';
+  } else {
+    existingEnv[envKey] = 'false';
+  }
+
+  const newContent = Object.entries(existingEnv)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n') + '\n';
+  fs.writeFileSync(ENV_FILE, newContent, { mode: 0o600 });
+  ok(`${featureLabel} ${hasEnable ? 'enabled' : 'disabled'}.`);
+
+  if (fs.existsSync(COMPOSE_FILE)) {
+    log('Restarting container...');
+    try {
+      execSync(`docker compose -f "${COMPOSE_FILE}" restart limbo`, { stdio: 'inherit' });
+      ok('Container restarted.');
+    } catch {
+      warn('Could not restart container. Restart manually with: limbo stop && limbo start');
+    }
+  }
 }
 
 function cmdHelp() {
@@ -1699,6 +2273,7 @@ ${c.bold}Commands:${c.reset}
   logs          Tail container logs
   update        Pull latest image and restart
   status        Show container status
+  config        Configure optional features (voice, web-search)
   help          Show this help
 
 ${c.bold}Flags:${c.reset}
@@ -1709,32 +2284,134 @@ ${c.bold}Flags:${c.reset}
   --api-key <key>      API key for headless install
   --model <name>       Model name (optional, uses provider default)
   --language <code>    Language: en, es (default: en)
-  --tunnel-domain <d>  Admin: use branded subdomain for setup tunnel (e.g. limbo.tomasward.com)
+  --tunnel               Force tunnel creation prompt (even on local/non-server environments)
+
+${c.bold}Config:${c.reset}
+  limbo config voice --enable --api-key gsk_xxx     Enable voice transcription
+  limbo config voice --disable                       Disable voice transcription
+  limbo config web-search --enable --api-key BSAxxx  Enable web search
+  limbo config web-search --disable                  Disable web search
+  limbo config voice --status                        Show feature status
 
 ${c.bold}Data directory:${c.reset} ${LIMBO_DIR}
 `);
 }
 
+// ─── Update Notifier ─────────────────────────────────────────────────────────
+
+const UPDATE_CHECK_FILE = path.join(LIMBO_DIR, '.update-check');
+const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+// Spawn a detached background process to check the npm registry.
+// Writes {latest, checkedAt} to UPDATE_CHECK_FILE and exits.
+function checkForUpdateInBackground() {
+  try {
+    let shouldCheck = true;
+    if (fs.existsSync(UPDATE_CHECK_FILE)) {
+      const cached = JSON.parse(fs.readFileSync(UPDATE_CHECK_FILE, 'utf8'));
+      if (Date.now() - cached.checkedAt < UPDATE_CHECK_INTERVAL) shouldCheck = false;
+    }
+    if (!shouldCheck) return;
+
+    // Spawn detached child that hits the registry and writes cache
+    const child = spawn(process.execPath, ['-e', `
+      const https = require('https');
+      const fs = require('fs');
+      const req = https.get('https://registry.npmjs.org/limbo-ai/latest', { timeout: 5000 }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+          try {
+            const { version } = JSON.parse(data);
+            fs.mkdirSync('${LIMBO_DIR.replace(/\\/g, '\\\\')}', { recursive: true });
+            fs.writeFileSync('${UPDATE_CHECK_FILE.replace(/\\/g, '\\\\')}', JSON.stringify({ latest: version, checkedAt: Date.now() }));
+          } catch {}
+        });
+      });
+      req.on('error', () => {});
+      req.end();
+    `], { detached: true, stdio: 'ignore' });
+    child.unref();
+  } catch {}
+}
+
+// Read cache and print banner if a newer version is available.
+function notifyUpdate() {
+  try {
+    if (!fs.existsSync(UPDATE_CHECK_FILE)) return;
+    const { latest } = JSON.parse(fs.readFileSync(UPDATE_CHECK_FILE, 'utf8'));
+    const pkg = require('./package.json');
+    if (!latest || latest === pkg.version) return;
+
+    // Simple semver compare: split on dots, compare numerically
+    const cur = pkg.version.split('.').map(Number);
+    const lat = latest.split('.').map(Number);
+    const isNewer = lat[0] > cur[0] || (lat[0] === cur[0] && lat[1] > cur[1]) ||
+      (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
+    if (!isNewer) return;
+
+    // Strip ANSI escapes for visible-length padding
+    const strip = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+    const pad = (s, w) => s + ' '.repeat(Math.max(0, w - strip(s).length));
+
+    const line = `  Update available: ${c.dim}${pkg.version}${c.reset} → ${c.green}${latest}${c.reset}  `;
+    const instruction = `  Run ${c.cyan}npx limbo-ai@latest update${c.reset} to update  `;
+    const inner = Math.max(strip(line).length, strip(instruction).length);
+    const border = '─'.repeat(inner);
+    console.error(`\n  ${c.dim}╭${border}╮${c.reset}`);
+    console.error(`  ${c.dim}│${c.reset}${pad(line, inner)}${c.dim}│${c.reset}`);
+    console.error(`  ${c.dim}│${c.reset}${pad(instruction, inner)}${c.dim}│${c.reset}`);
+    console.error(`  ${c.dim}╰${border}╯${c.reset}\n`);
+  } catch {}
+}
+
+// ─── Exports (for testing) ────────────────────────────────────────────────────
+
+module.exports = {
+  MODEL_CATALOG,
+  normalizeConfig,
+  parseEnvFile,
+  deriveProviderFamily,
+  getModelCatalog,
+  parseCallbackInput,
+  decodeJwtPayload,
+  parseClaudeSetupToken,
+  buildCodexAuthProfile,
+  buildAnthropicAuthProfile,
+  generatePKCE,
+  buildOAuthUrl,
+};
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-const [,, cmd = 'start'] = process.argv;
+if (require.main === module) {
+  const [,, cmd = 'start'] = process.argv;
 
-(async () => {
-  switch (cmd) {
-    case 'start':
-    case 'install': await cmdStart(); break;
-    case 'stop':    cmdStop(); break;
-    case 'logs':    cmdLogs(); break;
-    case 'update':  cmdUpdate(); break;
-    case 'status':  cmdStatus(); break;
-    case 'help':
-    case '--help':
-    case '-h':      cmdHelp(); break;
-    default:
-      warn(t('en', 'unknownCommand', cmd));
-      cmdHelp();
-      process.exit(1);
-  }
-})().catch((err) => {
-  die(err.message || String(err));
-});
+  (async () => {
+    if (cmd !== 'update') checkForUpdateInBackground();
+
+    switch (cmd) {
+      case 'start':
+      case 'install': await cmdStart(); break;
+      case 'stop':    cmdStop(); break;
+      case 'logs':    cmdLogs(); break;
+      case 'update':  cmdUpdate(); break;
+      case 'status':  cmdStatus(); break;
+      case 'config':  cmdConfig(); break;
+      case 'version':
+      case '--version':
+      case '-v':      console.log(require('./package.json').version); break;
+      case 'help':
+      case '--help':
+      case '-h':      cmdHelp(); break;
+      default:
+        warn(t('en', 'unknownCommand', cmd));
+        cmdHelp();
+        process.exit(1);
+    }
+
+    notifyUpdate();
+  })().catch((err) => {
+    die(err.message || String(err));
+  });
+}

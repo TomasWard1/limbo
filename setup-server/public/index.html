@@ -86,6 +86,27 @@
       margin-top: 4px;
     }
 
+    /* --- Language toggle in header --- */
+    .lang-toggle {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 13px;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 4px 10px;
+      border-radius: var(--r-sm);
+      border: 1px solid var(--border);
+      background: transparent;
+      font-family: inherit;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .lang-toggle:hover {
+      color: var(--text);
+      border-color: var(--border-hover);
+    }
+
     /* --- Progress --- */
     .progress {
       display: flex;
@@ -115,6 +136,7 @@
       align-items: center;
       margin-bottom: 32px;
       min-height: 40px;
+      position: relative;
     }
     .btn-back {
       width: 40px;
@@ -419,6 +441,11 @@
       font-weight: 500;
       font-family: 'JetBrains Mono', monospace;
     }
+    .model-desc {
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-top: 2px;
+    }
     .model-badge {
       font-size: 11px;
       font-weight: 600;
@@ -558,7 +585,7 @@
     .tg-fields { display: none; }
     .tg-fields.visible { display: block; }
 
-    /* --- Error banner --- */
+    /* --- Error / Connection banners --- */
     .error-banner {
       display: none;
       background: rgba(196, 92, 92, 0.1);
@@ -573,6 +600,26 @@
     }
     .error-banner.visible {
       display: flex;
+    }
+
+    .connection-banner {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: rgba(160, 135, 69, 0.95);
+      color: #fff;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 500;
+      text-align: center;
+      backdrop-filter: blur(8px);
+    }
+    .connection-banner.visible { display: block; }
+    .connection-banner.error {
+      background: rgba(196, 92, 92, 0.95);
     }
 
     /* --- OAuth / Subscription Auth --- */
@@ -644,6 +691,76 @@
       font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
+    /* --- OS pills for setup-token guide --- */
+    .os-pills {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .os-pill {
+      padding: 8px 16px;
+      border-radius: var(--r-pill);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-sub);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .os-pill:hover {
+      border-color: var(--border-hover);
+      color: var(--text);
+    }
+    .os-pill.active {
+      border-color: var(--accent);
+      background: rgba(232, 132, 108, 0.1);
+      color: var(--accent);
+    }
+
+    .os-instruction {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: var(--text-sub);
+      line-height: 1.6;
+    }
+    .os-instruction kbd {
+      display: inline-block;
+      background: var(--bg-4);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .collapsible-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      padding: 12px 0;
+      user-select: none;
+    }
+    .collapsible-header input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+    .collapsible-body {
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    .collapsible-body.collapsed {
+      max-height: 0;
+    }
+
     /* --- Footer --- */
     .footer {
       text-align: center;
@@ -670,6 +787,9 @@
 </head>
 <body class="lang-en">
 
+  <!-- Connection lost banner (Phase 1) -->
+  <div class="connection-banner" id="connectionBanner"></div>
+
   <div class="wizard-wrapper">
     <!-- Brand -->
     <div class="brand">
@@ -677,7 +797,7 @@
       <div class="brand-sub">Setup Wizard</div>
     </div>
 
-    <!-- Progress Dots -->
+    <!-- Progress Dots (7 steps — language step removed) -->
     <div class="progress" id="progress">
       <div class="progress-dot active"></div>
       <div class="progress-dot"></div>
@@ -695,38 +815,11 @@
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
       </button>
+      <button class="lang-toggle" id="langToggle" onclick="toggleLanguage()"></button>
     </div>
 
-    <!-- Step 1: Language -->
+    <!-- Step 1: Provider (was step 2) -->
     <div class="step active" data-step="1">
-      <h2 class="step-title">
-        <span data-lang="en">Choose your language</span>
-        <span data-lang="es">Elegí tu idioma</span>
-      </h2>
-      <p class="step-desc">
-        <span data-lang="en">Select your preferred language for Limbo.</span>
-        <span data-lang="es">Seleccioná tu idioma preferido para Limbo.</span>
-      </p>
-      <div class="cards horizontal">
-        <div class="card card-lg" data-value="es" onclick="selectLanguage('es')">
-          <div class="card-icon">🇦🇷</div>
-          <div class="card-content">
-            <div class="card-title">Español</div>
-            <div class="card-subtitle">Argentina</div>
-          </div>
-        </div>
-        <div class="card card-lg" data-value="en" onclick="selectLanguage('en')">
-          <div class="card-icon">🇬🇧</div>
-          <div class="card-content">
-            <div class="card-title">English</div>
-            <div class="card-subtitle">International</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 2: Provider -->
-    <div class="step" data-step="2">
       <h2 class="step-title">
         <span data-lang="en">Choose your AI provider</span>
         <span data-lang="es">Elegí tu proveedor de IA</span>
@@ -740,20 +833,14 @@
           <div class="card-icon">🟠</div>
           <div class="card-content">
             <div class="card-title">Anthropic <span style="color:var(--text-sub);font-weight:400">(Claude)</span></div>
-            <div class="card-subtitle">
-              <span data-lang="en">Claude Opus, Sonnet, Haiku</span>
-              <span data-lang="es">Claude Opus, Sonnet, Haiku</span>
-            </div>
+            <div class="card-subtitle">Claude Opus, Sonnet, Haiku</div>
           </div>
         </div>
         <div class="card" data-value="openai" onclick="selectProvider('openai')">
           <div class="card-icon">🟢</div>
           <div class="card-content">
             <div class="card-title">OpenAI <span style="color:var(--text-sub);font-weight:400">(ChatGPT)</span></div>
-            <div class="card-subtitle">
-              <span data-lang="en">GPT-5.4, GPT-4.1, o3, o4-mini</span>
-              <span data-lang="es">GPT-5.4, GPT-4.1, o3, o4-mini</span>
-            </div>
+            <div class="card-subtitle">GPT-5.4, GPT-4.1, o3, o4-mini</div>
           </div>
         </div>
         <div class="card" data-value="openrouter" onclick="selectProvider('openrouter')">
@@ -769,8 +856,8 @@
       </div>
     </div>
 
-    <!-- Step 3: Auth Method -->
-    <div class="step" data-step="3">
+    <!-- Step 2: Auth Method -->
+    <div class="step" data-step="2">
       <h2 class="step-title">
         <span data-lang="en">Authentication method</span>
         <span data-lang="es">Método de autenticación</span>
@@ -793,7 +880,10 @@
         <div class="card" data-value="subscription" onclick="selectAuthMode('subscription')">
           <div class="card-icon">✨</div>
           <div class="card-content">
-            <div class="card-title">Subscription</div>
+            <div class="card-title">
+              <span data-lang="en">Subscription</span>
+              <span data-lang="es">Suscripción</span>
+            </div>
             <div class="card-subtitle" id="subscriptionSubtitle">
               <span data-lang="en">Use your existing subscription</span>
               <span data-lang="es">Usá tu suscripción existente</span>
@@ -803,8 +893,8 @@
       </div>
     </div>
 
-    <!-- Step 4: API Key / Token -->
-    <div class="step" data-step="4">
+    <!-- Step 3: API Key / Token -->
+    <div class="step" data-step="3">
       <!-- API Key variant -->
       <div id="apiKeySection">
         <h2 class="step-title">
@@ -817,18 +907,12 @@
         </p>
         <div class="input-group">
           <label class="input-label" for="apiKeyInput">API Key</label>
-          <input
-            type="password"
-            class="input-field"
-            id="apiKeyInput"
-            placeholder="sk-..."
-            autocomplete="off"
-            spellcheck="false"
-          >
+          <input type="password" class="input-field" id="apiKeyInput" placeholder="sk-..." autocomplete="off" spellcheck="false">
           <div class="validation-msg" id="apiKeyValidation"></div>
           <p class="input-hint" id="apiKeyHint"></p>
         </div>
       </div>
+
       <!-- Subscription: OpenAI OAuth PKCE -->
       <div id="oauthSection" style="display:none">
         <h2 class="step-title">
@@ -839,8 +923,6 @@
           <span data-lang="en">Sign in with your ChatGPT Plus or Pro account.</span>
           <span data-lang="es">Iniciá sesión con tu cuenta ChatGPT Plus o Pro.</span>
         </p>
-
-        <!-- Vista 1: Botón inicial -->
         <div id="oauthStartView">
           <button class="btn-oauth" id="btnOauthStart" onclick="startOpenAIOAuth()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364l2.0201-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.4114-.6938zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0974-2.3616l2.603-1.5018 2.6029 1.5018v3.0036l-2.6029 1.5018-2.603-1.5018z"/></svg>
@@ -848,8 +930,6 @@
             <span data-lang="es">Iniciar sesión con OpenAI</span>
           </button>
         </div>
-
-        <!-- Vista 2: Heads-up dialog antes de abrir -->
         <div id="oauthHeadsUpView" style="display:none">
           <div class="info-box" style="border-color:var(--accent);background:rgba(232,132,108,0.06)">
             <p style="color:var(--text);font-weight:600;margin-bottom:10px;font-size:15px">
@@ -874,8 +954,6 @@
             <span data-lang="es">Volver</span>
           </button>
         </div>
-
-        <!-- Vista 3: Pegar URL -->
         <div id="oauthPasteView" style="display:none">
           <div class="guide-steps" style="margin-bottom:20px">
             <div class="guide-step">
@@ -902,8 +980,8 @@
             <div class="guide-step">
               <div class="guide-num">4</div>
               <div class="guide-text">
-                <span data-lang="en">Paste it below</span>
-                <span data-lang="es">Pegala acá abajo</span>
+                <span data-lang="en">Paste it below — it will connect automatically</span>
+                <span data-lang="es">Pegala acá abajo — se conecta automáticamente</span>
               </div>
             </div>
           </div>
@@ -912,95 +990,107 @@
               <span data-lang="en">Paste the URL here</span>
               <span data-lang="es">Pegá la URL acá</span>
             </label>
-            <input
-              type="text"
-              class="input-field"
-              id="oauthCallbackInput"
-              placeholder="http://localhost:1455/auth/callback?code=..."
-              autocomplete="off"
-              spellcheck="false"
-            >
+            <input type="text" class="input-field" id="oauthCallbackInput" placeholder="http://localhost:1455/auth/callback?code=..." autocomplete="off" spellcheck="false">
             <div class="validation-msg" id="oauthValidation"></div>
           </div>
-          <button class="btn-primary" id="btnOauthConnect" onclick="submitOAuthCallback()" disabled style="width:100%;margin-top:8px">
-            <span data-lang="en">Connect</span>
-            <span data-lang="es">Conectar</span>
-          </button>
         </div>
-
         <div id="oauthSuccessView" style="display:none" class="auth-success">
           <span data-lang="en">Connected as <strong id="oauthEmailEn"></strong></span>
           <span data-lang="es">Conectado como <strong id="oauthEmailEs"></strong></span>
         </div>
       </div>
 
-      <!-- Subscription: Anthropic (claude setup-token) -->
+      <!-- Subscription: Anthropic (claude setup-token) — OS-aware guide -->
       <div id="claudeTokenSection" style="display:none">
         <h2 class="step-title">
           <span data-lang="en">Connect your Claude subscription</span>
           <span data-lang="es">Conectá tu suscripción de Claude</span>
         </h2>
         <p class="step-desc">
-          <span data-lang="en">Run this command in your terminal to get a setup token.</span>
-          <span data-lang="es">Ejecutá este comando en tu terminal para obtener un token.</span>
+          <span data-lang="en">We need a token from Claude to connect your account. Follow these steps:</span>
+          <span data-lang="es">Necesitamos un token de Claude para conectar tu cuenta. Seguí estos pasos:</span>
         </p>
-
         <div class="guide-steps">
           <div class="guide-step">
             <div class="guide-num">1</div>
             <div class="guide-text">
-              <span data-lang="en">Open a terminal on your computer</span>
-              <span data-lang="es">Abrí una terminal en tu computadora</span>
-            </div>
-          </div>
-          <div class="guide-step">
-            <div class="guide-num">2</div>
-            <div class="guide-text">
-              <span data-lang="en">Run this command:</span>
-              <span data-lang="es">Ejecutá este comando:</span>
+              <span data-lang="en"><strong style="color:var(--text)">Open a terminal</strong> on your computer</span>
+              <span data-lang="es"><strong style="color:var(--text)">Abrí una terminal</strong> en tu computadora</span>
             </div>
           </div>
         </div>
-
+        <div class="os-pills" id="osPills">
+          <button class="os-pill" data-os="mac" onclick="selectOS('mac')">macOS</button>
+          <button class="os-pill" data-os="windows" onclick="selectOS('windows')">Windows</button>
+          <button class="os-pill" data-os="linux" onclick="selectOS('linux')">Linux</button>
+        </div>
+        <div class="os-instruction" id="osInstruction"></div>
+        <div style="margin-bottom:20px">
+          <label class="collapsible-header" id="claudeInstalledHeader">
+            <input type="checkbox" id="claudeInstalledCheck" onchange="toggleClaudeInstall()">
+            <span style="font-size:14px;color:var(--text-sub)">
+              <span data-lang="en">I already have Claude Code installed</span>
+              <span data-lang="es">Ya tengo Claude Code instalado</span>
+            </span>
+          </label>
+          <div class="collapsible-body" id="claudeInstallBody">
+            <div class="guide-steps" style="margin-bottom:12px">
+              <div class="guide-step">
+                <div class="guide-num">2</div>
+                <div class="guide-text">
+                  <span data-lang="en"><strong style="color:var(--text)">Install Claude Code</strong> — paste this in your terminal:</span>
+                  <span data-lang="es"><strong style="color:var(--text)">Instalá Claude Code</strong> — pegá esto en tu terminal:</span>
+                </div>
+              </div>
+            </div>
+            <div class="cmd-block" onclick="copyCommand(this)" id="installCmd">
+              <span>npm install -g @anthropic-ai/claude-code</span>
+              <span class="copy-hint" data-lang="en">click to copy</span>
+              <span class="copy-hint" data-lang="es">click para copiar</span>
+            </div>
+            <div id="windowsNodeHint" style="display:none">
+              <p class="input-hint" style="margin-bottom:16px">
+                <span data-lang="en">If you don't have Node.js, install it first from <a href="https://nodejs.org" target="_blank">nodejs.org</a> (download the LTS version)</span>
+                <span data-lang="es">Si no tenés Node.js, instalalo primero desde <a href="https://nodejs.org" target="_blank">nodejs.org</a> (descargá la versión LTS)</span>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="guide-steps">
+          <div class="guide-step">
+            <div class="guide-num" id="tokenStepNum">3</div>
+            <div class="guide-text">
+              <span data-lang="en"><strong style="color:var(--text)">Generate the token</strong> — paste this command in your terminal:</span>
+              <span data-lang="es"><strong style="color:var(--text)">Generá el token</strong> — pegá este comando en tu terminal:</span>
+            </div>
+          </div>
+        </div>
         <div class="cmd-block" onclick="copyCommand(this)">
           <span>claude setup-token</span>
           <span class="copy-hint" data-lang="en">click to copy</span>
           <span class="copy-hint" data-lang="es">click para copiar</span>
         </div>
-
+        <div class="info-box" style="margin-bottom:20px">
+          <span data-lang="en">This command opens your browser to sign in with Claude. After signing in, it gives you a code — paste it below.</span>
+          <span data-lang="es">Este comando abre tu navegador para que inicies sesión en Claude. Después de iniciar sesión, te da un código — pegalo acá abajo.</span>
+        </div>
         <div class="guide-steps">
           <div class="guide-step">
-            <div class="guide-num">3</div>
+            <div class="guide-num" id="pasteStepNum">4</div>
             <div class="guide-text">
-              <span data-lang="en">Follow the instructions in your terminal — it will give you a token</span>
-              <span data-lang="es">Seguí las instrucciones en tu terminal — te va a dar un token</span>
-            </div>
-          </div>
-          <div class="guide-step">
-            <div class="guide-num">4</div>
-            <div class="guide-text">
-              <span data-lang="en">Paste the token below</span>
-              <span data-lang="es">Pegá el token acá abajo</span>
+              <span data-lang="en"><strong style="color:var(--text)">Paste the token</strong> below</span>
+              <span data-lang="es"><strong style="color:var(--text)">Pegá el token</strong> acá abajo</span>
             </div>
           </div>
         </div>
-
         <div class="input-group">
           <label class="input-label" for="claudeTokenInput">
             <span data-lang="en">Setup Token</span>
             <span data-lang="es">Token de configuración</span>
           </label>
-          <input
-            type="password"
-            class="input-field"
-            id="claudeTokenInput"
-            placeholder="sk-ant-..."
-            autocomplete="off"
-            spellcheck="false"
-          >
+          <input type="password" class="input-field" id="claudeTokenInput" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
           <div class="validation-msg" id="claudeTokenValidation"></div>
         </div>
-
         <div id="claudeSuccessView" style="display:none" class="auth-success">
           <span data-lang="en">Connected to Claude</span>
           <span data-lang="es">Conectado a Claude</span>
@@ -1014,15 +1104,15 @@
       </div>
     </div>
 
-    <!-- Step 5: Model Selection -->
-    <div class="step" data-step="5">
+    <!-- Step 4: Model Selection -->
+    <div class="step" data-step="4">
       <h2 class="step-title">
         <span data-lang="en">Choose your model</span>
         <span data-lang="es">Elegí tu modelo</span>
       </h2>
       <p class="step-desc">
-        <span data-lang="en">Select the AI model you want to use.</span>
-        <span data-lang="es">Seleccioná el modelo de IA que querés usar.</span>
+        <span data-lang="en">Select the AI model you want to use. The recommended one is pre-selected.</span>
+        <span data-lang="es">Seleccioná el modelo de IA que querés usar. El recomendado ya está seleccionado.</span>
       </p>
       <div id="modelsContainer">
         <div class="loading-models">
@@ -1039,83 +1129,51 @@
       </div>
     </div>
 
-    <!-- Step 6: Telegram -->
-    <div class="step" data-step="6">
+    <!-- Step 5: Telegram (mandatory) -->
+    <div class="step" data-step="5">
       <h2 class="step-title">
         <span data-lang="en">Connect Telegram</span>
         <span data-lang="es">Conectá Telegram</span>
       </h2>
       <p class="step-desc">
-        <span data-lang="en">Telegram is the recommended way to chat with Limbo from your phone. If you're technical, you can skip this and connect directly to the vault MCP.</span>
-        <span data-lang="es">Telegram es la forma recomendada de hablar con Limbo desde tu celular. Si sos técnico, podés omitir esto y conectarte directo al MCP del vault.</span>
+        <span data-lang="en">Telegram is how you'll chat with Limbo. Create a bot and connect it here.</span>
+        <span data-lang="es">Telegram es como vas a hablar con Limbo. Creá un bot y conectalo acá.</span>
       </p>
-
-      <div class="toggle-row">
-        <div>
-          <div class="toggle-label">
-            <span data-lang="en">Connect Telegram bot</span>
-            <span data-lang="es">Conectar bot de Telegram</span>
-          </div>
-          <div class="toggle-sub">
-            <span data-lang="en">Recommended — chat with Limbo from anywhere</span>
-            <span data-lang="es">Recomendado — hablá con Limbo desde cualquier lugar</span>
+      <div class="guide-steps">
+        <div class="guide-step">
+          <div class="guide-num">1</div>
+          <div class="guide-text">
+            <span data-lang="en">Open Telegram and search for <code>@BotFather</code></span>
+            <span data-lang="es">Abrí Telegram y buscá <code>@BotFather</code></span>
           </div>
         </div>
-        <label class="toggle">
-          <input type="checkbox" id="tgToggle" onchange="toggleTelegram()" checked>
-          <span class="toggle-track"></span>
-          <span class="toggle-thumb"></span>
-        </label>
+        <div class="guide-step">
+          <div class="guide-num">2</div>
+          <div class="guide-text">
+            <span data-lang="en">Send <code>/newbot</code> and follow the steps</span>
+            <span data-lang="es">Enviá <code>/newbot</code> y seguí los pasos</span>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">3</div>
+          <div class="guide-text">
+            <span data-lang="en">Copy the bot token BotFather gives you</span>
+            <span data-lang="es">Copiá el token que te da BotFather</span>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">4</div>
+          <div class="guide-text">
+            <span data-lang="en">Paste it below</span>
+            <span data-lang="es">Pegalo abajo</span>
+          </div>
+        </div>
       </div>
-
-      <div class="tg-fields visible" id="tgFields">
-        <div class="guide-steps">
-          <div class="guide-step">
-            <div class="guide-num">1</div>
-            <div class="guide-text">
-              <span data-lang="en">Open Telegram and search for <code>@BotFather</code></span>
-              <span data-lang="es">Abrí Telegram y buscá <code>@BotFather</code></span>
-            </div>
-          </div>
-          <div class="guide-step">
-            <div class="guide-num">2</div>
-            <div class="guide-text">
-              <span data-lang="en">Send <code>/newbot</code> and follow the steps</span>
-              <span data-lang="es">Enviá <code>/newbot</code> y seguí los pasos</span>
-            </div>
-          </div>
-          <div class="guide-step">
-            <div class="guide-num">3</div>
-            <div class="guide-text">
-              <span data-lang="en">Copy the bot token BotFather gives you</span>
-              <span data-lang="es">Copiá el token que te da BotFather</span>
-            </div>
-          </div>
-          <div class="guide-step">
-            <div class="guide-num">4</div>
-            <div class="guide-text">
-              <span data-lang="en">Paste it below</span>
-              <span data-lang="es">Pegalo abajo</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="input-group">
-          <label class="input-label" for="tgTokenInput">Bot Token</label>
-          <input
-            type="text"
-            class="input-field"
-            id="tgTokenInput"
-            placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-            autocomplete="off"
-            spellcheck="false"
-          >
-          <div class="validation-msg" id="tgTokenValidation"></div>
-        </div>
-
+      <div class="input-group">
+        <label class="input-label" for="tgTokenInput">Bot Token</label>
+        <input type="text" class="input-field" id="tgTokenInput" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" autocomplete="off" spellcheck="false">
+        <div class="validation-msg" id="tgTokenValidation"></div>
       </div>
-
-      <!-- Pairing panel (shown after token validation) -->
       <div id="tgPairing" style="display: none;">
         <div class="guide-steps">
           <div class="guide-step">
@@ -1133,7 +1191,6 @@
             </div>
           </div>
         </div>
-
         <div id="tgPairingStatus" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--bg-3); border-radius: var(--r-md); margin-top: 16px;">
           <div class="spinner" style="border-color: var(--accent); border-top-color: transparent; width: 20px; height: 20px; border-width: 2px;"></div>
           <span style="color: var(--text-sub);">
@@ -1141,19 +1198,87 @@
             <span data-lang="es">Esperando tu mensaje...</span>
           </span>
         </div>
-
         <div id="tgPairingSuccess" style="display: none; align-items: center; gap: 12px; padding: 16px; background: var(--bg-3); border-radius: var(--r-md); margin-top: 16px;">
           <span style="color: var(--success); font-size: 20px; font-weight: 700;">&#10003;</span>
           <span id="tgPairingSuccessMsg" style="color: var(--success);"></span>
         </div>
       </div>
-
       <div class="btn-row" id="tgBtnRow">
-        <button class="btn-secondary" onclick="skipTelegram()">
-          <span data-lang="en">Skip</span>
-          <span data-lang="es">Omitir</span>
-        </button>
         <button class="btn-primary" id="btnTgContinue" onclick="submitTelegram()">
+          <span data-lang="en">Continue</span>
+          <span data-lang="es">Continuar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 6: Optional Features (de-emphasized) -->
+    <div class="step" data-step="6">
+      <h2 class="step-title">
+        <span data-lang="en">Extra features</span>
+        <span data-lang="es">Funciones extra</span>
+      </h2>
+      <p class="step-desc">
+        <span data-lang="en">Optional — you can add these later if you want.</span>
+        <span data-lang="es">Opcional — podés agregar esto después si querés.</span>
+      </p>
+      <div class="toggle-row" style="margin-bottom:12px">
+        <div>
+          <div class="toggle-label">
+            <span data-lang="en">Voice Messages</span>
+            <span data-lang="es">Mensajes de Voz</span>
+          </div>
+          <div class="toggle-sub">
+            <span data-lang="en">Transcribe voice notes with Groq Whisper</span>
+            <span data-lang="es">Transcribir notas de voz con Groq Whisper</span>
+          </div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="voiceToggle" onchange="toggleFeatureVoice()">
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <div id="voiceFields" class="tg-fields">
+        <div class="input-group">
+          <label class="input-label" for="groqKeyInput">Groq API Key</label>
+          <input type="password" class="input-field" id="groqKeyInput" placeholder="gsk_..." autocomplete="off" spellcheck="false">
+          <div class="validation-msg" id="groqKeyValidation"></div>
+          <p class="input-hint">
+            <span data-lang="en">Get your key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></span>
+            <span data-lang="es">Obtené tu key en <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></span>
+          </p>
+        </div>
+      </div>
+      <div class="toggle-row" style="margin-bottom:12px">
+        <div>
+          <div class="toggle-label">
+            <span data-lang="en">Web Search</span>
+            <span data-lang="es">Búsqueda Web</span>
+          </div>
+          <div class="toggle-sub">
+            <span data-lang="en">Search the web via Brave Search API</span>
+            <span data-lang="es">Buscar en la web con Brave Search API</span>
+          </div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="webSearchToggle" onchange="toggleFeatureWebSearch()">
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <div id="webSearchFields" class="tg-fields">
+        <div class="input-group">
+          <label class="input-label" for="braveKeyInput">Brave API Key</label>
+          <input type="password" class="input-field" id="braveKeyInput" placeholder="BSA..." autocomplete="off" spellcheck="false">
+          <div class="validation-msg" id="braveKeyValidation"></div>
+          <p class="input-hint">
+            <span data-lang="en">Get your key at <a href="https://brave.com/search/api/" target="_blank">brave.com/search/api</a></span>
+            <span data-lang="es">Obtené tu key en <a href="https://brave.com/search/api/" target="_blank">brave.com/search/api</a></span>
+          </p>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="submitFeatures()" style="flex:1">
           <span data-lang="en">Continue</span>
           <span data-lang="es">Continuar</span>
         </button>
@@ -1170,13 +1295,10 @@
         <span data-lang="en">Review your configuration. Click any item to change it.</span>
         <span data-lang="es">Revisá tu configuración. Tocá cualquier item para cambiarlo.</span>
       </p>
-
       <div class="error-banner" id="confirmError">
         <span id="confirmErrorText"></span>
       </div>
-
       <div class="summary-card" id="summaryCard"></div>
-
       <div class="btn-row" style="flex-direction:column;gap:8px">
         <button class="btn-primary" id="btnConfirm" onclick="submitConfig()" style="width:100%">
           <span data-lang="en">Start Limbo</span>
@@ -1200,13 +1322,9 @@
         <span data-lang="en">Limbo is ready!</span>
         <span data-lang="es">¡Limbo está listo!</span>
       </h2>
-      <p class="success-sub" id="successMsgTelegram" style="display:none">
+      <p class="success-sub">
         <span data-lang="en">Open Telegram and send a message to your bot to start chatting with Limbo.</span>
         <span data-lang="es">Abrí Telegram y mandale un mensaje a tu bot para empezar a hablar con Limbo.</span>
-      </p>
-      <p class="success-sub" id="successMsgNoTelegram" style="display:none">
-        <span data-lang="en">Connect to the gateway at <code style="background:var(--bg-3);padding:4px 10px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:14px" id="gwUrlEn"></code></span>
-        <span data-lang="es">Conectate al gateway en <code style="background:var(--bg-3);padding:4px 10px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:14px" id="gwUrlEs"></code></span>
       </p>
       <p class="success-sub" style="margin-top:24px;color:var(--text-dim);font-size:14px">
         <span data-lang="en">You can close this page.</span>
@@ -1218,155 +1336,301 @@
   <footer class="footer">&copy; 2026 Limbo</footer>
 
   <script>
-    // --- Setup Token ---
-    const SETUP_TOKEN = new URLSearchParams(window.location.search).get('token') || '';
-    function authHeaders() {
-      return { 'Authorization': `Bearer ${SETUP_TOKEN}`, 'Content-Type': 'application/json' };
+    'use strict';
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 1: Safe fetch wrapper — handles tunnel death gracefully
+    // ═══════════════════════════════════════════════════════════════════
+
+    class ConnectionLostError extends Error {
+      constructor(msg) { super(msg); this.name = 'ConnectionLostError'; }
     }
 
-    // --- State ---
-    const state = {
+    // All data used in innerHTML comes from our own server's MODEL_CATALOG
+    // or from hardcoded UI strings — never from user input. The wizard is
+    // also token-gated and only runs during first-boot setup.
+
+    async function safeApiFetch(url, options) {
+      var res;
+      try {
+        res = await fetch(url, options || {});
+      } catch (_unused) {
+        throw new ConnectionLostError('Server unreachable');
+      }
+      var ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        throw new ConnectionLostError('Non-JSON response (' + res.status + ')');
+      }
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error ' + res.status);
+      return data;
+    }
+
+    async function safeApiFetchWithRetry(url, options, retries) {
+      retries = retries || 3;
+      var banner = document.getElementById('connectionBanner');
+      for (var attempt = 1; attempt <= retries; attempt++) {
+        try {
+          var result = await safeApiFetch(url, options);
+          banner.classList.remove('visible');
+          return result;
+        } catch (err) {
+          if (!(err instanceof ConnectionLostError) || attempt === retries) {
+            banner.classList.remove('visible');
+            throw err;
+          }
+          banner.textContent = state.language === 'es'
+            ? 'Reconectando... (intento ' + attempt + '/' + retries + ')'
+            : 'Reconnecting... (attempt ' + attempt + '/' + retries + ')';
+          banner.className = 'connection-banner visible';
+          await new Promise(function(r) { setTimeout(r, 3000); });
+        }
+      }
+    }
+
+    function showConnectionError() {
+      var banner = document.getElementById('connectionBanner');
+      banner.textContent = state.language === 'es'
+        ? 'No se pudo reconectar. Refrescá la página.'
+        : 'Could not reconnect. Please refresh the page.';
+      banner.className = 'connection-banner visible error';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Setup Token & Language
+    // ═══════════════════════════════════════════════════════════════════
+
+    var SETUP_TOKEN = new URLSearchParams(window.location.search).get('token') || '';
+    function authHeaders() {
+      return { 'Authorization': 'Bearer ' + SETUP_TOKEN, 'Content-Type': 'application/json' };
+    }
+
+    var detectedLang = (navigator.language || '').toLowerCase().startsWith('es') ? 'es' : 'en';
+
+    var state = {
       step: 1,
-      language: 'en',
+      language: detectedLang,
       provider: null,
       authMode: null,
       apiKey: '',
       model: null,
       telegram: { enabled: true, botToken: '' },
+      features: {
+        voice: { enabled: false, apiKey: '' },
+        webSearch: { enabled: false, apiKey: '' },
+      },
       subscriptionDone: false,
       subscriptionEmail: '',
+      detectedOS: detectOS(),
     };
 
-    const totalSteps = 7;
+    var totalSteps = 7;
 
-    // --- Prefix validation rules ---
-    const keyPrefixes = {
+    document.body.className = 'lang-' + state.language;
+    updateLangToggle();
+
+    function toggleLanguage() {
+      state.language = state.language === 'es' ? 'en' : 'es';
+      document.body.className = 'lang-' + state.language;
+      updateLangToggle();
+    }
+
+    function updateLangToggle() {
+      document.getElementById('langToggle').textContent = state.language === 'es' ? 'EN' : 'ES';
+    }
+
+    function detectOS() {
+      var ua = navigator.userAgent || '';
+      if (/Win/i.test(ua)) return 'windows';
+      if (/Mac/i.test(ua)) return 'mac';
+      return 'linux';
+    }
+
+    function selectOS(os) {
+      state.detectedOS = os;
+      document.querySelectorAll('.os-pill').forEach(function(p) {
+        p.classList.toggle('active', p.dataset.os === os);
+      });
+      updateOSInstruction();
+    }
+
+    function updateOSInstruction() {
+      var el = document.getElementById('osInstruction');
+      var os = state.detectedOS;
+      var l = state.language;
+      var instructions = {
+        mac: {
+          en: 'Press <kbd>\u2318 Command</kbd> + <kbd>Space</kbd>, type <kbd>Terminal</kbd>, press <kbd>Enter</kbd>',
+          es: 'Presion\u00e1 <kbd>\u2318 Command</kbd> + <kbd>Espacio</kbd>, escrib\u00ed <kbd>Terminal</kbd>, presion\u00e1 <kbd>Enter</kbd>',
+        },
+        windows: {
+          en: 'Press <kbd>Windows</kbd> + <kbd>R</kbd>, type <kbd>cmd</kbd>, press <kbd>Enter</kbd>',
+          es: 'Presion\u00e1 <kbd>Windows</kbd> + <kbd>R</kbd>, escrib\u00ed <kbd>cmd</kbd>, presion\u00e1 <kbd>Enter</kbd>',
+        },
+        linux: {
+          en: 'Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd>',
+          es: 'Presion\u00e1 <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd>',
+        },
+      };
+      // These are hardcoded strings, not user input
+      el.innerHTML = (instructions[os] && instructions[os][l]) || instructions.mac[l];
+
+      var windowsHint = document.getElementById('windowsNodeHint');
+      if (windowsHint) windowsHint.style.display = os === 'windows' ? '' : 'none';
+    }
+
+    function toggleClaudeInstall() {
+      var checked = document.getElementById('claudeInstalledCheck').checked;
+      var body = document.getElementById('claudeInstallBody');
+      if (checked) {
+        body.classList.add('collapsed');
+        document.getElementById('tokenStepNum').textContent = '2';
+        document.getElementById('pasteStepNum').textContent = '3';
+      } else {
+        body.classList.remove('collapsed');
+        document.getElementById('tokenStepNum').textContent = '3';
+        document.getElementById('pasteStepNum').textContent = '4';
+      }
+    }
+
+    var keyPrefixes = {
       anthropic: 'sk-ant-',
       openai: 'sk-',
       openrouter: 'sk-or-',
     };
 
-    const keyLinks = {
+    var keyLinks = {
       anthropic: 'https://console.anthropic.com/settings/keys',
       openai: 'https://platform.openai.com/api-keys',
       openrouter: 'https://openrouter.ai/keys',
     };
 
-    // --- Provider display names ---
-    const providerNames = {
+    var providerNames = {
       anthropic: 'Anthropic (Claude)',
       openai: 'OpenAI (ChatGPT)',
       openrouter: 'OpenRouter',
     };
 
-    const authModeNames = {
+    var authModeNames = {
       en: { 'api-key': 'API Key', subscription: 'Subscription' },
-      es: { 'api-key': 'API Key', subscription: 'Suscripción' },
+      es: { 'api-key': 'API Key', subscription: 'Suscripci\u00f3n' },
     };
 
-    // --- Navigation ---
+    var modelDescriptions = {
+      'claude-opus-4-6': { en: 'Most capable', es: 'M\u00e1s capaz' },
+      'claude-sonnet-4-6': { en: 'Fast and smart', es: 'R\u00e1pido e inteligente' },
+      'claude-haiku-4-5-20251001': { en: 'Fastest, most affordable', es: 'M\u00e1s r\u00e1pido y econ\u00f3mico' },
+      'gpt-5.4': { en: 'Most capable', es: 'M\u00e1s capaz' },
+      'gpt-4.1': { en: 'Fast and smart', es: 'R\u00e1pido e inteligente' },
+      'gpt-4.1-mini': { en: 'Compact, affordable', es: 'Compacto y econ\u00f3mico' },
+      'gpt-4.1-nano': { en: 'Fastest, cheapest', es: 'M\u00e1s r\u00e1pido y barato' },
+      'o3': { en: 'Advanced reasoning', es: 'Razonamiento avanzado' },
+      'o4-mini': { en: 'Reasoning, affordable', es: 'Razonamiento, econ\u00f3mico' },
+      'anthropic/claude-opus-4-6': { en: 'Most capable (Anthropic)', es: 'M\u00e1s capaz (Anthropic)' },
+      'openai/gpt-5.4': { en: 'Most capable (OpenAI)', es: 'M\u00e1s capaz (OpenAI)' },
+      'google/gemini-2.5-pro': { en: "Google's best", es: 'El mejor de Google' },
+      'deepseek/deepseek-r1': { en: 'Advanced reasoning', es: 'Razonamiento avanzado' },
+      'meta-llama/llama-4-maverick': { en: 'Open source, fast', es: 'Open source, r\u00e1pido' },
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Navigation
+    // ═══════════════════════════════════════════════════════════════════
+
     function goToStep(n) {
-      // Skip auth method step for openrouter
-      if (n === 3 && state.provider === 'openrouter') {
+      if (n === 2 && state.provider === 'openrouter') {
         state.authMode = 'api-key';
-        n = 4;
+        n = 3;
       }
 
       state.step = n;
 
-      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-      const target = document.querySelector(`.step[data-step="${n}"]`);
+      document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
+      var target = document.querySelector('.step[data-step="' + n + '"]');
       if (target) target.classList.add('active');
 
-      // Progress dots
-      document.querySelectorAll('.progress-dot').forEach((dot, i) => {
+      document.querySelectorAll('.progress-dot').forEach(function(dot, i) {
         dot.classList.remove('active', 'done');
         if (i + 1 === n) dot.classList.add('active');
         else if (i + 1 < n) dot.classList.add('done');
       });
 
-      // Back button
       document.getElementById('btnBack').classList.toggle('hidden', n === 1);
 
-      // Step-specific setup
-      if (n === 4) setupApiKeyStep();
-      if (n === 5) fetchModels();
-      if (n === 6) resetTelegramUI();
+      if (n === 3) setupApiKeyStep();
+      if (n === 4) fetchModels();
+      if (n === 5) resetTelegramUI();
+      if (n === 6) resetFeaturesUI();
       if (n === 7) buildSummary();
     }
 
-    document.getElementById('btnBack').addEventListener('click', () => {
-      let prev = state.step - 1;
-      // Skip auth method for openrouter when going back
-      if (prev === 3 && state.provider === 'openrouter') prev = 2;
+    document.getElementById('btnBack').addEventListener('click', function() {
+      var prev = state.step - 1;
+      if (prev === 2 && state.provider === 'openrouter') prev = 1;
       if (prev >= 1) goToStep(prev);
     });
 
-    // --- Step 1: Language ---
-    function selectLanguage(lang) {
-      state.language = lang;
-      document.body.className = `lang-${lang}`;
-      // Mark card selected
-      document.querySelectorAll('.step[data-step="1"] .card').forEach(c => {
-        c.classList.toggle('selected', c.dataset.value === lang);
-      });
-      setTimeout(() => goToStep(2), 200);
-    }
+    // ═══════════════════════════════════════════════════════════════════
+    // Step 1: Provider
+    // ═══════════════════════════════════════════════════════════════════
 
-    // --- Step 2: Provider ---
-    const subscriptionLabels = {
-      anthropic: { en: 'Use your Claude Pro/Team subscription', es: 'Usá tu suscripción de Claude Pro/Team' },
-      openai:    { en: 'Use your ChatGPT Plus/Pro subscription', es: 'Usá tu suscripción de ChatGPT Plus/Pro' },
+    var subscriptionLabels = {
+      anthropic: { en: 'Use your Claude Pro/Team subscription', es: 'Us\u00e1 tu suscripci\u00f3n de Claude Pro/Team' },
+      openai:    { en: 'Use your ChatGPT Plus/Pro subscription', es: 'Us\u00e1 tu suscripci\u00f3n de ChatGPT Plus/Pro' },
     };
+
     function selectProvider(provider) {
       state.provider = provider;
-      document.querySelectorAll('.step[data-step="2"] .card').forEach(c => {
+      document.querySelectorAll('.step[data-step="1"] .card').forEach(function(c) {
         c.classList.toggle('selected', c.dataset.value === provider);
       });
-      // Update subscription subtitle for step 3
-      const sub = document.getElementById('subscriptionSubtitle');
-      const labels = subscriptionLabels[provider];
+      var sub = document.getElementById('subscriptionSubtitle');
+      var labels = subscriptionLabels[provider];
       if (labels && sub) {
-        sub.innerHTML = `<span data-lang="en">${labels.en}</span><span data-lang="es">${labels.es}</span>`;
-        document.body.className = `lang-${state.language}`;
+        // Hardcoded labels, safe to set
+        sub.innerHTML = '<span data-lang="en">' + labels.en + '</span><span data-lang="es">' + labels.es + '</span>';
+        document.body.className = 'lang-' + state.language;
       }
-      // Reset downstream
       state.authMode = null;
       state.apiKey = '';
       state.model = null;
       state.subscriptionDone = false;
       state.subscriptionEmail = '';
-      setTimeout(() => goToStep(3), 200);
+      setTimeout(function() { goToStep(2); }, 200);
     }
 
-    // --- Step 3: Auth Mode ---
+    // ═══════════════════════════════════════════════════════════════════
+    // Step 2: Auth Mode
+    // ═══════════════════════════════════════════════════════════════════
+
     function selectAuthMode(mode) {
       state.authMode = mode;
       state.subscriptionDone = false;
       state.subscriptionEmail = '';
-      document.querySelectorAll('.step[data-step="3"] .card').forEach(c => {
+      document.querySelectorAll('.step[data-step="2"] .card').forEach(function(c) {
         c.classList.toggle('selected', c.dataset.value === mode);
       });
-      setTimeout(() => goToStep(4), 200);
+      setTimeout(function() { goToStep(3); }, 200);
     }
 
-    // --- Step 4: Credentials ---
-    function setupApiKeyStep() {
-      const isSub = state.authMode === 'subscription';
-      const isOAuth = isSub && state.provider === 'openai';
-      const isClaude = isSub && state.provider === 'anthropic';
+    // ═══════════════════════════════════════════════════════════════════
+    // Step 3: Credentials
+    // ═══════════════════════════════════════════════════════════════════
 
-      // Hide all sections
+    function setupApiKeyStep() {
+      var isSub = state.authMode === 'subscription';
+      var isOAuth = isSub && state.provider === 'openai';
+      var isClaude = isSub && state.provider === 'anthropic';
+
       document.getElementById('apiKeySection').style.display = 'none';
       document.getElementById('oauthSection').style.display = 'none';
       document.getElementById('claudeTokenSection').style.display = 'none';
 
-      const btn = document.getElementById('btnApiKeyContinue');
+      var btn = document.getElementById('btnApiKeyContinue');
 
       if (isOAuth) {
         document.getElementById('oauthSection').style.display = '';
         btn.disabled = !state.subscriptionDone;
-        // Reset all OAuth sub-views
         document.getElementById('oauthStartView').style.display = 'none';
         document.getElementById('oauthHeadsUpView').style.display = 'none';
         document.getElementById('oauthPasteView').style.display = 'none';
@@ -1380,107 +1644,104 @@
         document.getElementById('claudeTokenSection').style.display = '';
         btn.disabled = !state.subscriptionDone;
         document.getElementById('claudeSuccessView').style.display = state.subscriptionDone ? '' : 'none';
-        const input = document.getElementById('claudeTokenInput');
+        var input = document.getElementById('claudeTokenInput');
         if (!state.subscriptionDone) {
           input.value = '';
           input.className = 'input-field';
-          document.getElementById('claudeTokenValidation').innerHTML = '';
+          document.getElementById('claudeTokenValidation').textContent = '';
         }
+        selectOS(state.detectedOS);
       } else {
-        // API Key mode
         document.getElementById('apiKeySection').style.display = '';
         btn.disabled = true;
-        const input = document.getElementById('apiKeyInput');
-        input.value = state.apiKey || '';
-        input.className = 'input-field';
-        document.getElementById('apiKeyValidation').innerHTML = '';
+        var apiInput = document.getElementById('apiKeyInput');
+        apiInput.value = state.apiKey || '';
+        apiInput.className = 'input-field';
+        document.getElementById('apiKeyValidation').textContent = '';
         setupApiKeyHint();
       }
     }
 
     function setupApiKeyHint() {
-      const link = keyLinks[state.provider] || '#';
-      const hint = document.getElementById('apiKeyHint');
+      var link = keyLinks[state.provider] || '#';
+      var hint = document.getElementById('apiKeyHint');
+      // Provider name is from our hardcoded providerNames map
       if (state.language === 'es') {
-        hint.innerHTML = `Podés obtener tu API key en <a href="${link}" target="_blank">${state.provider}</a>`;
+        hint.innerHTML = 'Pod\u00e9s obtener tu API key en <a href="' + link + '" target="_blank">' + state.provider + '</a>';
       } else {
-        hint.innerHTML = `You can get your API key at <a href="${link}" target="_blank">${state.provider}</a>`;
+        hint.innerHTML = 'You can get your API key at <a href="' + link + '" target="_blank">' + state.provider + '</a>';
       }
     }
 
-    // --- API Key input validation ---
     document.getElementById('apiKeyInput').addEventListener('input', function () {
-      const val = this.value.trim();
-      const msgEl = document.getElementById('apiKeyValidation');
-      const btn = document.getElementById('btnApiKeyContinue');
-      const expectedPrefix = keyPrefixes[state.provider] || '';
+      var val = this.value.trim();
+      var msgEl = document.getElementById('apiKeyValidation');
+      var btn = document.getElementById('btnApiKeyContinue');
+      var expectedPrefix = keyPrefixes[state.provider] || '';
 
       if (!val) {
         this.className = 'input-field';
-        msgEl.innerHTML = '';
+        msgEl.textContent = '';
         btn.disabled = true;
         return;
       }
 
       if (expectedPrefix && val.startsWith(expectedPrefix) && val.length > expectedPrefix.length + 5) {
         this.className = 'input-field valid';
-        const msg = state.language === 'es' ? 'Formato válido' : 'Valid format';
-        msgEl.innerHTML = `<span class="validation-msg success">${msg}</span>`;
+        msgEl.textContent = state.language === 'es' ? 'Formato v\u00e1lido' : 'Valid format';
+        msgEl.className = 'validation-msg success';
         btn.disabled = false;
       } else if (expectedPrefix && !val.startsWith(expectedPrefix)) {
         this.className = 'input-field invalid';
-        const msg = state.language === 'es'
-          ? `La key debe empezar con <code>${expectedPrefix}</code>`
-          : `Key should start with <code>${expectedPrefix}</code>`;
-        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+        msgEl.textContent = state.language === 'es'
+          ? 'La key debe empezar con ' + expectedPrefix
+          : 'Key should start with ' + expectedPrefix;
+        msgEl.className = 'validation-msg error';
         btn.disabled = true;
       } else {
         this.className = 'input-field';
-        msgEl.innerHTML = '';
+        msgEl.textContent = '';
+        msgEl.className = 'validation-msg';
         btn.disabled = val.length < 10;
       }
     });
 
     // --- OpenAI OAuth PKCE ---
     function startOpenAIOAuth() {
-      // Show the heads-up dialog before opening the auth window
       document.getElementById('oauthStartView').style.display = 'none';
       document.getElementById('oauthHeadsUpView').style.display = '';
     }
 
     async function confirmOpenAIOAuth() {
-      const btn = document.getElementById('btnOauthConfirmOpen');
+      var btn = document.getElementById('btnOauthConfirmOpen');
       btn.disabled = true;
-      const origHTML = btn.innerHTML;
+      var origHTML = btn.innerHTML;
       btn.innerHTML = '<div class="spinner" style="border-color:#fff;border-top-color:transparent;width:18px;height:18px"></div>';
 
-      // Open window FIRST to preserve user-gesture context
-      const popup = window.open('about:blank', '_blank');
+      var popup = window.open('about:blank', '_blank');
 
       try {
-        const res = await fetch(`/api/auth/openai/start?token=${SETUP_TOKEN}`);
-        if (!res.ok) throw new Error('Failed to start OAuth');
-        const data = await res.json();
-
+        var data = await safeApiFetch('/api/auth/openai/start?token=' + SETUP_TOKEN);
         popup.location.href = data.authUrl;
-
-        // Show paste-URL step
         document.getElementById('oauthHeadsUpView').style.display = 'none';
         document.getElementById('oauthPasteView').style.display = '';
       } catch (err) {
         if (popup) popup.close();
         btn.disabled = false;
         btn.innerHTML = origHTML;
-        document.body.className = `lang-${state.language}`;
-        document.getElementById('oauthValidation').innerHTML =
-          `<span class="validation-msg error">${err.message}</span>`;
+        document.body.className = 'lang-' + state.language;
+        var msg = err instanceof ConnectionLostError
+          ? (state.language === 'es' ? 'Se perdi\u00f3 la conexi\u00f3n con el servidor' : 'Lost connection to server')
+          : err.message;
+        var validation = document.getElementById('oauthValidation');
+        validation.textContent = msg;
+        validation.className = 'validation-msg error';
       }
     }
 
     function onOAuthSuccess(email) {
       state.subscriptionDone = true;
       state.subscriptionEmail = email;
-
       document.getElementById('oauthPasteView').style.display = 'none';
       document.getElementById('oauthHeadsUpView').style.display = 'none';
       document.getElementById('oauthSuccessView').style.display = '';
@@ -1489,422 +1750,477 @@
       document.getElementById('btnApiKeyContinue').disabled = false;
     }
 
-    // Paste URL validation + submit
+    // PKCE auto-detect: auto-submit when URL with code= is pasted
     document.getElementById('oauthCallbackInput').addEventListener('input', function () {
-      const val = this.value.trim();
-      document.getElementById('btnOauthConnect').disabled = !val || !val.includes('code=');
-      document.getElementById('oauthValidation').innerHTML = '';
+      var val = this.value.trim();
+      document.getElementById('oauthValidation').textContent = '';
+      if (val && val.includes('code=')) {
+        submitOAuthCallback();
+      }
     });
 
     async function submitOAuthCallback() {
-      const input = document.getElementById('oauthCallbackInput');
-      const url = input.value.trim();
+      var input = document.getElementById('oauthCallbackInput');
+      var url = input.value.trim();
       if (!url) return;
 
-      const btn = document.getElementById('btnOauthConnect');
-      btn.disabled = true;
-      btn.innerHTML = '<div class="spinner"></div>';
+      var validation = document.getElementById('oauthValidation');
+      validation.textContent = state.language === 'es' ? 'Conectando...' : 'Connecting...';
+      validation.className = 'validation-msg';
 
       try {
-        const res = await fetch('/api/auth/openai/exchange', {
+        var data = await safeApiFetchWithRetry('/api/auth/openai/exchange', {
           method: 'POST',
           headers: authHeaders(),
           body: JSON.stringify({ callbackUrl: url }),
         });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || 'Exchange failed');
-        }
-        const data = await res.json();
         onOAuthSuccess(data.email || '');
       } catch (err) {
-        btn.disabled = false;
-        btn.innerHTML = '<span data-lang="en">Connect</span><span data-lang="es">Conectar</span>';
-        document.body.className = `lang-${state.language}`;
-        document.getElementById('oauthValidation').innerHTML =
-          `<span class="validation-msg error">${err.message}</span>`;
+        var msg = err instanceof ConnectionLostError
+          ? (state.language === 'es' ? 'Se perdi\u00f3 la conexi\u00f3n' : 'Connection lost')
+          : err.message;
+        validation.textContent = msg;
+        validation.className = 'validation-msg error';
       }
     }
 
     // --- Anthropic setup-token ---
     document.getElementById('claudeTokenInput').addEventListener('input', function () {
-      const val = this.value.trim();
-      const msgEl = document.getElementById('claudeTokenValidation');
-      const btn = document.getElementById('btnApiKeyContinue');
+      var val = this.value.trim();
+      var msgEl = document.getElementById('claudeTokenValidation');
+      var btn = document.getElementById('btnApiKeyContinue');
 
       if (!val) {
         this.className = 'input-field';
-        msgEl.innerHTML = '';
+        msgEl.textContent = '';
         btn.disabled = true;
         return;
       }
 
       if (val.length > 20) {
         this.className = 'input-field valid';
-        msgEl.innerHTML = '';
+        msgEl.textContent = '';
         btn.disabled = false;
       } else {
         this.className = 'input-field invalid';
-        const msg = state.language === 'es' ? 'Token demasiado corto' : 'Token too short';
-        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+        msgEl.textContent = state.language === 'es' ? 'Token demasiado corto' : 'Token too short';
+        msgEl.className = 'validation-msg error';
         btn.disabled = true;
       }
     });
 
     async function connectClaudeToken(token) {
-      const btn = document.getElementById('btnApiKeyContinue');
-      const origHTML = btn.innerHTML;
+      var btn = document.getElementById('btnApiKeyContinue');
+      var origHTML = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<div class="spinner"></div>';
 
       try {
-        const res = await fetch('/api/auth/anthropic/token', {
+        await safeApiFetchWithRetry('/api/auth/anthropic/token', {
           method: 'POST',
           headers: authHeaders(),
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token: token }),
         });
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || 'Validation failed');
-        }
-
         state.subscriptionDone = true;
-
-        // Show success
         document.getElementById('claudeSuccessView').style.display = '';
         document.getElementById('claudeTokenInput').className = 'input-field valid';
-        document.getElementById('claudeTokenValidation').innerHTML = '';
-
+        document.getElementById('claudeTokenValidation').textContent = '';
         btn.disabled = false;
         btn.innerHTML = origHTML;
-        document.body.className = `lang-${state.language}`;
+        document.body.className = 'lang-' + state.language;
       } catch (err) {
         btn.disabled = false;
         btn.innerHTML = origHTML;
-        document.body.className = `lang-${state.language}`;
-        const msgEl = document.getElementById('claudeTokenValidation');
-        msgEl.innerHTML = `<span class="validation-msg error">${err.message}</span>`;
+        document.body.className = 'lang-' + state.language;
+        var msg = err instanceof ConnectionLostError
+          ? (state.language === 'es' ? 'Se perdi\u00f3 la conexi\u00f3n' : 'Connection lost')
+          : err.message;
+        var msgEl = document.getElementById('claudeTokenValidation');
+        msgEl.textContent = msg;
+        msgEl.className = 'validation-msg error';
       }
     }
 
-    // --- Copy command helper ---
     function copyCommand(el) {
-      const cmd = el.querySelector('span:first-child').textContent;
-      navigator.clipboard.writeText(cmd).then(() => {
-        const hints = el.querySelectorAll('.copy-hint');
-        hints.forEach(h => {
-          const orig = h.textContent;
+      var cmd = el.querySelector('span:first-child').textContent;
+      navigator.clipboard.writeText(cmd).then(function() {
+        var hints = el.querySelectorAll('.copy-hint');
+        hints.forEach(function(h) {
+          var orig = h.textContent;
           h.textContent = state.language === 'es' ? 'copiado!' : 'copied!';
           h.style.color = 'var(--success)';
-          setTimeout(() => { h.textContent = orig; h.style.color = ''; }, 1500);
+          setTimeout(function() { h.textContent = orig; h.style.color = ''; }, 1500);
         });
       });
     }
 
-    // --- Submit Step 4 ---
     async function submitApiKey() {
-      // Anthropic subscription: validate token on server first
       if (state.authMode === 'subscription' && state.provider === 'anthropic' && !state.subscriptionDone) {
-        const token = document.getElementById('claudeTokenInput').value.trim();
+        var token = document.getElementById('claudeTokenInput').value.trim();
         if (!token) return;
         await connectClaudeToken(token);
-        if (!state.subscriptionDone) return; // validation failed
+        if (!state.subscriptionDone) return;
       }
-
-      // API key mode: store key
       if (state.authMode === 'api-key') {
         state.apiKey = document.getElementById('apiKeyInput').value.trim();
       }
-
-      goToStep(5);
+      goToStep(4);
     }
 
-    // --- Step 5: Models ---
+    // ═══════════════════════════════════════════════════════════════════
+    // Step 4: Models
+    // ═══════════════════════════════════════════════════════════════════
+
     async function fetchModels() {
-      const container = document.getElementById('modelsContainer');
-      const btnRow = document.getElementById('modelBtnRow');
+      var container = document.getElementById('modelsContainer');
+      var btnRow = document.getElementById('modelBtnRow');
       btnRow.style.display = 'none';
 
-      container.innerHTML = `
-        <div class="loading-models">
-          <div class="spinner"></div>
-          <span data-lang="en">Loading models...</span>
-          <span data-lang="es">Cargando modelos...</span>
-        </div>`;
-      // Re-apply lang visibility
-      document.body.className = `lang-${state.language}`;
+      // Hardcoded loading UI
+      container.innerHTML = '<div class="loading-models"><div class="spinner"></div><span data-lang="en">Loading models...</span><span data-lang="es">Cargando modelos...</span></div>';
+      document.body.className = 'lang-' + state.language;
 
       try {
-        const res = await fetch(`/api/models?provider=${state.provider}&token=${SETUP_TOKEN}`);
-        if (!res.ok) throw new Error('Failed to fetch models');
-        const data = await res.json();
-        const models = data.models || [];
+        var data = await safeApiFetchWithRetry('/api/models?provider=' + state.provider + '&token=' + SETUP_TOKEN);
+        var models = data.models || [];
 
         if (models.length === 0) {
-          container.innerHTML = `<p style="color:var(--text-sub);text-align:center;padding:24px">
-            <span data-lang="en">No models available</span>
-            <span data-lang="es">No hay modelos disponibles</span>
-          </p>`;
-          document.body.className = `lang-${state.language}`;
+          container.innerHTML = '<p style="color:var(--text-sub);text-align:center;padding:24px"><span data-lang="en">No models available</span><span data-lang="es">No hay modelos disponibles</span></p>';
+          document.body.className = 'lang-' + state.language;
           return;
         }
 
-        container.innerHTML = '<div class="cards" id="modelCards"></div>';
-        const cardsEl = document.getElementById('modelCards');
+        // Build model cards using DOM API to avoid innerHTML with server data
+        container.innerHTML = '';
+        var cardsEl = document.createElement('div');
+        cardsEl.className = 'cards';
+        cardsEl.id = 'modelCards';
+        container.appendChild(cardsEl);
 
-        models.forEach(m => {
-          const isDefault = m.default === true;
-          const card = document.createElement('div');
+        models.forEach(function(m) {
+          var isDefault = m.default === true;
+          var desc = modelDescriptions[m.id];
+          var descText = desc ? (desc[state.language] || desc.en) : '';
+
+          var card = document.createElement('div');
           card.className = 'model-card' + (isDefault ? ' selected' : '');
           card.dataset.model = m.id;
-          card.innerHTML = `
-            <span class="model-name">${m.name || m.id}</span>
-            ${isDefault ? `<span class="model-badge">
-              <span data-lang="en">default</span>
-              <span data-lang="es">predeterminado</span>
-            </span>` : ''}`;
-          card.addEventListener('click', () => selectModel(m.id));
-          cardsEl.appendChild(card);
 
-          if (isDefault) state.model = m.id;
+          var infoDiv = document.createElement('div');
+          var nameSpan = document.createElement('span');
+          nameSpan.className = 'model-name';
+          nameSpan.textContent = m.name || m.id;
+          infoDiv.appendChild(nameSpan);
+
+          if (descText) {
+            var descDiv = document.createElement('div');
+            descDiv.className = 'model-desc';
+            descDiv.textContent = descText;
+            infoDiv.appendChild(descDiv);
+          }
+          card.appendChild(infoDiv);
+
+          if (isDefault) {
+            var badge = document.createElement('span');
+            badge.className = 'model-badge';
+            // Bilingual badge
+            var badgeEn = document.createElement('span');
+            badgeEn.setAttribute('data-lang', 'en');
+            badgeEn.textContent = 'recommended';
+            var badgeEs = document.createElement('span');
+            badgeEs.setAttribute('data-lang', 'es');
+            badgeEs.textContent = 'recomendado';
+            badge.appendChild(badgeEn);
+            badge.appendChild(badgeEs);
+            card.appendChild(badge);
+            state.model = m.id;
+          }
+
+          card.addEventListener('click', function() { selectModel(m.id); });
+          cardsEl.appendChild(card);
         });
 
-        document.body.className = `lang-${state.language}`;
+        document.body.className = 'lang-' + state.language;
         btnRow.style.display = '';
       } catch (err) {
-        container.innerHTML = `
-          <p style="color:var(--danger);text-align:center;padding:24px">
-            <span data-lang="en">Could not load models. Check your API key and try again.</span>
-            <span data-lang="es">No se pudieron cargar los modelos. Revisá tu API key e intentá de nuevo.</span>
-          </p>
-          <div class="btn-row">
-            <button class="btn-secondary" onclick="goToStep(4)">
-              <span data-lang="en">Go back</span>
-              <span data-lang="es">Volver</span>
-            </button>
-            <button class="btn-primary" onclick="fetchModels()">
-              <span data-lang="en">Retry</span>
-              <span data-lang="es">Reintentar</span>
-            </button>
-          </div>`;
-        document.body.className = `lang-${state.language}`;
+        if (err instanceof ConnectionLostError) {
+          showConnectionError();
+          return;
+        }
+        container.innerHTML = '<p style="color:var(--danger);text-align:center;padding:24px"><span data-lang="en">Could not load models. Check your API key and try again.</span><span data-lang="es">No se pudieron cargar los modelos. Revis\u00e1 tu API key e intent\u00e1 de nuevo.</span></p><div class="btn-row"><button class="btn-secondary" onclick="goToStep(3)"><span data-lang="en">Go back</span><span data-lang="es">Volver</span></button><button class="btn-primary" onclick="fetchModels()"><span data-lang="en">Retry</span><span data-lang="es">Reintentar</span></button></div>';
+        document.body.className = 'lang-' + state.language;
       }
     }
 
     function selectModel(id) {
       state.model = id;
-      document.querySelectorAll('.model-card').forEach(c => {
+      document.querySelectorAll('.model-card').forEach(function(c) {
         c.classList.toggle('selected', c.dataset.model === id);
       });
     }
 
     function submitModel() {
       if (!state.model) return;
-      goToStep(6);
+      goToStep(5);
     }
 
-    // --- Step 6: Telegram ---
-    function toggleTelegram() {
-      const enabled = document.getElementById('tgToggle').checked;
-      state.telegram.enabled = enabled;
-      document.getElementById('tgFields').classList.toggle('visible', enabled);
-    }
+    // ═══════════════════════════════════════════════════════════════════
+    // Step 5: Telegram (mandatory)
+    // ═══════════════════════════════════════════════════════════════════
 
     document.getElementById('tgTokenInput').addEventListener('input', function () {
-      const val = this.value.trim();
-      const msgEl = document.getElementById('tgTokenValidation');
-      // Telegram bot tokens look like: 123456:ABC-DEF...
-      const valid = /^\d+:.{20,}$/.test(val);
+      var val = this.value.trim();
+      var msgEl = document.getElementById('tgTokenValidation');
+      var valid = /^\d+:.{20,}$/.test(val);
       if (!val) {
         this.className = 'input-field';
-        msgEl.innerHTML = '';
+        msgEl.textContent = '';
         return;
       }
       if (valid) {
         this.className = 'input-field valid';
-        msgEl.innerHTML = '';
+        msgEl.textContent = '';
       } else {
         this.className = 'input-field invalid';
-        const msg = state.language === 'es' ? 'Formato de token inválido' : 'Invalid token format';
-        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+        msgEl.textContent = state.language === 'es' ? 'Formato de token inv\u00e1lido' : 'Invalid token format';
+        msgEl.className = 'validation-msg error';
       }
     });
 
-    let pairingActive = false;
-
-    function skipTelegram() {
-      pairingActive = false;
-      state.telegram.enabled = false;
-      state.telegram.botToken = '';
-      goToStep(7);
-    }
+    var pairingActive = false;
 
     function resetTelegramUI() {
-      document.getElementById('tgFields').classList.toggle('visible', state.telegram.enabled);
       document.getElementById('tgPairing').style.display = 'none';
       document.getElementById('tgPairingStatus').style.display = 'flex';
       document.getElementById('tgPairingSuccess').style.display = 'none';
-      const btn = document.getElementById('btnTgContinue');
+      var btn = document.getElementById('btnTgContinue');
       btn.disabled = false;
       btn.style.display = '';
-      btn.innerHTML = `<span data-lang="en">Continue</span><span data-lang="es">Continuar</span>`;
-      document.body.className = `lang-${state.language}`;
+      btn.innerHTML = '<span data-lang="en">Continue</span><span data-lang="es">Continuar</span>';
+      document.body.className = 'lang-' + state.language;
     }
 
     async function submitTelegram() {
-      if (!state.telegram.enabled) {
-        goToStep(7);
-        return;
-      }
-
-      const token = document.getElementById('tgTokenInput').value.trim();
+      var token = document.getElementById('tgTokenInput').value.trim();
       if (!token || !/^\d+:.{20,}$/.test(token)) {
-        const msgEl = document.getElementById('tgTokenValidation');
-        const msg = state.language === 'es' ? 'Ingresá un token válido o salteá este paso' : 'Enter a valid token or skip this step';
-        msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+        var msgEl = document.getElementById('tgTokenValidation');
+        msgEl.textContent = state.language === 'es' ? 'Ingres\u00e1 un token de bot v\u00e1lido' : 'Enter a valid bot token';
+        msgEl.className = 'validation-msg error';
         return;
       }
 
       state.telegram.botToken = token;
-      const btn = document.getElementById('btnTgContinue');
+      var btn = document.getElementById('btnTgContinue');
       btn.disabled = true;
-      btn.innerHTML = `<div class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;"></div>`;
+      btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;"></div>';
 
       try {
-        // Validate token with Telegram getMe
-        const validateRes = await fetch('/api/telegram/validate-token', {
+        var validateData = await safeApiFetchWithRetry('/api/telegram/validate-token', {
           method: 'POST',
           headers: authHeaders(),
           body: JSON.stringify({ botToken: token }),
         });
-        const validateData = await validateRes.json();
 
         if (!validateData.valid) {
-          const msgEl = document.getElementById('tgTokenValidation');
-          const msg = state.language === 'es' ? 'Token inválido. Revisá que sea correcto.' : 'Invalid token. Please check and try again.';
-          msgEl.innerHTML = `<span class="validation-msg error">${msg}</span>`;
+          var tgMsgEl = document.getElementById('tgTokenValidation');
+          tgMsgEl.textContent = state.language === 'es' ? 'Token inv\u00e1lido. Revis\u00e1 que sea correcto.' : 'Invalid token. Please check and try again.';
+          tgMsgEl.className = 'validation-msg error';
           btn.disabled = false;
-          btn.innerHTML = `<span data-lang="en">Continue</span><span data-lang="es">Continuar</span>`;
-          document.body.className = `lang-${state.language}`;
+          btn.innerHTML = '<span data-lang="en">Continue</span><span data-lang="es">Continuar</span>';
+          document.body.className = 'lang-' + state.language;
           return;
         }
 
-        // Show pairing panel
-        const handle = `@${validateData.botUsername}`;
+        var handle = '@' + validateData.botUsername;
         document.getElementById('tgBotHandle').textContent = handle;
         document.getElementById('tgBotHandleEs').textContent = handle;
-        document.getElementById('tgFields').classList.remove('visible');
         document.getElementById('tgPairing').style.display = 'block';
         btn.style.display = 'none';
 
-        // Start long-poll pairing loop
         pairingActive = true;
         startTelegramPairing(token);
       } catch (err) {
-        const msgEl = document.getElementById('tgTokenValidation');
-        msgEl.innerHTML = `<span class="validation-msg error">${err.message}</span>`;
+        var errMsgEl = document.getElementById('tgTokenValidation');
+        var errMsg = err instanceof ConnectionLostError
+          ? (state.language === 'es' ? 'Se perdi\u00f3 la conexi\u00f3n' : 'Connection lost')
+          : err.message;
+        errMsgEl.textContent = errMsg;
+        errMsgEl.className = 'validation-msg error';
         btn.disabled = false;
-        btn.innerHTML = `<span data-lang="en">Continue</span><span data-lang="es">Continuar</span>`;
-        document.body.className = `lang-${state.language}`;
+        btn.innerHTML = '<span data-lang="en">Continue</span><span data-lang="es">Continuar</span>';
+        document.body.className = 'lang-' + state.language;
       }
     }
 
     async function startTelegramPairing(token) {
       while (pairingActive) {
         try {
-          const res = await fetch('/api/telegram/pair', {
+          var data = await safeApiFetch('/api/telegram/pair', {
             method: 'POST',
             headers: authHeaders(),
             body: JSON.stringify({ botToken: token, language: state.language }),
           });
-          const data = await res.json();
 
           if (!pairingActive) return;
 
           if (data.paired) {
             pairingActive = false;
             document.getElementById('tgPairingStatus').style.display = 'none';
-            const successEl = document.getElementById('tgPairingSuccess');
+            var successEl = document.getElementById('tgPairingSuccess');
             successEl.style.display = 'flex';
-            const msg = state.language === 'es'
-              ? `Conectado${data.firstName ? ' con ' + data.firstName : ''}. Saludo enviado.`
-              : `Connected${data.firstName ? ' with ' + data.firstName : ''}. Greeting sent.`;
+            var msg = state.language === 'es'
+              ? 'Conectado' + (data.firstName ? ' con ' + data.firstName : '') + '. Saludo enviado.'
+              : 'Connected' + (data.firstName ? ' with ' + data.firstName : '') + '. Greeting sent.';
             document.getElementById('tgPairingSuccessMsg').textContent = msg;
-
-            setTimeout(() => goToStep(7), 2000);
+            setTimeout(function() { goToStep(6); }, 2000);
             return;
           }
-          // Not paired yet — the server already waited ~25s, loop immediately
-        } catch {
+        } catch (err) {
           if (!pairingActive) return;
-          await new Promise(r => setTimeout(r, 2000));
+          if (err instanceof ConnectionLostError) {
+            var statusSpan = document.getElementById('tgPairingStatus').querySelector('span[style]');
+            if (statusSpan) {
+              statusSpan.innerHTML = '<span data-lang="en" style="color:var(--warning)">Reconnecting...</span><span data-lang="es" style="color:var(--warning)">Reconectando...</span>';
+              document.body.className = 'lang-' + state.language;
+            }
+          }
+          await new Promise(function(r) { setTimeout(r, 2000); });
         }
       }
     }
 
-    // --- Step 7: Summary ---
-    function buildSummary() {
-      const card = document.getElementById('summaryCard');
-      const l = state.language;
+    // ═══════════════════════════════════════════════════════════════════
+    // Step 6: Features
+    // ═══════════════════════════════════════════════════════════════════
 
-      const items = [
-        {
-          label: l === 'es' ? 'Idioma' : 'Language',
-          value: state.language === 'es' ? 'Español (Argentina)' : 'English',
-          step: 1,
-        },
-        {
-          label: l === 'es' ? 'Proveedor' : 'Provider',
-          value: providerNames[state.provider] || state.provider,
-          step: 2,
-        },
-        {
-          label: l === 'es' ? 'Autenticación' : 'Authentication',
-          value: authModeNames[l][state.authMode] || state.authMode,
-          step: 3,
-          hide: state.provider === 'openrouter',
-        },
-        {
-          label: state.authMode === 'subscription'
-            ? (l === 'es' ? 'Cuenta' : 'Account')
-            : (l === 'es' ? 'Clave' : 'Key'),
-          value: state.authMode === 'subscription'
-            ? (state.subscriptionEmail || (l === 'es' ? 'Conectado' : 'Connected'))
-            : maskKey(state.apiKey),
-          step: 4,
-        },
-        {
-          label: l === 'es' ? 'Modelo' : 'Model',
-          value: state.model,
-          step: 5,
-        },
-        {
-          label: 'Telegram',
-          value: state.telegram.enabled
-            ? (l === 'es' ? 'Activado' : 'Enabled')
-            : (l === 'es' ? 'Desactivado' : 'Disabled'),
-          step: 6,
-        },
+    function toggleFeatureVoice() {
+      var enabled = document.getElementById('voiceToggle').checked;
+      state.features.voice.enabled = enabled;
+      document.getElementById('voiceFields').classList.toggle('visible', enabled);
+    }
+
+    function toggleFeatureWebSearch() {
+      var enabled = document.getElementById('webSearchToggle').checked;
+      state.features.webSearch.enabled = enabled;
+      document.getElementById('webSearchFields').classList.toggle('visible', enabled);
+    }
+
+    function resetFeaturesUI() {
+      document.getElementById('voiceFields').classList.toggle('visible', state.features.voice.enabled);
+      document.getElementById('webSearchFields').classList.toggle('visible', state.features.webSearch.enabled);
+    }
+
+    document.getElementById('groqKeyInput').addEventListener('input', function () {
+      var val = this.value.trim();
+      var msgEl = document.getElementById('groqKeyValidation');
+      state.features.voice.apiKey = val;
+      if (!val) { this.className = 'input-field'; msgEl.textContent = ''; return; }
+      if (val.startsWith('gsk_') && val.length > 10) {
+        this.className = 'input-field valid';
+        msgEl.textContent = state.language === 'es' ? 'Formato v\u00e1lido' : 'Valid format';
+        msgEl.className = 'validation-msg success';
+      } else if (!val.startsWith('gsk_')) {
+        this.className = 'input-field invalid';
+        msgEl.textContent = state.language === 'es' ? 'La key debe empezar con gsk_' : 'Key should start with gsk_';
+        msgEl.className = 'validation-msg error';
+      } else { this.className = 'input-field'; msgEl.textContent = ''; }
+    });
+
+    document.getElementById('braveKeyInput').addEventListener('input', function () {
+      var val = this.value.trim();
+      var msgEl = document.getElementById('braveKeyValidation');
+      state.features.webSearch.apiKey = val;
+      if (!val) { this.className = 'input-field'; msgEl.textContent = ''; return; }
+      if (val.startsWith('BSA') && val.length > 10) {
+        this.className = 'input-field valid';
+        msgEl.textContent = state.language === 'es' ? 'Formato v\u00e1lido' : 'Valid format';
+        msgEl.className = 'validation-msg success';
+      } else if (!val.startsWith('BSA')) {
+        this.className = 'input-field invalid';
+        msgEl.textContent = state.language === 'es' ? 'La key debe empezar con BSA' : 'Key should start with BSA';
+        msgEl.className = 'validation-msg error';
+      } else { this.className = 'input-field'; msgEl.textContent = ''; }
+    });
+
+    function submitFeatures() {
+      if (state.features.voice.enabled) {
+        var groqKey = document.getElementById('groqKeyInput').value.trim();
+        if (!groqKey) {
+          var gMsgEl = document.getElementById('groqKeyValidation');
+          gMsgEl.textContent = state.language === 'es' ? 'Ingres\u00e1 tu API key de Groq' : 'Enter your Groq API key';
+          gMsgEl.className = 'validation-msg error';
+          return;
+        }
+        state.features.voice.apiKey = groqKey;
+      }
+      if (state.features.webSearch.enabled) {
+        var braveKey = document.getElementById('braveKeyInput').value.trim();
+        if (!braveKey) {
+          var bMsgEl = document.getElementById('braveKeyValidation');
+          bMsgEl.textContent = state.language === 'es' ? 'Ingres\u00e1 tu API key de Brave' : 'Enter your Brave API key';
+          bMsgEl.className = 'validation-msg error';
+          return;
+        }
+        state.features.webSearch.apiKey = braveKey;
+      }
+      goToStep(7);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Step 7: Summary
+    // ═══════════════════════════════════════════════════════════════════
+
+    function buildSummary() {
+      var card = document.getElementById('summaryCard');
+      var l = state.language;
+
+      var items = [
+        { label: l === 'es' ? 'Idioma' : 'Language', value: state.language === 'es' ? 'Espa\u00f1ol (Argentina)' : 'English' },
+        { label: l === 'es' ? 'Proveedor' : 'Provider', value: providerNames[state.provider] || state.provider, step: 1 },
+        { label: l === 'es' ? 'Autenticaci\u00f3n' : 'Authentication', value: authModeNames[l][state.authMode] || state.authMode, step: 2, hide: state.provider === 'openrouter' },
+        { label: state.authMode === 'subscription' ? (l === 'es' ? 'Cuenta' : 'Account') : (l === 'es' ? 'Clave' : 'Key'), value: state.authMode === 'subscription' ? (state.subscriptionEmail || (l === 'es' ? 'Conectado' : 'Connected')) : maskKey(state.apiKey), step: 3 },
+        { label: l === 'es' ? 'Modelo' : 'Model', value: state.model, step: 4 },
+        { label: 'Telegram', value: l === 'es' ? 'Activado' : 'Enabled', step: 5 },
+        { label: l === 'es' ? 'Voz' : 'Voice', value: state.features.voice.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6 },
+        { label: l === 'es' ? 'B\u00fasqueda Web' : 'Web Search', value: state.features.webSearch.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6 },
       ];
 
-      card.innerHTML = items
-        .filter(i => !i.hide)
-        .map(i => `
-          <div class="summary-item" style="cursor:default">
-            <div>
-              <div class="summary-label">${i.label}</div>
-              <div class="summary-value">${i.value}</div>
-            </div>
-          </div>
-        `).join('');
+      // Build summary using DOM API
+      card.innerHTML = '';
+      items.filter(function(i) { return !i.hide; }).forEach(function(item) {
+        var row = document.createElement('div');
+        row.className = 'summary-item';
+        if (item.step) {
+          row.style.cursor = 'pointer';
+          row.addEventListener('click', function() { goToStep(item.step); });
+        } else {
+          row.style.cursor = 'default';
+        }
+        var infoDiv = document.createElement('div');
+        var labelDiv = document.createElement('div');
+        labelDiv.className = 'summary-label';
+        labelDiv.textContent = item.label;
+        var valueDiv = document.createElement('div');
+        valueDiv.className = 'summary-value';
+        valueDiv.textContent = item.value;
+        infoDiv.appendChild(labelDiv);
+        infoDiv.appendChild(valueDiv);
+        row.appendChild(infoDiv);
+        if (item.step) {
+          var editSpan = document.createElement('div');
+          editSpan.className = 'summary-edit';
+          editSpan.textContent = '\u270e';
+          row.appendChild(editSpan);
+        }
+        card.appendChild(row);
+      });
 
-      // Reset error
       document.getElementById('confirmError').classList.remove('visible');
     }
 
     function maskKey(key) {
-      if (!key) return '—';
+      if (!key) return '\u2014';
       if (key.length <= 12) return key.substring(0, 4) + '...' + key.slice(-4);
       return key.substring(0, 8) + '...' + key.slice(-4);
     }
@@ -1917,31 +2233,36 @@
       state.subscriptionDone = false;
       state.subscriptionEmail = '';
       state.telegram = { enabled: true, botToken: '' };
+      state.features = { voice: { enabled: false, apiKey: '' }, webSearch: { enabled: false, apiKey: '' } };
       pairingActive = false;
-      document.getElementById('tgToggle').checked = true;
-      resetTelegramUI();
+      document.getElementById('voiceToggle').checked = false;
+      document.getElementById('webSearchToggle').checked = false;
       goToStep(1);
     }
 
-    // --- Submit ---
+    // ═══════════════════════════════════════════════════════════════════
+    // Submit Config
+    // ═══════════════════════════════════════════════════════════════════
+
     async function submitConfig() {
-      const btn = document.getElementById('btnConfirm');
-      const errorBanner = document.getElementById('confirmError');
-      const errorText = document.getElementById('confirmErrorText');
+      var btn = document.getElementById('btnConfirm');
+      var errorBanner = document.getElementById('confirmError');
+      var errorText = document.getElementById('confirmErrorText');
 
       errorBanner.classList.remove('visible');
       btn.disabled = true;
-      btn.innerHTML = `<div class="spinner"></div> <span data-lang="en">Configuring...</span><span data-lang="es">Configurando...</span>`;
-      document.body.className = `lang-${state.language}`;
+      btn.innerHTML = '<div class="spinner"></div> <span data-lang="en">Configuring...</span><span data-lang="es">Configurando...</span>';
+      document.body.className = 'lang-' + state.language;
 
-      const payload = {
+      var payload = {
         language: state.language,
         provider: state.provider,
         authMode: state.authMode,
         model: state.model,
-        telegram: {
-          enabled: state.telegram.enabled,
-          botToken: state.telegram.enabled ? state.telegram.botToken : '',
+        telegram: { enabled: true, botToken: state.telegram.botToken },
+        features: {
+          voice: { enabled: state.features.voice.enabled, apiKey: state.features.voice.enabled ? state.features.voice.apiKey : '' },
+          webSearch: { enabled: state.features.webSearch.enabled, apiKey: state.features.webSearch.enabled ? state.features.webSearch.apiKey : '' },
         },
       };
       if (state.authMode === 'api-key') {
@@ -1949,47 +2270,31 @@
       }
 
       try {
-        const res = await fetch('/api/configure', {
+        await safeApiFetch('/api/configure', {
           method: 'POST',
           headers: authHeaders(),
           body: JSON.stringify(payload),
         });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Server error (${res.status})`);
-        }
-
         showSuccess();
       } catch (err) {
+        if (err instanceof ConnectionLostError) {
+          // Server likely exited after successful configure — treat as success
+          showSuccess();
+          return;
+        }
         btn.disabled = false;
-        btn.innerHTML = `<span data-lang="en">Start Limbo</span><span data-lang="es">Iniciar Limbo</span>`;
-        document.body.className = `lang-${state.language}`;
+        btn.innerHTML = '<span data-lang="en">Start Limbo</span><span data-lang="es">Iniciar Limbo</span>';
+        document.body.className = 'lang-' + state.language;
         errorText.textContent = err.message || (state.language === 'es' ? 'Error al configurar' : 'Configuration failed');
         errorBanner.classList.add('visible');
       }
     }
 
     function showSuccess() {
-      // Hide all steps and nav
-      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
       document.getElementById('progress').style.display = 'none';
       document.querySelector('.nav-header').style.display = 'none';
-
-      const screen = document.getElementById('successScreen');
-      screen.classList.add('active');
-
-      // Show the right message based on Telegram config
-      if (state.telegram.enabled && state.telegram.botToken) {
-        document.getElementById('successMsgTelegram').style.display = 'block';
-      } else {
-        const gwUrl = `ws://${window.location.hostname}:${window.location.port || '18789'}`;
-        const gwUrlEn = document.getElementById('gwUrlEn');
-        const gwUrlEs = document.getElementById('gwUrlEs');
-        if (gwUrlEn) gwUrlEn.textContent = gwUrl;
-        if (gwUrlEs) gwUrlEs.textContent = gwUrl;
-        document.getElementById('successMsgNoTelegram').style.display = 'block';
-      }
+      document.getElementById('successScreen').classList.add('active');
     }
   </script>
 </body>

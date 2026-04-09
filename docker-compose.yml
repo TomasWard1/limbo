@@ -1,7 +1,8 @@
 services:
   limbo:
     # This file is a development reference. The CLI generates a versioned copy at install time.
-    image: ghcr.io/tomasward1/limbo:1.0.0
+    image: registry.gitlab.com/tomas209/limbo:latest
+    init: true
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -11,31 +12,34 @@ services:
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
-      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:18789:18789"
     volumes:
       - limbo-data:/data
       - ./vault:/data/vault
-      - limbo-zeroclaw-state:/home/limbo/.zeroclaw
+      - ./openclaw-state:/home/limbo/.openclaw
     secrets:
       - llm_api_key
       - telegram_bot_token
       - gateway_token
+      - groq_api_key
+      - brave_api_key
     env_file:
       - .env
     environment:
-      NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=256}"
+      NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "zeroclaw status --format=exit-code 2>/dev/null || node -e \"require('http').get('http://127.0.0.1:${LIMBO_PORT:-18789}/',r=>{process.exit(r.statusCode<500?0:1)}).on('error',()=>process.exit(1))\"",
-        ]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "node", "-e", "fetch('http://localhost:18789/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 5s
+      start_period: 30s
 
 secrets:
   llm_api_key:
@@ -44,7 +48,10 @@ secrets:
     file: ./secrets/telegram_bot_token
   gateway_token:
     file: ./secrets/gateway_token
+  groq_api_key:
+    file: ./secrets/groq_api_key
+  brave_api_key:
+    file: ./secrets/brave_api_key
 
 volumes:
   limbo-data:
-  limbo-zeroclaw-state:

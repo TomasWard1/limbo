@@ -1,0 +1,112 @@
+{
+  "case": "get-file",
+  "run": 1,
+  "passRate": 1,
+  "passed": 2,
+  "total": 2,
+  "scoreResults": [
+    {
+      "assertion": {
+        "type": "tool_called",
+        "tool": "vault_get_file"
+      },
+      "pass": true,
+      "reason": "Tool \"vault_get_file\" was called"
+    },
+    {
+      "assertion": {
+        "type": "response_matches",
+        "pattern": "(?i)(logo|imagen|image|png|archivo)"
+      },
+      "pass": true,
+      "reason": "Response matched /(?i)(logo|imagen|image|png|archivo)/"
+    }
+  ],
+  "judgeResults": null,
+  "response": "<tool_result>\n[{\"name\":\"limbo-vault__vault_get_file\",\"description\":\"Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter and returns the file as base64. Returns an image content block for image files.\",\"inputSchema\":{\"properties\":{\"noteId\":{\"description\":\"The note ID of the linked file note\",\"type\":\"string\"}},\"required\":[\"noteId\"],\"type\":\"object\"}}]\n</tool_result>\n<tool_result>\n{\"noteId\":\"eval-seed-logo\",\"title\":\"Logo de Eval Seed\",\"filename\":\"20260401T17143",
+  "steps": [
+    {
+      "index": 1,
+      "input": "Mostrame el archivo de la nota eval-seed-logo",
+      "response": "<tool_result>\n[{\"name\":\"limbo-vault__vault_get_file\",\"description\":\"Retrieve a stored file by its linked note ID. Reads the note's asset_path from frontmatter and returns the file as base64. Returns an image content block for image files.\",\"inputSchema\":{\"properties\":{\"noteId\":{\"description\":\"The note ID of the linked file note\",\"type\":\"string\"}},\"required\":[\"noteId\"],\"type\":\"object\"}}]\n</tool_result>\n<tool_result>\n{\"noteId\":\"eval-seed-logo\",\"title\":\"Logo de Eval Seed\",\"filename\":\"20260401T171430Z-logo.jpeg\",\"asset_type\":\"image/jpeg\",\"mimeType\":\"image/jpeg\",\"size\":99198,\"base64\":\"<omitted>\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/jpeg\",\"data\":\"<omitted>\"}}]}\n</tool_result>Acá está el archivo de `eval-seed-logo`:\n\n![Logo de Eval Seed](data:image/jpeg;base64,<omitted>)\n\nArchivo: `20260401T171430Z-logo.jpeg`  \nTipo: `image/jpeg`  \nTamaño: 99198 bytesAcá está el archivo de `eval-seed-logo`:\n\n![eval-test-logo](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==)\n\nArchivo: `eval-test-logo.png`  \nTipo: `application/octet-stream`",
+      "latencyMs": 13506,
+      "userProfile": "# About Your User\n\nThis file was generated at first run from environment variables. It personalizes how you interact with your user.\n\n## Identity\n\n- **Name:** Tomas\n- **Timezone:** \n- **Language:** Spanish\n\n## Communication Preferences\n\nRespond in **Spanish**. Keep responses concise by default unless the user asks for more detail.\n\nAddress the user as **Tomas** when it feels natural, but don't overdo it.\n\n## Additional Context\n\nNo additional context provided.\n",
+      "mcpLogCount": 2,
+      "mcpLogs": [
+        {
+          "type": "tool_call",
+          "tool": "vault_get_file",
+          "params": {
+            "noteId": "eval-seed-logo"
+          },
+          "timestamp": "2026-04-01T18:30:24.516Z"
+        },
+        {
+          "type": "tool_result",
+          "tool": "vault_get_file",
+          "success": true,
+          "timestamp": "2026-04-01T18:30:24.519Z"
+        }
+      ],
+      "assertions": [
+        {
+          "type": "tool_called",
+          "tool": "vault_get_file"
+        },
+        {
+          "type": "response_matches",
+          "pattern": "(?i)(logo|imagen|image|png|archivo)"
+        }
+      ],
+      "scoreResults": [
+        {
+          "assertion": {
+            "type": "tool_called",
+            "tool": "vault_get_file"
+          },
+          "pass": true,
+          "reason": "Tool \"vault_get_file\" was called"
+        },
+        {
+          "assertion": {
+            "type": "response_matches",
+            "pattern": "(?i)(logo|imagen|image|png|archivo)"
+          },
+          "pass": true,
+          "reason": "Response matched /(?i)(logo|imagen|image|png|archivo)/"
+        }
+      ],
+      "vaultDiff": {
+        "created": 0,
+        "modified": 0,
+        "deleted": 0
+      },
+      "cronJobs": []
+    }
+  ],
+  "vaultDiff": {
+    "created": 0,
+    "modified": 0,
+    "deleted": 0
+  },
+  "mcpLogCount": 2,
+  "mcpLogs": [
+    {
+      "type": "tool_call",
+      "tool": "vault_get_file",
+      "params": {
+        "noteId": "eval-seed-logo"
+      },
+      "timestamp": "2026-04-01T18:30:24.516Z"
+    },
+    {
+      "type": "tool_result",
+      "tool": "vault_get_file",
+      "success": true,
+      "timestamp": "2026-04-01T18:30:24.519Z"
+    }
+  ],
+  "searchTimeMs": null,
+  "latencyMs": 13506,
+  "timestamp": "2026-04-01T18:30:29.279Z"
+}

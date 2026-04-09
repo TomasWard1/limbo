@@ -27,7 +27,22 @@ function buildMapFrontmatter(name) {
 }
 
 /**
+ * Extracts wikilink noteIds from a block of text.
+ * Matches [[noteId]] and [[noteId|Display Title]].
+ */
+function extractWikilinks(text) {
+  const regex = /\[\[([^\]|]+)/g;
+  const ids = new Set();
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    ids.add(match[1].trim());
+  }
+  return ids;
+}
+
+/**
  * Finds or creates a section in markdown content.
+ * Deduplicates entries — skips any whose wikilink noteId already exists in the section.
  * Returns the updated content string.
  */
 function upsertSection(content, section, entries) {
@@ -37,20 +52,37 @@ function upsertSection(content, section, entries) {
   const sectionIdx = lines.findIndex((l) => l.trim() === sectionHeader);
 
   if (sectionIdx === -1) {
-    // Section doesn't exist — append it
+    // Section doesn't exist — append it (all entries are new)
     const toAdd = ["", sectionHeader, "", ...entries, ""];
-    return lines.concat(toAdd).join("\n");
+    return { content: lines.concat(toAdd).join("\n"), added: entries.length };
   }
 
   // Find where the section ends (next ## or EOF)
-  let insertIdx = sectionIdx + 1;
-  while (insertIdx < lines.length && !lines[insertIdx].startsWith("## ")) {
-    insertIdx++;
+  let endIdx = sectionIdx + 1;
+  while (endIdx < lines.length && !lines[endIdx].startsWith("## ")) {
+    endIdx++;
   }
 
-  // Insert entries before the next section (or EOF)
-  lines.splice(insertIdx, 0, ...entries);
-  return lines.join("\n");
+  // Collect existing wikilinks in this section
+  const sectionText = lines.slice(sectionIdx, endIdx).join("\n");
+  const existing = extractWikilinks(sectionText);
+
+  // Filter out entries whose noteId is already present
+  const newEntries = entries.filter((entry) => {
+    const entryIds = extractWikilinks(entry);
+    for (const id of entryIds) {
+      if (existing.has(id)) return false;
+    }
+    return true;
+  });
+
+  if (newEntries.length === 0) {
+    return { content: content, added: 0 };
+  }
+
+  // Insert new entries before the next section (or EOF)
+  lines.splice(endIdx, 0, ...newEntries);
+  return { content: lines.join("\n"), added: newEntries.length };
 }
 
 /**
@@ -85,7 +117,11 @@ export async function vaultUpdateMap(map, section, entries) {
     existing = `${buildMapFrontmatter(map)}\n\n# ${map}\n`;
   }
 
-  const updated = upsertSection(existing, section, entries);
-  await writeFile(filePath, updated, "utf8");
-  return { map: safeMap, section, added: entries.length };
+  const { content: updated, added } = upsertSection(existing, section, entries);
+
+  if (added > 0) {
+    await writeFile(filePath, updated, "utf8");
+  }
+
+  return { map: safeMap, section, added };
 }

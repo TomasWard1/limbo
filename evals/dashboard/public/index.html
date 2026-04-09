@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Limbo Eval Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand">
+      <span class="nav-logo">L</span>
+      <span class="nav-title">Limbo Eval</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-view="accuracy">Accuracy</button>
+      <button class="nav-tab" data-view="speed">Speed</button>
+      <button class="nav-tab" data-view="compare">Compare</button>
+      <button class="nav-tab" data-view="history">History</button>
+    </div>
+    <div class="nav-controls">
+      <select id="profile-select"></select>
+    </div>
+    <div id="nav-meta"></div>
+  </nav>
+
+  <main class="main">
+    <!-- Accuracy -->
+    <section id="view-accuracy" class="view active">
+      <div class="overview-header">
+        <h1>Accuracy</h1>
+        <p class="run-id" id="accuracy-run-id"></p>
+      </div>
+      <div class="stats-grid" id="accuracy-stats"></div>
+      <div class="difficulty-grid" id="accuracy-difficulty"></div>
+      <div class="section-title">Results by Case</div>
+      <div class="filters">
+        <select id="filter-difficulty">
+          <option value="">All difficulties</option>
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+        <select id="filter-status">
+          <option value="">All statuses</option>
+          <option value="pass">Passed</option>
+          <option value="fail">Failed</option>
+          <option value="partial">Partial</option>
+        </select>
+        <input type="text" id="filter-search" placeholder="Search cases...">
+      </div>
+      <div class="results-list" id="accuracy-results"></div>
+    </section>
+
+    <!-- Speed -->
+    <section id="view-speed" class="view">
+      <h1>Speed — vault_search Performance</h1>
+      <p class="section-sub" id="speed-run-id">Cases tagged with "speed" or "vault_search"</p>
+      <div class="stats-grid" id="speed-stats"></div>
+      <div class="speed-chart-container" id="speed-chart"></div>
+      <div class="section-title">Speed Cases</div>
+      <div class="results-list" id="speed-results"></div>
+    </section>
+
+    <!-- Compare -->
+    <section id="view-compare" class="view">
+      <h1>Compare Runs</h1>
+      <div class="compare-selectors" id="compare-section">
+        <select id="compare-a"></select>
+        <select id="compare-b"></select>
+        <button class="btn-primary" id="compare-btn">Compare</button>
+        <button class="btn-secondary" id="compare-baseline-btn">Latest vs Baseline</button>
+      </div>
+      <p class="section-sub" id="compare-hint">Compare the latest run for the selected profile against its baseline by default.</p>
+      <div id="compare-results"></div>
+    </section>
+
+    <!-- History -->
+    <section id="view-history" class="view">
+      <h1>Run History</h1>
+      <div class="history-chart" id="history-chart"></div>
+      <div class="section-title">All Runs</div>
+      <div class="history-list" id="history-list"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

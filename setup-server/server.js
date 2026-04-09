@@ -13,9 +13,9 @@ const crypto = require('crypto');
 const PORT = parseInt(process.env.LIMBO_PORT, 10) || 18789;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.LIMBO_DATA_DIR || '/data';
-const ZEROCLAW_STATE = process.env.ZEROCLAW_STATE_DIR || '/home/limbo/.zeroclaw';
+const OPENCLAW_STATE = process.env.OPENCLAW_STATE_DIR || '/home/limbo/.openclaw';
 const CONFIG_DIR = path.join(DATA_DIR, 'config');
-const SECRETS_DIR = path.join(ZEROCLAW_STATE, 'secrets');
+const SECRETS_DIR = path.join(OPENCLAW_STATE, 'secrets');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const SETUP_TOKEN_FILE = path.join(CONFIG_DIR, 'setup_token');
 
@@ -154,7 +154,10 @@ function ensureSetupToken() {
   return token;
 }
 
-const SETUP_TOKEN = ensureSetupToken();
+let SETUP_TOKEN = null;
+if (require.main === module) {
+  SETUP_TOKEN = ensureSetupToken();
+}
 
 function checkToken(req) {
   const parsed = new URL(req.url, `http://${req.headers.host}`);
@@ -226,56 +229,36 @@ function decodeJwtPayload(token) {
   return JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 }
 
-// ZeroClaw auth-profiles.json format:
-//   path: ~/.zeroclaw/auth-profiles.json
-//   fields: profile_name, kind, provider, access_token, refresh_token, expires_at (RFC3339)
-//   After writing, `zeroclaw auth use --provider X --profile Y` activates it.
+// ─── OpenAI Codex auth profiles ──────────────────────────────────────────────
+// OpenAI OAuth tokens expire and need refresh. OpenClaw reads auth-profiles.json
+// for the refresh token and handles renewal automatically. This is ONLY needed
+// for OpenAI Codex — Anthropic tokens are static and stored as secrets instead.
+// OpenClaw stores auth profiles per-agent: agents/{id}/agent/auth-profiles.json
+// The default agent is "main".
+const AUTH_PROFILES_DIR = path.join(OPENCLAW_STATE, 'agents', 'main', 'agent');
+const AUTH_PROFILES_FILE = path.join(AUTH_PROFILES_DIR, 'auth-profiles.json');
 
 function buildCodexAuthProfile(profile) {
-  const profileName = 'default';
+  const profileName = profile.email || 'default';
   const profileId = `openai-codex:${profileName}`;
   return {
     version: 1,
     profiles: {
       [profileId]: {
-        profile_name: profileName,
-        kind: 'oauth',
+        type: 'oauth',
         provider: 'openai-codex',
-        access_token: profile.access,
-        refresh_token: profile.refresh,
-        expires_at: new Date(profile.expires).toISOString(),
-        account_id: profile.accountId || '',
+        access: profile.access,
+        refresh: profile.refresh,
+        expires: profile.expires,
+        email: profile.email || '',
+        accountId: profile.accountId || '',
       },
     },
-    order: { 'openai-codex': [profileId] },
-    lastGood: { 'openai-codex': profileId },
-    usageStats: {},
   };
 }
-
-function buildAnthropicAuthProfile(token) {
-  const profileName = 'default';
-  const profileId = `anthropic:${profileName}`;
-  return {
-    version: 1,
-    profiles: {
-      [profileId]: {
-        profile_name: profileName,
-        kind: 'token',
-        provider: 'anthropic',
-        access_token: token,
-      },
-    },
-    order: { anthropic: [profileId] },
-    lastGood: { anthropic: profileId },
-    usageStats: {},
-  };
-}
-
-const AUTH_PROFILES_FILE = path.join(ZEROCLAW_STATE, 'auth-profiles.json');
 
 function writeAuthProfiles(store) {
-  fs.mkdirSync(ZEROCLAW_STATE, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(AUTH_PROFILES_DIR, { recursive: true, mode: 0o700 });
   fs.writeFileSync(AUTH_PROFILES_FILE, JSON.stringify(store, null, 2), { mode: 0o600 });
   log('Auth profile written to ' + AUTH_PROFILES_FILE);
 }
@@ -558,6 +541,7 @@ async function exchangeOAuthCode(code, verifier, redirectUri) {
 function processOAuthTokens(tokenRes) {
   const jwt = decodeJwtPayload(tokenRes.access_token);
   const authClaim = jwt['https://api.openai.com/auth'] || {};
+  // Write auth profile for OpenClaw's OAuth refresh flow
   const store = buildCodexAuthProfile({
     access: tokenRes.access_token,
     refresh: tokenRes.refresh_token,
@@ -566,6 +550,8 @@ function processOAuthTokens(tokenRes) {
     email: jwt.email || '',
   });
   writeAuthProfiles(store);
+  // Also write access token as secret for entrypoint to export
+  writeSecretFile('llm_api_key', tokenRes.access_token);
   return { email: jwt.email || '' };
 }
 
@@ -677,8 +663,9 @@ async function handleAnthropicToken(req, res) {
     return;
   }
 
-  const store = buildAnthropicAuthProfile(token);
-  writeAuthProfiles(store);
+  // Anthropic tokens are static (no refresh needed) — store as secret
+  writeSecretFile('llm_api_key', token);
+  log('Anthropic token written to secrets/llm_api_key');
   sendJSON(res, 200, { success: true });
 }
 
@@ -734,6 +721,15 @@ async function handleConfigure(req, res) {
       // chat_id is already captured by /api/telegram/pair during wizard Step 6
     }
 
+    // Handle optional features (voice transcription, web search)
+    const features = data.features || {};
+    if (features.voice && features.voice.enabled && features.voice.apiKey) {
+      writeSecretFile('groq_api_key', features.voice.apiKey);
+    }
+    if (features.webSearch && features.webSearch.enabled && features.webSearch.apiKey) {
+      writeSecretFile('brave_api_key', features.webSearch.apiKey);
+    }
+
     const gatewayToken = ensureGatewayToken();
 
     // Build env vars (excluding secrets)
@@ -745,6 +741,8 @@ async function handleConfigure(req, res) {
       MODEL_NAME:                 modelName,
       LIMBO_PORT:                 String(PORT),
       TELEGRAM_ENABLED:           telegram.enabled ? 'true' : 'false',
+      VOICE_ENABLED:              (features.voice && features.voice.enabled) ? 'true' : 'false',
+      WEB_SEARCH_ENABLED:         (features.webSearch && features.webSearch.enabled) ? 'true' : 'false',
     };
 
     // Write .env file (quote values to handle special chars)
@@ -840,17 +838,45 @@ async function handleRequest(req, res) {
   }
 }
 
+// ─── Exports (for testing) ────────────────────────────────────────────────────
+
+module.exports = {
+  MODEL_CATALOG,
+  KEY_PREFIXES,
+  MIME_TYPES,
+  parseJSON,
+  generatePKCE,
+  buildOAuthUrl,
+  decodeJwtPayload,
+  buildCodexAuthProfile,
+  handleRequest,
+  _internals: {
+    OPENAI_OAUTH,
+    readBody,
+    sendJSON,
+    sendError,
+    checkToken,
+    writeSecretFile,
+    readSecretFile,
+    ensureGatewayToken,
+    ensureSetupToken,
+    writeAuthProfiles,
+  },
+};
+
 // ─── Server ──────────────────────────────────────────────────────────────────
 
-const server = http.createServer(handleRequest);
+if (require.main === module) {
+  const server = http.createServer(handleRequest);
 
-server.listen(PORT, '0.0.0.0', () => {
-  log(`Limbo Setup Wizard listening on port ${PORT}`);
-  log(`SETUP_URL=http://0.0.0.0:${PORT}/?token=${SETUP_TOKEN}`);
-  log('Share the URL above with the user to complete setup.');
-});
+  server.listen(PORT, '0.0.0.0', () => {
+    log(`Limbo Setup Wizard listening on port ${PORT}`);
+    log(`SETUP_URL=http://127.0.0.1:${PORT}/?token=${SETUP_TOKEN}`);
+    log('Share the URL above with the user to complete setup.');
+  });
 
-server.on('error', (err) => {
-  log(`Server error: ${err.message}`);
-  process.exit(1);
-});
+  server.on('error', (err) => {
+    log(`Server error: ${err.message}`);
+    process.exit(1);
+  });
+}

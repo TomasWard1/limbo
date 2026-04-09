@@ -10,14 +10,14 @@ Limbo runs inside a Docker container with the following hardening:
 - **Capabilities dropped**: All Linux capabilities are dropped (`cap_drop: ALL`)
 - **Process limit**: PID limit of 200 prevents fork bombs
 - **Loopback binding**: Gateway only listens on `127.0.0.1` — not exposed to LAN
-- **Writable paths**: Only `/data` (volume), `/home/limbo/.zeroclaw` (volume), `/tmp` (tmpfs), and `/home/limbo/.npm` (tmpfs) are writable
+- **Writable paths**: Only `/data` (volume), `/home/limbo/.openclaw` (volume), `/tmp` (tmpfs), and `/home/limbo/.npm` (tmpfs) are writable
 
 ## What Agents Can Access
 
 Inside the container, the AI agent can:
 
 - Read and write vault notes in `/data/vault/` (via MCP tools only)
-- Execute MCP tools registered through ZeroClaw native MCP (vault_search, vault_read, vault_write_note, vault_update_map)
+- Execute MCP tools registered through OpenClaw native MCP (vault_search, vault_read, vault_write_note, vault_update_map)
 - Search the web and fetch URLs (`web_search`, `web_fetch` — enabled for recommendations, link previews, etc.)
 - Respond to Telegram messages (if enabled, with pairing required)
 - Make network requests to AI provider APIs (Anthropic, OpenAI, OpenRouter)
@@ -36,7 +36,7 @@ Inside the container, the AI agent can:
 - **Access host filesystem**: Only the bind-mounted vault directory is accessible
 - **Spawn unlimited processes**: PID limit of 200
 
-## ZeroClaw Tool Policy
+## OpenClaw Tool Policy
 
 The agent runs with the most restrictive tool profile. On top of that:
 
@@ -57,18 +57,18 @@ API keys are stored as Docker Compose secrets:
 - **Not in environment**: Secrets are scrubbed from the process environment before the gateway starts
 - **Not in `docker inspect`**: Docker secrets don't appear in container inspect output
 - **`.env` file**: Only contains non-sensitive configuration (model provider, model name, language, etc.)
-- **Gateway auth**: ZeroClaw manages its own gateway authentication internally. All secrets (API keys, bot tokens) are scrubbed from the process environment before the daemon starts
+- **Gateway auth**: OpenClaw manages its own gateway authentication internally. All secrets (API keys, bot tokens) are scrubbed from the process environment before the daemon starts
 
-## ZeroClaw Security
+## OpenClaw Security
 
-Limbo uses ZeroClaw in a **personal assistant trust model** (one trusted operator per gateway). Key settings in `config.toml`:
+Limbo uses OpenClaw in a **personal assistant trust model** (one trusted operator per gateway). Key settings in `openclaw.json`:
 
-- `[gateway] host = "127.0.0.1"` — loopback only, no LAN exposure
-- `[gateway] allow_public_bind = false` — prevents binding to all interfaces
-- `[gateway.auth] mode = "token"` — all WebSocket clients must present a valid token
-- `[gateway.auth] token_file = "/run/secrets/gateway_token"` — reads auth token from Docker secret
-- `[session] dm_scope = "per-channel-peer"` — DM sessions are isolated per sender (when using Telegram)
-- `[channels.telegram] dm_policy = "pairing"` — unknown Telegram senders must be explicitly approved
+- `"host": "127.0.0.1"` — loopback only, no LAN exposure
+- `"allowPublicBind": false` — prevents binding to all interfaces
+- `"auth.mode": "token"` — all WebSocket clients must present a valid token
+- `"auth.tokenFile": "/run/secrets/gateway_token"` — reads auth token from Docker secret
+- `"session.dmScope": "per-channel-peer"` — DM sessions are isolated per sender (when using Telegram)
+- `"channels.telegram.dmPolicy": "pairing"` — unknown Telegram senders must be explicitly approved
 
 ## Network Access
 
@@ -105,4 +105,4 @@ If you discover a security vulnerability in Limbo:
 3. Include: description, reproduction steps, affected version, and impact assessment
 4. We will acknowledge within 48 hours and work on a fix
 
-For vulnerabilities in ZeroClaw itself, follow their responsible disclosure process at https://github.com/zeroclaw-labs/zeroclaw/security
+For vulnerabilities in OpenClaw itself, follow their responsible disclosure process at https://github.com/openclaw-ai/openclaw/security

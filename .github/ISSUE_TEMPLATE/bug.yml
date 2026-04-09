@@ -1,0 +1,71 @@
+name: "Bug Report"
+description: "Something is broken in Limbo"
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Agent Debug Guide
+        Be precise — an AI agent will use this to reproduce and fix the bug autonomously.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: "One sentence: what's broken?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro-steps
+    attributes:
+      label: Steps to Reproduce
+      description: "Exact steps to trigger the bug. Include message text, tool calls, or CLI commands."
+      placeholder: |
+        1. Send message: "search for notes about kubernetes"
+        2. Observe: tool_call `note_search` with query "kubernetes"
+        3. Bug: returns empty array despite matching notes existing
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: "What should happen?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: "What happens instead? Include error messages, logs, or screenshots."
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-areas
+    attributes:
+      label: Suspected Affected Areas
+      description: "Where do you think the bug lives? File paths, tool names, etc."
+      placeholder: |
+        - `mcp-server/fts.js` — FTS query builder
+        - `mcp-server/tools/note_search.js` — result mapping
+
+  - type: textarea
+    id: fix-hints
+    attributes:
+      label: Fix Hints
+      description: "Optional: any clues about the root cause or possible fix."
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: "How to verify the bug is fixed."
+      placeholder: |
+        - `note_search` for "kubernetes" returns notes with "kubernetes" in title or body
+        - Existing eval cases still pass
+    validations:
+      required: true
