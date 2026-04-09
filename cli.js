@@ -19,7 +19,8 @@ const ZEROCLAW_STATE_DIR = path.join(LIMBO_DIR, 'zeroclaw-state');
 const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
-const REGISTRY_IMAGE = 'registry.gitlab.com/tomas209/limbo';
+const DEFAULT_REGISTRY = 'registry.gitlab.com/tomas209/limbo';
+const REGISTRY_IMAGE = process.env.LIMBO_REGISTRY || DEFAULT_REGISTRY;
 const DEFAULT_TAG = 'latest';
 const DEFAULT_PORT = 18789;
 const COEXIST_PORT = 18900;
@@ -2046,16 +2047,17 @@ function cmdLogs() {
   run('docker compose logs -f');
 }
 
+// Returns true if the CLI was updated on disk (caller should re-exec).
 function selfUpdateCli() {
   const pkg = require('./package.json');
   try {
     const latest = execSync('npm view limbo-ai version', { encoding: 'utf8', timeout: 10000 }).trim();
-    if (!latest || latest === pkg.version) return;
+    if (!latest || latest === pkg.version) return false;
     const cur = pkg.version.split('.').map(Number);
     const lat = latest.split('.').map(Number);
     const isNewer = lat[0] > cur[0] || (lat[0] === cur[0] && lat[1] > cur[1]) ||
       (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
-    if (!isNewer) return;
+    if (!isNewer) return false;
 
     const isGlobal = !process.argv[1].includes('npx') && !process.argv[1].includes('node_modules/.cache');
 
@@ -2063,10 +2065,9 @@ function selfUpdateCli() {
       log(`Updating CLI: ${pkg.version} → ${latest}...`);
       execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
       ok(`CLI updated to ${latest}.`);
-      // Clear update-check cache so notifyUpdate() won't show a stale banner
       try { fs.unlinkSync(UPDATE_CHECK_FILE); } catch {}
+      return true;
     } else {
-      // npx served a stale cached version — clear it
       warn(`CLI is outdated (${pkg.version} → ${latest}). npx served a cached version.`);
       try {
         const npxCacheBase = path.join(os.homedir(), '.npm', '_npx');
@@ -2082,28 +2083,38 @@ function selfUpdateCli() {
         }
       } catch {}
       log(`Re-run: ${c.cyan}npx limbo-ai@latest update${c.reset}`);
+      return false;
     }
   } catch {
     warn('Could not check for CLI updates. Run: npm install -g limbo-ai@latest');
+    return false;
   }
 }
 
 function cmdUpdate() {
   if (!fs.existsSync(COMPOSE_FILE)) die(t('en', 'installMissing'));
 
-  // Always attempt CLI self-update, regardless of install method
-  selfUpdateCli();
+  // Always attempt CLI self-update, regardless of install method.
+  // If updated, re-exec so the new code (with possibly a new default registry) runs.
+  const cliWasUpdated = selfUpdateCli();
+  if (cliWasUpdated) {
+    log('Re-executing with updated CLI...');
+    const { execFileSync } = require('child_process');
+    execFileSync(process.execPath, process.argv.slice(1), { stdio: 'inherit' });
+    return;
+  }
 
   // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
   let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
+  // Migrate from any old registry (ghcr.io, pinned tags) to current REGISTRY_IMAGE
   const patched = compose.replace(
-    /image:\s*ghcr\.io\/tomasward1\/limbo:\S+/g,
+    /image:\s*(?:ghcr\.io\/tomasward1\/limbo|registry\.gitlab\.com\/tomas209\/limbo):\S+/g,
     `image: ${REGISTRY_IMAGE}:${DEFAULT_TAG}`
   );
   if (patched !== compose) {
     compose = patched;
     fs.writeFileSync(COMPOSE_FILE, compose);
-    log('Patched compose image tag to :latest');
+    log(`Patched compose image to ${REGISTRY_IMAGE}:${DEFAULT_TAG}`);
   }
 
   log('Pulling latest image...');
