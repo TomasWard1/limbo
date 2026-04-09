@@ -106,8 +106,10 @@ release:
   services:
     - docker:dind
   id_tokens:
+    NPM_ID_TOKEN:
+      aud: npm:registry.npmjs.org
     SIGSTORE_ID_TOKEN:
-      aud: https://registry.npmjs.org
+      aud: sigstore
   environment: production
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
