@@ -30,5 +30,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TomasWard1/limbo.git"
+  },
+  "devDependencies": {
+    "promptfoo": "^0.121.3"
   }
 }
