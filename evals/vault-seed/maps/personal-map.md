@@ -7,5 +7,3 @@ type: moc
 
 
 ## Datos Personales
-
-- [[eval-seed-birthday]]
