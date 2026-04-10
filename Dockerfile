@@ -49,6 +49,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends gettext-base tz
 # Pinned via OPENCLAW_VERSION build arg (default: latest).
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
 
+# Apply local patch for openclaw#63851 — the guarded fetch drops FormData fields,
+# breaking Groq audio transcription. Remove this once upstream PR #64349 ships in
+# a released openclaw version; the patcher is idempotent and fails loudly if
+# the openclaw code shape has changed.
+COPY scripts/patch-openclaw-audio.mjs /tmp/patch-openclaw-audio.mjs
+RUN node /tmp/patch-openclaw-audio.mjs && rm /tmp/patch-openclaw-audio.mjs
+
 # App directories
 WORKDIR /app
 
