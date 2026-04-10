@@ -98,7 +98,26 @@ promote-staging-to-main:
         echo "Updated existing MR #${EXISTING}"
       fi
 
-# ─── RELEASE: version bump + npm publish + docker push + tag ──────
+# ─── RELEASE: manual trigger on main via RELEASE=true variable ────
+#
+# Architecture:
+#   - package.json is the source of truth for the version (set locally by
+#     the dev using `npx release-it` before merging to staging).
+#   - This job is manual (only runs when RELEASE=true is set via "Run pipeline"
+#     in the GitLab UI). Merging staging→main does NOT auto-publish.
+#   - The job is read-only over git state: no commits, no branch pushes.
+#     It only pushes an annotated tag at the end.
+#   - Idempotent: if the version in package.json is already on npm, skip.
+#
+# Release workflow (end-to-end):
+#   1. Dev bumps locally: `git checkout staging && npx release-it`
+#   2. release-it bumps package.json + generates CHANGELOG.md + commits
+#      (tag/push/publish all disabled in .release-it.json)
+#   3. Dev pushes: `git push gitlab staging`
+#   4. auto-promote MR updates; dev merges it to main
+#   5. Dev goes to GitLab UI → CI/CD → Pipelines → "Run pipeline"
+#      Branch: main, Variable: RELEASE=true → click "Run pipeline"
+#   6. This job publishes npm + docker + tag + GitLab Release.
 
 release:
   stage: release
@@ -112,7 +131,7 @@ release:
       aud: sigstore
   environment: production
   rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "main" && $RELEASE == "true"
       when: on_success
   variables:
     GIT_STRATEGY: clone
@@ -122,45 +141,32 @@ release:
     - npm install -g npm@11.6.2
   script:
     - |
-      # Skip bot commits
-      if echo "$CI_COMMIT_MESSAGE" | grep -q "\[skip ci\]"; then
-        echo "Skipping release for [skip ci] commit"
-        exit 0
-      fi
+      set -eo pipefail
 
-      # Determine version bump
-      LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-      if [ -z "$LAST_TAG" ]; then
-        RANGE="HEAD"
-      else
-        RANGE="${LAST_TAG}..HEAD"
-      fi
-
-      COMMITS=$(git log "$RANGE" --first-parent --pretty=format:"%B" 2>/dev/null || echo "")
-      echo "--- First-parent commits since last tag ---"
-      echo "$COMMITS"
-
-      if echo "$COMMITS" | grep -qE "^feat(\(.+\))?!:|BREAKING CHANGE"; then
-        BUMP="major"
-      elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
-        BUMP="minor"
-      elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:"; then
-        BUMP="patch"
-      else
-        echo "No releasable changes found on main."
-        exit 0
-      fi
-
-      echo "Bump type: $BUMP"
-
-      # Bump version
-      npm version "$BUMP" --no-git-tag-version
+      # ── Read version from package.json (single source of truth) ──
       VERSION=$(node -p "require('./package.json').version")
+      echo "Target version: $VERSION"
+
+      # ── Validate CalVer format: YYYY.M.N ──
+      # Accepts e.g. 2026.4.0, 2026.12.3. Rejects 2026.04.0 (leading zero on month),
+      # 1.32.0 (old semver), 2026.4 (missing micro), etc.
+      if ! echo "$VERSION" | grep -qE '^[0-9]{4}\.[1-9][0-9]*\.[0-9]+$'; then
+        echo "ERROR: version '$VERSION' does not match CalVer format YYYY.M.N"
+        echo "Expected: 4-digit year, 1-2 digit month (no leading zero), integer counter."
+        exit 1
+      fi
+
+      # ── Idempotency: skip if already published to npm ──
+      if npm view "limbo-ai@${VERSION}" version >/dev/null 2>&1; then
+        echo "Version ${VERSION} already on npm — skipping publish (idempotent)"
+        exit 0
+      fi
+
       MAJOR=$(echo "$VERSION" | cut -d. -f1)
       MINOR=$(echo "$VERSION" | cut -d. -f1-2)
-      echo "Publishing version: $VERSION"
+      echo "Publishing version: $VERSION (major=${MAJOR}, minor=${MINOR})"
 
-      # Docker: build and push to GitLab Container Registry
+      # ── Docker: build and push to GitLab Container Registry ──
       IMAGE="${CI_REGISTRY_IMAGE}"
       echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
 
@@ -176,34 +182,31 @@ release:
       docker push "${IMAGE}:${MAJOR}"
       docker push "${IMAGE}:latest"
 
-      # npm publish (trusted publishing via OIDC — no token needed)
+      # ── npm publish (trusted publishing via OIDC — no token needed) ──
       npm publish --provenance --access public
 
-      # Git: commit version bump and tag
+      # ── Git: create annotated tag and push ONLY the tag (no branch mutation) ──
       git config user.name "gitlab-ci[bot]"
       git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
       git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git"
-      git add package.json
-      git commit -m "chore: release v${VERSION} [skip ci]"
-      git tag "v${VERSION}"
-      git checkout -B main
-      git push origin main --follow-tags
+      git tag -a "v${VERSION}" -m "Release v${VERSION}"
+      git push origin "v${VERSION}"
 
-      # Create GitLab Release
+      # ── Create GitLab Release ──
       PREV_TAG=$(git describe --tags --abbrev=0 "v${VERSION}^" 2>/dev/null || echo "")
       if [ -n "$PREV_TAG" ]; then
-        CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+        CHANGELOG_BODY=$(git log "${PREV_TAG}..v${VERSION}" --pretty=format:"- %s (%h)" --no-merges)
       else
-        CHANGELOG=$(git log HEAD --pretty=format:"- %s (%h)" --no-merges)
+        CHANGELOG_BODY=$(git log "v${VERSION}" --pretty=format:"- %s (%h)" --no-merges)
       fi
 
-      curl -s --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+      curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
         -X POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases" \
         -H "Content-Type: application/json" \
         -d "{
           \"tag_name\": \"v${VERSION}\",
           \"name\": \"Limbo v${VERSION}\",
-          \"description\": $(echo "$CHANGELOG" | jq -Rs .)
+          \"description\": $(echo "$CHANGELOG_BODY" | jq -Rs .)
         }"
 
       echo "Released v${VERSION}"
