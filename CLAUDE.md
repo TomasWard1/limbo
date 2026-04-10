@@ -63,11 +63,75 @@ Limbo uses **GitLab CI** (`.gitlab-ci.yml`). GitHub Actions files are kept but i
 |-------|------|---------|
 | test | `docker-build`, `mcp-server-check`, `tests` | MRs + push to staging |
 | promote | `promote-staging-to-main` | Push to staging |
-| release | `release` (version bump + npm publish + docker push + tag) | Push to main |
+| release | `release` (read package.json + validate + publish) | **Manual** — Run pipeline on `main` with `RELEASE=true` |
 
 - npm publishing uses **OIDC trusted publishing** (no token needed)
-- `GITLAB_TOKEN` CI variable is set for MR creation and release pushing
-- Release job pushes version bump commit + tag to `main` (protected, maintainer push allowed)
+- `GITLAB_TOKEN` CI variable is set for MR creation and tag pushing
+- Release job is **read-only over git state** — only pushes an annotated tag, never modifies branches or commits to the repo
+
+## Versioning & Release Workflow
+
+Limbo uses **Calendar Versioning** (CalVer) in the format `YYYY.M.N`:
+- `YYYY` — year (4 digits)
+- `M` — month (1-12, no leading zero)
+- `N` — release counter within the month, resets to 0 each month
+
+Version is managed locally by [`release-it`](https://github.com/release-it/release-it) with the [`@csmith/release-it-calver-plugin`](https://github.com/casmith/release-it-calver-plugin) and [`@release-it/conventional-changelog`](https://github.com/release-it/conventional-changelog) plugins. Config lives in `.release-it.json`.
+
+### Dev workflow (normal features)
+
+- Branch from `staging` with conventional commit messages: `feat:`, `fix:`, `feat!:` (breaking), etc.
+- Open MR against `staging`, merge. Auto-promote MR to `main` gets created/updated by the `promote-staging-to-main` job.
+- **Do NOT touch `package.json` or `CHANGELOG.md` in feature MRs.** They're managed by `release-it`.
+
+### Release workflow (when ready to publish)
+
+**1. Bump version and generate changelog locally:**
+```bash
+git checkout staging && git pull gitlab staging
+npx release-it
+```
+
+`release-it` will:
+- Ask you to confirm the next version (e.g. `2026.4.0 → 2026.5.0`)
+- Parse conventional commits since the last tag
+- Bump `package.json` to the new CalVer version
+- Update `CHANGELOG.md` with the new entries
+- Commit `chore: release v<version>` locally
+
+It does **NOT** tag, push, or publish — all those are handled by CI.
+
+**2. Push the release commit to staging:**
+```bash
+git push gitlab staging
+```
+
+This triggers the staging pipeline and updates the auto-promote MR to main.
+
+**3. Merge the promote MR** (staging → main) as usual.
+
+**4. Trigger the release pipeline manually:**
+- Go to **GitLab UI → CI/CD → Pipelines → Run pipeline**
+- Branch: `main`
+- Add variable: `RELEASE = true`
+- Click **Run pipeline**
+
+The release job will:
+- Read the version from `package.json`
+- Validate CalVer format
+- Skip if the version is already on npm (idempotency check)
+- Build and push Docker images (`:VERSION`, `:MINOR`, `:MAJOR`, `:latest`)
+- Publish to npm with provenance
+- Create annotated git tag `v<version>` and push it
+- Create the GitLab Release with changelog
+
+### Safety properties
+
+- **Dev-proof**: the bump is the trigger for everything. Forgetting to bump means nothing gets published (idempotency check catches it).
+- **No automatic publishing on merge**: merging staging→main does NOT publish. You have to explicitly run the pipeline with `RELEASE=true`.
+- **Rollback trivial**: if you merged the bump but don't want to publish, just don't run the release pipeline.
+- **Re-runnable**: if a release job fails mid-way, re-running it is idempotent — already-published steps (npm, docker tags) are detected and skipped.
+- **No CI writes to main**: the release job never commits or pushes to `main`, only pushes the tag. Branch protection on `main` stays strict.
 
 ## Dev Secrets
 

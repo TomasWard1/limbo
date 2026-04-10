@@ -1,5 +1,5 @@
 /**
- * Migration 004: FTS5 full-text search backfill
+ * Migration 005: FTS5 full-text search backfill
  *
  * Creates search.db with FTS5 virtual table and indexes all existing
  * vault notes for full-text search.
@@ -12,7 +12,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 const require = createRequire(new URL("../../mcp-server/", import.meta.url));
 const Database = require("better-sqlite3");
 
-export const version = 4;
+export const version = 5;
 
 /**
  * Extract frontmatter title and body from a markdown file's content.
