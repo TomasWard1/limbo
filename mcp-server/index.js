@@ -15,6 +15,7 @@ import { vaultUpdateMap } from "./tools/update-map.js";
 import { vaultStoreFile } from "./tools/store-file.js";
 import { vaultGetFile } from "./tools/get-file.js";
 import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
+import { calendarRead, calendarCreate, calendarDelete, calendarUpdate } from "./tools/google-calendar.js";
 import { updateInstance } from "./tools/update-instance.js";
 
 /**
@@ -261,6 +262,126 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "calendar_read",
+      description:
+        "List upcoming Google Calendar events. Returns events within a date range. Defaults to today if no range specified. Use when the user asks about their schedule, meetings, or availability.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          startDate: {
+            type: "string",
+            description:
+              "Start of range in ISO 8601 date format (e.g. '2026-04-09'). Defaults to today.",
+          },
+          endDate: {
+            type: "string",
+            description:
+              "End of range in ISO 8601 date format (e.g. '2026-04-10'). Defaults to end of startDate.",
+          },
+          maxResults: {
+            type: "number",
+            description:
+              "Maximum number of events to return. Default: 25, max: 100.",
+          },
+        },
+        required: [],
+      },
+    },
+    {
+      name: "calendar_create",
+      description:
+        "Create a new Google Calendar event. Requires a title and start time. Duration defaults to 60 minutes. Always confirm details with the user before creating. IMPORTANT: pass the user's timeZone (read from USER.md) so the event lands at the correct local time.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "Event title/summary",
+          },
+          startTime: {
+            type: "string",
+            description:
+              "Event start time. Either ISO 8601 without offset (e.g. '2026-04-09T14:00:00') — in which case pass timeZone — or with offset (e.g. '2026-04-09T14:00:00-03:00').",
+          },
+          duration: {
+            type: "number",
+            description: "Duration in minutes. Default: 60.",
+          },
+          description: {
+            type: "string",
+            description: "Optional event description/notes",
+          },
+          location: {
+            type: "string",
+            description: "Optional event location",
+          },
+          timeZone: {
+            type: "string",
+            description:
+              "IANA timezone identifier (e.g. 'America/Argentina/Buenos_Aires'). Read from USER.md. Required when startTime has no offset.",
+          },
+        },
+        required: ["title", "startTime"],
+      },
+    },
+    {
+      name: "calendar_delete",
+      description:
+        "Delete a Google Calendar event by its id. Get the id first via calendar_read. Always confirm with the user before deleting — this is irreversible.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          eventId: {
+            type: "string",
+            description: "Google Calendar event id (from calendar_read results)",
+          },
+        },
+        required: ["eventId"],
+      },
+    },
+    {
+      name: "calendar_update",
+      description:
+        "Update an existing Google Calendar event. Only the provided fields are changed (PATCH). Get the event id first via calendar_read. Always confirm changes with the user before applying.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          eventId: {
+            type: "string",
+            description: "Google Calendar event id (from calendar_read results)",
+          },
+          title: {
+            type: "string",
+            description: "New event title/summary",
+          },
+          startTime: {
+            type: "string",
+            description:
+              "New event start time. ISO 8601, with or without offset. When changing the time, pass timeZone too.",
+          },
+          duration: {
+            type: "number",
+            description:
+              "New duration in minutes. Must be passed together with startTime (duration-only updates not supported).",
+          },
+          description: {
+            type: "string",
+            description: "New event description",
+          },
+          location: {
+            type: "string",
+            description: "New event location",
+          },
+          timeZone: {
+            type: "string",
+            description:
+              "IANA timezone (e.g. 'America/Argentina/Buenos_Aires'). Read from USER.md. Required when startTime has no offset.",
+          },
+        },
+        required: ["eventId"],
+      },
+    },
+    {
       name: "update_instance",
       description:
         "Trigger a Limbo self-update. Notifies the user that Limbo is going offline briefly, then signals the host to pull the latest image and restart. Use when the user wants to update Limbo.",
@@ -277,7 +398,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  log(`tool_call: ${name}`);
+  // Include params as JSON in the log line so eval assertions can verify
+  // tool arguments (e.g. calendar_create was called with the right timeZone).
+  // The provider's parser matches `tool_call: <name>` first — the trailing
+  // JSON is ignored by the existing regex, so this is backwards compatible.
+  const paramsStr = args && Object.keys(args).length ? ` params=${JSON.stringify(args)}` : "";
+  log(`tool_call: ${name}${paramsStr}`);
   evalLog({ type: "tool_call", tool: name, params: args });
 
   try {
@@ -377,6 +503,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const wsWrite = await workspaceWrite(args.filename, args.content);
         result = {
           content: [{ type: "text", text: `Updated ${wsWrite.filename} (${wsWrite.size} bytes)` }],
+        };
+        break;
+      }
+
+      case "calendar_read": {
+        const events = await calendarRead(args);
+        result = {
+          content: [{ type: "text", text: JSON.stringify(events, null, 2) }],
+        };
+        break;
+      }
+
+      case "calendar_create": {
+        const event = await calendarCreate(args);
+        result = {
+          content: [{ type: "text", text: JSON.stringify(event, null, 2) }],
+        };
+        break;
+      }
+
+      case "calendar_delete": {
+        const deleted = await calendarDelete(args);
+        result = {
+          content: [{ type: "text", text: JSON.stringify(deleted, null, 2) }],
+        };
+        break;
+      }
+
+      case "calendar_update": {
+        const updated = await calendarUpdate(args);
+        result = {
+          content: [{ type: "text", text: JSON.stringify(updated, null, 2) }],
         };
         break;
       }

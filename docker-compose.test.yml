@@ -36,6 +36,8 @@ services:
       - gateway_token
       - groq_api_key
       - brave_api_key
+      - google_client_id
+      - google_client_secret
     env_file:
       - /tmp/limbo-e2e-test/.env
     environment:
@@ -68,6 +70,10 @@ secrets:
     file: /tmp/limbo-e2e-test/secrets/groq_api_key
   brave_api_key:
     file: /tmp/limbo-e2e-test/secrets/brave_api_key
+  google_client_id:
+    file: /tmp/limbo-e2e-test/secrets/google_client_id
+  google_client_secret:
+    file: /tmp/limbo-e2e-test/secrets/google_client_secret
 
 volumes:
   limbo-e2e-data:

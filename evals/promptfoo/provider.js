@@ -72,11 +72,19 @@ function readMcpLogFrom(startLine) {
 function parseMcpLogLines(lines) {
   const logs = [];
   for (const line of lines) {
-    // Format: [timestamp] [session] tool_call: <tool_name>
+    // Format: [timestamp] [session] tool_call: <tool_name>[ params=<json>]
     // Format: [timestamp] [session] tool_result: <tool_name> success=<bool>
-    const callMatch = line.match(/tool_call:\s*(\S+)/);
+    const callMatch = line.match(/tool_call:\s*(\S+)(?:\s+params=(.*))?$/);
     if (callMatch) {
-      logs.push({ type: 'tool_call', tool: callMatch[1] });
+      const entry = { type: 'tool_call', tool: callMatch[1] };
+      if (callMatch[2]) {
+        try {
+          entry.params = JSON.parse(callMatch[2]);
+        } catch {
+          // Ignore malformed params — assertions using paramMatch will just miss.
+        }
+      }
+      logs.push(entry);
       continue;
     }
     const resultMatch = line.match(/tool_result:\s*(\S+)\s+success=(\S+)/);

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Mock gws CLI for Limbo evals.
+#
+# Replaces the real `@googleworkspace/cli` binary in the eval container so
+# calendar_read / calendar_create tests stay deterministic without needing
+# real OAuth credentials or hitting Google. Installed by hooks.js before
+# the eval run.
+#
+# Supports only the subcommands our MCP tools actually invoke:
+#   gws calendar events list    --params '...' --format json
+#   gws calendar events insert  --params '...' --json '...' --format json
+#   gws calendar events patch   --params '...' --json '...' --format json
+#   gws calendar events delete  --params '...'    (no --format, no body)
+#
+# Returns fixture JSON from this directory regardless of args. The agent
+# assertions check tool params via the MCP log, not the response shape, so
+# a static fixture is enough to validate the agent-layer wiring.
+
+set -euo pipefail
+
+FIXTURE_DIR="${EVAL_MOCK_DIR:-/eval-mocks/gws}"
+
+case "${1:-} ${2:-} ${3:-}" in
+  "calendar events list")
+    cat "$FIXTURE_DIR/events-list.json"
+    ;;
+  "calendar events insert")
+    cat "$FIXTURE_DIR/event-created.json"
+    ;;
+  "calendar events patch")
+    cat "$FIXTURE_DIR/event-updated.json"
+    ;;
+  "calendar events delete")
+    # events.delete returns HTTP 204 No Content — the MCP tool uses
+    # callGwsNoBody(), which doesn't parse stdout. Emit nothing.
+    exit 0
+    ;;
+  *)
+    echo "mock gws: unsupported command: $*" >&2
+    exit 1
+    ;;
+esac

@@ -11,5 +11,8 @@ data/
 
 .worktrees
 
+# gitlab-ci-local cache
+.gitlab-ci-local/
+
 # Allow eval env file (overrides .env.* rule)
 !evals/.env.eval

@@ -59,15 +59,27 @@ Limbo uses OpenClaw (Node.js) as its agent runtime. OpenClaw is an npm dependenc
 
 Limbo uses **GitLab CI** (`.gitlab-ci.yml`). GitHub Actions files are kept but inactive.
 
-| Stage | Jobs | Trigger |
-|-------|------|---------|
-| test | `docker-build`, `mcp-server-check`, `tests` | MRs + push to staging |
-| promote | `promote-staging-to-main` | Push to staging |
-| release | `release` (read package.json + validate + publish) | **Manual** — Run pipeline on `main` with `RELEASE=true` |
+**Runner topology:** all jobs run on a self-hosted GitLab runner (tag `self-hosted`). The project does not consume GitLab SaaS minutes. The release job used to run on SaaS because of OIDC trusted publishing, but npm does not yet accept id_tokens from self-hosted runners, so release was moved to self-hosted with a classic `NPM_TOKEN` instead (trade-off: no provenance attestation).
 
-- npm publishing uses **OIDC trusted publishing** (no token needed)
-- `GITLAB_TOKEN` CI variable is set for MR creation and tag pushing
-- Release job is **read-only over git state** — only pushes an annotated tag, never modifies branches or commits to the repo
+| Stage | Jobs | Trigger | Runner |
+|-------|------|---------|--------|
+| test | `docker-build`, `mcp-server-check`, `tests` | MRs + push to staging | self-hosted |
+| promote | `promote-staging-to-main` | Push to staging | self-hosted |
+| release | `release` (validate + docker build/push + npm publish + tag) | **Manual** — Run pipeline on `main` with `RELEASE=true` | self-hosted |
+
+**Docker layer cache:** `docker-build` and `release` mount the host Docker socket (`/var/run/docker.sock`) instead of using `docker:dind`. This gives persistent layer cache across pipeline runs on the same runner — first cold build is ~5 min, subsequent builds are ~30-60s when only code changes.
+
+**Required CI/CD variables** (set `hidden` + `masked`):
+
+- `NPM_TOKEN` — npm granular automation token, scope: `limbo-ai` read+write. Used by the release job.
+- `GITLAB_TOKEN` — GitLab PAT with `api` scope. Used by the promote job (create/update MR) and release job (push tag + create GitLab Release).
+
+The release job:
+- Is **read-only over git branches** — never commits or pushes to `main`, only pushes an annotated tag at the end.
+- Is **idempotent** — checks `npm view` first; skips publish if the version is already on npm.
+- Fails fast with actionable errors if `NPM_TOKEN` or `GITLAB_TOKEN` is missing.
+
+**Local hooks (see CONTRIBUTING.md):** husky pre-commit runs lint-staged + gitleaks. Pre-push runs `npm test`. Both source nvm so they always use the pinned Node version from `.nvmrc`.
 
 ## Versioning & Release Workflow
 
@@ -121,7 +133,7 @@ The release job will:
 - Validate CalVer format
 - Skip if the version is already on npm (idempotency check)
 - Build and push Docker images (`:VERSION`, `:MINOR`, `:MAJOR`, `:latest`)
-- Publish to npm with provenance
+- Publish to npm via `NPM_TOKEN` (classic auth — no provenance until npm supports self-hosted runners)
 - Create annotated git tag `v<version>` and push it
 - Create the GitLab Release with changelog
 

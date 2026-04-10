@@ -1,6 +1,6 @@
 {
   "name": "limbo-ai",
-  "version": "2026.4.0",
+  "version": "2026.4.1",
   "description": "Your personal AI memory agent — install and manage Limbo via npx",
   "type": "commonjs",
   "bin": {
@@ -16,13 +16,21 @@
   "devDependencies": {
     "@csmith/release-it-calver-plugin": "^2026.3.11",
     "@release-it/conventional-changelog": "^10.0.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "promptfoo": "^0.121.3",
     "release-it": "^19.2.4"
   },
   "scripts": {
     "start": "node cli.js start",
     "test": "node --test test/cli-filter.test.js test/cli-auth.test.js test/cli-compose.test.js test/openclaw-migration.test.js test/setup-server.test.js test/cli-wizard-parity.test.js test/fts.test.js test/sanitize-control-chars.test.js test/mcp-tools.test.js test/entrypoint.test.js test/update-system.test.js",
-    "postinstall": "[ -d mcp-server ] && cd mcp-server && npm install --ignore-scripts && cd node_modules/better-sqlite3 && npx node-gyp rebuild --release 2>/dev/null || true"
+    "postinstall": "[ -d mcp-server ] && cd mcp-server && npm install --ignore-scripts && cd node_modules/better-sqlite3 && npx node-gyp rebuild --release 2>/dev/null || true",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.js": "node --check",
+    "mcp-server/*.js": "node --check",
+    "setup-server/*.js": "node --check"
   },
   "keywords": [
     "limbo",

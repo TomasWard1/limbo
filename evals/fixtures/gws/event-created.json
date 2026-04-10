@@ -1,0 +1,8 @@
+{
+  "id": "mock-evt-created-001",
+  "summary": "Mock created event",
+  "start": { "dateTime": "2026-04-11T15:00:00-03:00" },
+  "end": { "dateTime": "2026-04-11T16:00:00-03:00" },
+  "status": "confirmed",
+  "htmlLink": "https://calendar.google.com/event?eid=mock-created-001"
+}
