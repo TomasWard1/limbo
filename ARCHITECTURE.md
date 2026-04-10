@@ -1,7 +1,7 @@
 # Limbo — Architecture Reference
 
 > This file is loaded by AI assistants to avoid re-scanning the codebase every session.
-> Keep it updated when structure changes. Last verified: 2026-03-29.
+> Keep it updated when structure changes. Last verified: 2026-04-10.
 
 ## What Is Limbo
 
@@ -31,7 +31,7 @@ limbo/
 ├── docker-compose.yml        # Production reference (generated per-user into ~/.limbo)
 ├── docker-compose.dev.yml    # Local dev
 ├── docker-compose.test.yml   # Local testing
-├── package.json              # npm package: limbo-ai v1.20.4
+├── package.json              # npm package: limbo-ai (CalVer, see package.json for current version)
 │
 ├── mcp-server/               # Node.js MCP server (JSON-RPC 2.0 over stdio)
 │   ├── index.js              # Entry point — tool routing, vault init, FTS setup
@@ -77,12 +77,19 @@ limbo/
 │   ├── results/              # Run outputs + baselines/
 │   └── scripts/              # Eval helper scripts
 │
-├── test/                     # Unit tests (node --test)
+├── test/                     # Unit tests (node --test) — see package.json "test" script
+│   │                         # for the authoritative list of files run by npm test.
 │   ├── cli-filter.test.js
 │   ├── cli-auth.test.js
+│   ├── cli-compose.test.js
+│   ├── cli-wizard-parity.test.js
 │   ├── openclaw-migration.test.js
 │   ├── setup-server.test.js
-│   └── cli-wizard-parity.test.js
+│   ├── entrypoint.test.js
+│   ├── fts.test.js
+│   ├── mcp-tools.test.js
+│   ├── sanitize-control-chars.test.js
+│   └── update-system.test.js
 │
 ├── docs/                     # Public documentation
 ├── agents/                   # Paperclip agent configs (not deployed in Limbo)
@@ -168,7 +175,9 @@ Key env vars (see `.env.example` for full list):
 ## Testing
 
 ```bash
-npm test    # runs: cli-filter, cli-auth, openclaw-migration, setup-server, cli-wizard-parity
+npm test    # full unit suite (314 tests across 32 suites, ~10s on Node 22)
 ```
 
-Tests use Node.js built-in test runner (`node --test`).
+Tests use Node.js built-in test runner (`node --test`). The `package.json` `test` script is the authoritative list of files. `npm test` is also what the pre-push git hook runs — see `CONTRIBUTING.md` for the hook setup.
+
+**Node version:** pinned to 22 via `.nvmrc`. The FTS module hits a test-pollution bug on Node ≥ 25 (closeFts nullifies a module-level singleton that subsequent test suites assume is initialized). Pin your local shell to the `.nvmrc` version before running the suite.

@@ -19,6 +19,7 @@ const SECRETS_DIR = path.join(OPENCLAW_STATE, 'secrets');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const SETUP_TOKEN_FILE = path.join(CONFIG_DIR, 'setup_token');
 const SWITCH_BRAIN_MODE = process.env.SWITCH_BRAIN_MODE === 'true';
+const CONNECT_CALENDAR_MODE = process.env.CONNECT_CALENDAR_MODE === 'true';
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -201,6 +202,16 @@ const OPENAI_OAUTH = {
 let pkceSession = null;
 // Track OAuth completion for polling
 let oauthResult = null;
+
+// Google Calendar OAuth — client credentials read from secrets at runtime
+const GOOGLE_OAUTH = {
+  authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenUrl: 'https://oauth2.googleapis.com/token',
+  scopes: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly',
+};
+
+let googlePkceSession = null;
+let googleOauthResult = null;
 
 function generatePKCE() {
   const verifier = crypto.randomBytes(32).toString('base64url');
@@ -649,6 +660,121 @@ async function handleOAuthExchange(req, res) {
   }
 }
 
+// ─── Google Calendar OAuth Handlers ──────────────────────────────────────────
+
+function handleGoogleOAuthStart(req, res) {
+  // Read client credentials from secrets
+  const clientId = readSecretFile('google_client_id');
+  const clientSecret = readSecretFile('google_client_secret');
+  if (!clientId || !clientSecret) {
+    sendError(res, 500, 'Google Calendar client credentials not configured. Add google_client_id and google_client_secret to secrets.');
+    return;
+  }
+
+  const pkce = generatePKCE();
+  const state = crypto.randomBytes(16).toString('hex');
+  const redirectUri = `http://localhost:${PORT}/auth/google/callback`;
+
+  googlePkceSession = { verifier: pkce.verifier, state, redirectUri, clientId, clientSecret, ts: Date.now() };
+  googleOauthResult = null;
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: GOOGLE_OAUTH.scopes,
+    code_challenge: pkce.challenge,
+    code_challenge_method: 'S256',
+    state,
+    access_type: 'offline',
+    prompt: 'consent',
+  });
+
+  const authUrl = `${GOOGLE_OAUTH.authorizeUrl}?${params}`;
+  sendJSON(res, 200, { authUrl });
+}
+
+async function handleGoogleOAuthCallback(req, res) {
+  const parsed = new URL(req.url, `http://${req.headers.host}`);
+  const code = parsed.searchParams.get('code');
+  const state = parsed.searchParams.get('state');
+
+  if (!googlePkceSession || googlePkceSession.state !== state) {
+    serveCallbackPage(res, false, 'Invalid or expired Google session. Go back to the wizard and try again.');
+    return;
+  }
+
+  try {
+    const { clientId, clientSecret, verifier, redirectUri } = googlePkceSession;
+
+    // Exchange code for tokens
+    const tokenBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      code_verifier: verifier,
+      redirect_uri: redirectUri,
+    });
+
+    const tokenRes = await new Promise((resolve, reject) => {
+      const reqUrl = new URL(GOOGLE_OAUTH.tokenUrl);
+      const postData = tokenBody.toString();
+      const options = {
+        hostname: reqUrl.hostname,
+        path: reqUrl.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      };
+      const r = https.request(options, (response) => {
+        const chunks = [];
+        response.on('data', c => chunks.push(c));
+        response.on('end', () => {
+          const body = Buffer.concat(chunks).toString();
+          if (response.statusCode >= 400) {
+            reject(new Error(`Google token exchange failed (${response.statusCode}): ${body}`));
+          } else {
+            resolve(JSON.parse(body));
+          }
+        });
+      });
+      r.on('error', reject);
+      r.write(postData);
+      r.end();
+    });
+
+    // Write authorized_user credentials for gws CLI
+    const credentials = JSON.stringify({
+      type: 'authorized_user',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: tokenRes.refresh_token,
+    });
+    writeSecretFile('google_calendar_credentials.json', credentials);
+    log('Google Calendar credentials written to secrets');
+
+    googleOauthResult = { success: true };
+    googlePkceSession = null;
+    serveCallbackPage(res, true, 'Google Calendar');
+  } catch (err) {
+    log(`Google OAuth callback error: ${err.message}`);
+    serveCallbackPage(res, false, err.message);
+  }
+}
+
+function handleGoogleOAuthStatus(req, res) {
+  if (googleOauthResult && googleOauthResult.success) {
+    sendJSON(res, 200, { done: true });
+  } else {
+    sendJSON(res, 200, { done: false });
+  }
+}
+
+// ─── Wizard Mode Handler ─────────────────────────────────────────────────────
+
 function handleWizardMode(req, res) {
   let existingConfig = {};
   try {
@@ -659,13 +785,18 @@ function handleWizardMode(req, res) {
     }
   } catch {}
 
+  const mode = SWITCH_BRAIN_MODE ? 'switch-brain'
+    : CONNECT_CALENDAR_MODE ? 'connect-calendar'
+    : 'full';
+
   sendJSON(res, 200, {
-    mode: SWITCH_BRAIN_MODE ? 'switch-brain' : 'full',
-    existingConfig: SWITCH_BRAIN_MODE ? {
+    mode,
+    existingConfig: (SWITCH_BRAIN_MODE || CONNECT_CALENDAR_MODE) ? {
       language: existingConfig.CLI_LANGUAGE || 'en',
       telegramEnabled: existingConfig.TELEGRAM_ENABLED || 'false',
       voiceEnabled: existingConfig.VOICE_ENABLED || 'false',
       webSearchEnabled: existingConfig.WEB_SEARCH_ENABLED || 'false',
+      googleCalendarEnabled: existingConfig.GOOGLE_CALENDAR_ENABLED || 'false',
     } : null,
   });
 }
@@ -679,29 +810,32 @@ async function handleConfigure(req, res) {
     return;
   }
 
-  // Validate required fields
-  if (!data.provider) {
-    sendError(res, 400, 'Missing required field: provider');
-    return;
-  }
-
-  const authMode = data.authMode || 'api-key';
-  if (authMode === 'api-key' && !data.apiKey) {
-    sendError(res, 400, 'Missing required field: apiKey');
-    return;
-  }
-
-  if (!MODEL_CATALOG[data.provider]) {
-    sendError(res, 400, `Unknown provider: ${data.provider}`);
-    return;
-  }
-
-  // Validate key format (only for api-key mode)
-  if (authMode === 'api-key' && data.apiKey) {
-    const prefix = KEY_PREFIXES[data.provider];
-    if (prefix && !data.apiKey.startsWith(prefix)) {
-      sendError(res, 400, `Invalid API key format for ${data.provider}`);
+  // In connect-calendar mode, provider/apiKey validation is skipped — the wizard
+  // only runs the OAuth flow and preserves existing config.
+  if (!CONNECT_CALENDAR_MODE) {
+    if (!data.provider) {
+      sendError(res, 400, 'Missing required field: provider');
       return;
+    }
+
+    const authMode = data.authMode || 'api-key';
+    if (authMode === 'api-key' && !data.apiKey) {
+      sendError(res, 400, 'Missing required field: apiKey');
+      return;
+    }
+
+    if (!MODEL_CATALOG[data.provider]) {
+      sendError(res, 400, `Unknown provider: ${data.provider}`);
+      return;
+    }
+
+    // Validate key format (only for api-key mode)
+    if (authMode === 'api-key' && data.apiKey) {
+      const prefix = KEY_PREFIXES[data.provider];
+      if (prefix && !data.apiKey.startsWith(prefix)) {
+        sendError(res, 400, `Invalid API key format for ${data.provider}`);
+        return;
+      }
     }
   }
 
@@ -716,7 +850,7 @@ async function handleConfigure(req, res) {
     }
 
     // Handle telegram fields and optional features (only in full setup mode)
-    if (!SWITCH_BRAIN_MODE) {
+    if (!SWITCH_BRAIN_MODE && !CONNECT_CALENDAR_MODE) {
       const telegram = data.telegram || {};
       if (telegram.botToken) {
         writeSecretFile('telegram_bot_token', telegram.botToken);
@@ -735,7 +869,7 @@ async function handleConfigure(req, res) {
     const gatewayToken = ensureGatewayToken();
 
     // Build env vars (excluding secrets)
-    const modelName = data.model || data.modelName || MODEL_CATALOG[data.provider].defaultModel;
+    const modelName = CONNECT_CALENDAR_MODE ? null : (data.model || data.modelName || MODEL_CATALOG[data.provider].defaultModel);
 
     let envVars;
     if (SWITCH_BRAIN_MODE) {
@@ -754,6 +888,21 @@ async function handleConfigure(req, res) {
         MODEL_NAME: modelName,
       };
       delete envVars.SWITCH_BRAIN_MODE;
+    } else if (CONNECT_CALENDAR_MODE) {
+      // Preserve existing config, just flip GOOGLE_CALENDAR_ENABLED
+      let existingEnv = {};
+      try {
+        const content = fs.readFileSync(ENV_FILE, 'utf8');
+        for (const line of content.split('\n')) {
+          const m = line.match(/^([A-Z_]+)="?([^"]*)"?$/);
+          if (m) existingEnv[m[1]] = m[2];
+        }
+      } catch {}
+      envVars = {
+        ...existingEnv,
+        GOOGLE_CALENDAR_ENABLED: (googleOauthResult && googleOauthResult.success) ? 'true' : (existingEnv.GOOGLE_CALENDAR_ENABLED || 'false'),
+      };
+      delete envVars.CONNECT_CALENDAR_MODE;
     } else {
       const telegram = data.telegram || {};
       const features = data.features || {};
@@ -766,6 +915,7 @@ async function handleConfigure(req, res) {
         TELEGRAM_ENABLED: telegram.enabled ? 'true' : 'false',
         VOICE_ENABLED: (features.voice && features.voice.enabled) ? 'true' : 'false',
         WEB_SEARCH_ENABLED: (features.webSearch && features.webSearch.enabled) ? 'true' : 'false',
+        GOOGLE_CALENDAR_ENABLED: (googleOauthResult && googleOauthResult.success) ? 'true' : 'false',
       };
     }
 
@@ -819,6 +969,17 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // Google Calendar OAuth callback — same bypass pattern
+  if (method === 'GET' && url.startsWith('/auth/google/callback')) {
+    try {
+      await handleGoogleOAuthCallback(req, res);
+    } catch (err) {
+      log(`Google OAuth callback error: ${err.message}`);
+      if (!res.headersSent) serveCallbackPage(res, false, 'Internal error');
+    }
+    return;
+  }
+
   // Token check — every request must have a valid setup token
   if (!checkToken(req)) {
     log(`WARN  Rejected request without valid token: ${method} ${url}`);
@@ -846,6 +1007,10 @@ async function handleRequest(req, res) {
       handleOAuthStatus(req, res);
     } else if (method === 'POST' && url === '/api/auth/openai/exchange') {
       await handleOAuthExchange(req, res);
+    } else if (method === 'GET' && url.startsWith('/api/auth/google/start')) {
+      handleGoogleOAuthStart(req, res);
+    } else if (method === 'GET' && url.startsWith('/api/auth/google/status')) {
+      handleGoogleOAuthStatus(req, res);
     } else if (method === 'POST' && url === '/api/telegram/validate-token') {
       await handleTelegramValidate(req, res);
     } else if (method === 'POST' && url === '/api/telegram/pair') {
@@ -879,6 +1044,7 @@ module.exports = {
   handleRequest,
   _internals: {
     OPENAI_OAUTH,
+    GOOGLE_OAUTH,
     readBody,
     sendJSON,
     sendError,

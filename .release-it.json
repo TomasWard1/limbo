@@ -4,8 +4,19 @@
       "cycle": "month"
     },
     "@release-it/conventional-changelog": {
-      "preset": "angular",
-      "infile": "CHANGELOG.md"
+      "preset": {
+        "name": "conventionalcommits",
+        "commitUrlFormat": "{{host}}/{{owner}}/{{repository}}/-/commit/{{hash}}",
+        "compareUrlFormat": "{{host}}/{{owner}}/{{repository}}/-/compare/{{previousTag}}...{{currentTag}}",
+        "issueUrlFormat": "{{host}}/{{owner}}/{{repository}}/-/issues/{{id}}",
+        "userUrlFormat": "{{host}}/{{user}}"
+      },
+      "infile": "CHANGELOG.md",
+      "context": {
+        "host": "https://gitlab.com",
+        "owner": "tomas209",
+        "repository": "limbo"
+      }
     }
   },
   "git": {

@@ -24,3 +24,6 @@ migrations/
 scripts/
 PROJECT.md
 CLAUDE.md
+
+# Never publish auth files (CI writes a job-scoped .npmrc during release)
+.npmrc
