@@ -112,6 +112,41 @@ else
 fi
 
 
+# ─── Auto-update watcher ────────────────────────────────────────────────────
+header "Auto-update watcher"
+
+LIMBO_DIR="$HOME/.limbo"
+FLAGS_DIR="$LIMBO_DIR/flags"
+mkdir -p "$FLAGS_DIR"
+
+cat > /etc/systemd/system/limbo-updater.path <<UNIT_EOF
+[Unit]
+Description=Watch for Limbo update requests
+
+[Path]
+PathExists=$FLAGS_DIR/update.flag
+MakeDirectory=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT_EOF
+
+cat > /etc/systemd/system/limbo-updater.service <<UNIT_EOF
+[Unit]
+Description=Limbo self-update executor
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/bash -c 'npm view limbo-ai version 2>/dev/null > $FLAGS_DIR/updated.flag || echo "unknown" > $FLAGS_DIR/updated.flag'
+ExecStartPre=/bin/rm -f $FLAGS_DIR/update.flag
+ExecStart=$(command -v limbo || echo /usr/local/bin/limbo) update
+ExecStopPost=/bin/bash -c 'if [ \$EXIT_STATUS -ne 0 ]; then rm -f $FLAGS_DIR/updated.flag; fi'
+UNIT_EOF
+
+systemctl daemon-reload
+systemctl enable --now limbo-updater.path
+ok "Auto-update watcher installed"
+
 # ─── Pre-pull Docker image ───────────────────────────────────────────────────
 header "Docker image"
 

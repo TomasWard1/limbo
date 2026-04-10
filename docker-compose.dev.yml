@@ -8,3 +8,5 @@ services:
       - ./scripts/entrypoint.sh:/entrypoint.sh:ro
       - ./migrations:/app/migrations:ro
       - ./workspace:/app/workspace:ro
+      - ./lib:/app/lib:ro
+      - ./RELEASES.md:/app/RELEASES.md:ro

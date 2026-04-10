@@ -23,6 +23,7 @@ const LIMBO_DIR = (() => {
 })();
 const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
 const OPENCLAW_STATE_DIR = path.join(LIMBO_DIR, 'openclaw-state');
+const FLAGS_DIR = path.join(LIMBO_DIR, 'flags');
 const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const ENV_FILE = path.join(LIMBO_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
@@ -184,6 +185,7 @@ function composeContent() {
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
+      - ${FLAGS_DIR}:/flags
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -246,6 +248,7 @@ function composeContentHardened() {
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
+      - ${FLAGS_DIR}:/flags
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -1105,6 +1108,7 @@ function ensureComposeFile(hardened = false) {
   fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'maps'), { recursive: true });
   fs.mkdirSync(OPENCLAW_STATE_DIR, { recursive: true });
+  fs.mkdirSync(FLAGS_DIR, { recursive: true });
   migrateLegacyState();
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
   // Ensure secret files exist (Docker Compose secrets require the files to be present)
