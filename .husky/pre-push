@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# Pre-push: run the full unit test suite before anything hits the runner.
+# Budget: ~10s. Blocks push on failure.
+#
+# Rationale: determinism. The CI is the safety net, not the first line.
+# If the tests pass locally, the CI stays green. If they fail, we never
+# burn runner minutes on a broken push.
+
+set -e
+
+# Load nvm so the hook uses the Node version pinned by .nvmrc.
+# Without this, git invokes the hook with the system $PATH which may
+# point at a different Node (Node 25 currently breaks mcp-server FTS tests).
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then
+  . "/opt/homebrew/opt/nvm/nvm.sh"
+elif [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+fi
+if command -v nvm >/dev/null 2>&1; then
+  nvm use --silent >/dev/null 2>&1 || true
+fi
+
+echo "→ Running unit tests before push (node $(node --version))..."
+npm test
