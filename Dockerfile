@@ -68,6 +68,15 @@ COPY --chown=limbo:limbo workspace/templates/ ./workspace/templates/
 # Migration runner (no external deps — pure Node.js stdlib)
 COPY --chown=limbo:limbo migrations/ ./migrations/
 
+# Shared libs (telegram-notify, wakeup routine)
+COPY --chown=limbo:limbo lib/ ./lib/
+
+# Package metadata (version read by wakeup routine)
+COPY --chown=limbo:limbo package.json ./package.json
+
+# User-facing release notes (parsed by wakeup routine for update messages)
+COPY --chown=limbo:limbo RELEASES.md ./RELEASES.md
+
 # OpenClaw config template (populated by entrypoint from env vars)
 COPY --chown=limbo:limbo openclaw.json.template ./openclaw.json.template
 
@@ -77,6 +86,7 @@ RUN chmod +x /entrypoint.sh
 
 # Pre-create dirs with correct ownership for image-layer defaults
 RUN mkdir -p /data && chown limbo:limbo /data
+RUN mkdir -p /flags && chown limbo:limbo /flags
 RUN mkdir -p /home/limbo/.openclaw && chown limbo:limbo /home/limbo/.openclaw
 # Fix npm cache ownership — npm install -g runs as root but limbo user needs write access at runtime
 RUN mkdir -p /home/limbo/.npm && chown -R limbo:limbo /home/limbo/.npm
