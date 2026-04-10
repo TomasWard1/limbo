@@ -1181,6 +1181,41 @@
           </p>
         </div>
       </div>
+      <div class="toggle-row" style="margin-bottom:12px">
+        <div>
+          <div class="toggle-label">
+            <span data-lang="en">Google Calendar</span>
+            <span data-lang="es">Google Calendar</span>
+          </div>
+          <div class="toggle-sub">
+            <span data-lang="en">Read your schedule and create events</span>
+            <span data-lang="es">Ver tu agenda y crear eventos</span>
+          </div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="gcalToggle" onchange="toggleFeatureGcal()">
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <div id="gcalFields" class="tg-fields">
+        <div id="gcalNotConnected">
+          <button class="btn-secondary" onclick="startGoogleOAuth()" style="width:100%;margin-bottom:8px">
+            <span data-lang="en">Connect Google Account</span>
+            <span data-lang="es">Conectar cuenta de Google</span>
+          </button>
+          <p class="input-hint">
+            <span data-lang="en">Opens Google sign-in. Only calendar access is requested.</span>
+            <span data-lang="es">Abre el login de Google. Solo se pide acceso al calendario.</span>
+          </p>
+        </div>
+        <div id="gcalConnected" style="display:none">
+          <div class="validation-msg" style="color:#3E8F5D">
+            <span data-lang="en">&#10003; Google Calendar connected</span>
+            <span data-lang="es">&#10003; Google Calendar conectado</span>
+          </div>
+        </div>
+      </div>
       <div class="btn-row">
         <button class="btn-primary" onclick="submitFeatures()" style="flex:1">
           <span data-lang="en">Continue</span>
@@ -1324,6 +1359,7 @@
       features: {
         voice: { enabled: false, apiKey: '' },
         webSearch: { enabled: false, apiKey: '' },
+        googleCalendar: { enabled: false, connected: false },
       },
       subscriptionDone: false,
       subscriptionEmail: '',
@@ -1351,6 +1387,32 @@
         document.querySelectorAll('.progress-dot').forEach(function(dot, i) {
           if (i >= 4) dot.style.display = 'none';
         });
+      } else if (wizardMode === 'connect-calendar') {
+        // Hide all progress dots — single-step wizard (closed loop)
+        document.querySelectorAll('.progress-dot').forEach(function(dot) {
+          dot.style.display = 'none';
+        });
+        // Jump straight to Features step with only calendar visible
+        setTimeout(function() {
+          goToStep(6);
+          // Hide voice and web search rows
+          var rows = document.querySelectorAll('.step[data-step="6"] .toggle-row');
+          rows.forEach(function(row) {
+            if (!row.querySelector('#gcalToggle')) row.style.display = 'none';
+          });
+          // Hide fields for the hidden features
+          document.getElementById('voiceFields').style.display = 'none';
+          document.getElementById('webSearchFields').style.display = 'none';
+          // Hide the "Continue" button — submit happens automatically after OAuth
+          var featuresBtnRow = document.querySelector('.step[data-step="6"] .btn-row');
+          if (featuresBtnRow) featuresBtnRow.style.display = 'none';
+          // Auto-enable the calendar toggle so user just clicks Connect
+          var gcalToggle = document.getElementById('gcalToggle');
+          if (gcalToggle && !gcalToggle.checked) {
+            gcalToggle.checked = true;
+            toggleFeatureGcal();
+          }
+        }, 100);
       }
     })();
 
@@ -1904,9 +1966,56 @@
       document.getElementById('webSearchFields').classList.toggle('visible', enabled);
     }
 
+    function toggleFeatureGcal() {
+      var enabled = document.getElementById('gcalToggle').checked;
+      state.features.googleCalendar.enabled = enabled;
+      document.getElementById('gcalFields').classList.toggle('visible', enabled);
+    }
+
+    async function startGoogleOAuth() {
+      try {
+        var data = await safeApiFetch('/api/auth/google/start?token=' + SETUP_TOKEN);
+        if (data && data.authUrl) {
+          window.open(data.authUrl, '_blank');
+          pollGoogleOAuth();
+        } else {
+          var hint = document.getElementById('gcalNotConnected');
+          hint.textContent = (data && data.error) || 'Could not start Google OAuth';
+        }
+      } catch (err) {
+        var hint2 = document.getElementById('gcalNotConnected');
+        hint2.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    function pollGoogleOAuth() {
+      var interval = setInterval(async function() {
+        try {
+          var data = await safeApiFetch('/api/auth/google/status?token=' + SETUP_TOKEN);
+          if (data && data.done) {
+            clearInterval(interval);
+            state.features.googleCalendar.connected = true;
+            document.getElementById('gcalNotConnected').style.display = 'none';
+            document.getElementById('gcalConnected').style.display = 'block';
+            // In connect-calendar mode, auto-submit and close the loop — no summary step.
+            if (wizardMode === 'connect-calendar') {
+              setTimeout(function() { submitConfig(); }, 800);
+            }
+          }
+        } catch (err) { /* keep polling */ }
+      }, 2000);
+      // Stop polling after 5 minutes
+      setTimeout(function() { clearInterval(interval); }, 300000);
+    }
+
     function resetFeaturesUI() {
       document.getElementById('voiceFields').classList.toggle('visible', state.features.voice.enabled);
       document.getElementById('webSearchFields').classList.toggle('visible', state.features.webSearch.enabled);
+      document.getElementById('gcalFields').classList.toggle('visible', state.features.googleCalendar.enabled);
+      if (state.features.googleCalendar.connected) {
+        document.getElementById('gcalNotConnected').style.display = 'none';
+        document.getElementById('gcalConnected').style.display = 'block';
+      }
     }
 
     document.getElementById('groqKeyInput').addEventListener('input', function () {
@@ -1979,9 +2088,10 @@
         { label: l === 'es' ? 'Autenticaci\u00f3n' : 'Authentication', value: authModeNames[l][state.authMode] || state.authMode, step: 2, hide: state.provider === 'openrouter' || state.provider === 'anthropic' },
         { label: state.authMode === 'subscription' ? (l === 'es' ? 'Cuenta' : 'Account') : (l === 'es' ? 'Clave' : 'Key'), value: state.authMode === 'subscription' ? (state.subscriptionEmail || (l === 'es' ? 'Conectado' : 'Connected')) : maskKey(state.apiKey), step: 3 },
         { label: l === 'es' ? 'Modelo' : 'Model', value: state.model, step: 4 },
-        { label: 'Telegram', value: l === 'es' ? 'Activado' : 'Enabled', step: 5, hide: wizardMode === 'switch-brain' },
-        { label: l === 'es' ? 'Voz' : 'Voice', value: state.features.voice.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6, hide: wizardMode === 'switch-brain' },
-        { label: l === 'es' ? 'B\u00fasqueda Web' : 'Web Search', value: state.features.webSearch.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6, hide: wizardMode === 'switch-brain' },
+        { label: 'Telegram', value: l === 'es' ? 'Activado' : 'Enabled', step: 5, hide: wizardMode === 'switch-brain' || wizardMode === 'connect-calendar' },
+        { label: l === 'es' ? 'Voz' : 'Voice', value: state.features.voice.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6, hide: wizardMode === 'switch-brain' || wizardMode === 'connect-calendar' },
+        { label: l === 'es' ? 'B\u00fasqueda Web' : 'Web Search', value: state.features.webSearch.enabled ? (l === 'es' ? 'Activado' : 'Enabled') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6, hide: wizardMode === 'switch-brain' || wizardMode === 'connect-calendar' },
+        { label: 'Google Calendar', value: state.features.googleCalendar.connected ? (l === 'es' ? 'Conectado' : 'Connected') : (l === 'es' ? 'Desactivado' : 'Disabled'), step: 6, hide: wizardMode === 'switch-brain' },
       ];
 
       // Build summary using DOM API
@@ -2031,10 +2141,13 @@
       state.subscriptionDone = false;
       state.subscriptionEmail = '';
       state.telegram = { enabled: true, botToken: '' };
-      state.features = { voice: { enabled: false, apiKey: '' }, webSearch: { enabled: false, apiKey: '' } };
+      state.features = { voice: { enabled: false, apiKey: '' }, webSearch: { enabled: false, apiKey: '' }, googleCalendar: { enabled: false, connected: false } };
       pairingActive = false;
       document.getElementById('voiceToggle').checked = false;
       document.getElementById('webSearchToggle').checked = false;
+      document.getElementById('gcalToggle').checked = false;
+      document.getElementById('gcalNotConnected').style.display = '';
+      document.getElementById('gcalConnected').style.display = 'none';
       goToStep(1);
     }
 
@@ -2059,6 +2172,13 @@
           authMode: state.authMode,
           model: state.model,
           apiKey: state.apiKey,
+          language: state.language,
+        };
+      } else if (wizardMode === 'connect-calendar') {
+        // Minimal payload — just mark that we went through the flow.
+        // The server reads googleOauthResult to decide GOOGLE_CALENDAR_ENABLED.
+        payload = {
+          provider: state.provider,
           language: state.language,
         };
       } else {

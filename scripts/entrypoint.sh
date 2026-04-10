@@ -45,6 +45,7 @@ TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
 TELEGRAM_BOT_TOKEN="${_secret_telegram:-${TELEGRAM_BOT_TOKEN:-}}"
 VOICE_ENABLED="${VOICE_ENABLED:-false}"
 WEB_SEARCH_ENABLED="${WEB_SEARCH_ENABLED:-false}"
+GOOGLE_CALENDAR_ENABLED="${GOOGLE_CALENDAR_ENABLED:-false}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
 OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/home/limbo/.openclaw}"
@@ -89,6 +90,18 @@ if [ "${SWITCH_BRAIN_MODE:-}" = "true" ] && [ ! -f "$SWITCH_BRAIN_MARKER" ]; the
   fi
   rm -f "$OPENCLAW_CONFIG_PATH"
   touch "$SWITCH_BRAIN_MARKER"
+fi
+
+# -- Handle connect-calendar mode --------------------------------------------
+# CLI sets CONNECT_CALENDAR_MODE=true to run a reduced wizard that only
+# handles Google Calendar OAuth. Unlike SWITCH_BRAIN_MODE, this preserves
+# ALL existing config — it just needs to force the wizard server to run.
+CONNECT_CALENDAR_MARKER="/data/.connect-calendar-done"
+CONNECT_CALENDAR_ACTIVE=false
+if [ "${CONNECT_CALENDAR_MODE:-}" = "true" ] && [ ! -f "$CONNECT_CALENDAR_MARKER" ]; then
+  log "INFO  CONNECT_CALENDAR_MODE requested — forcing wizard for Google Calendar OAuth"
+  CONNECT_CALENDAR_ACTIVE=true
+  touch "$CONNECT_CALENDAR_MARKER"
 fi
 
 # ── Detect setup mode (no config yet → wizard will handle everything) ────────
@@ -165,7 +178,7 @@ mkdir -p /data/vault/notes /data/vault/maps /data/vault/assets /data/config "$OP
 # Note: Docker Compose file-based secrets ignore uid/gid/mode settings,
 # so files may be owned by a different user. Use cp || true to tolerate
 # permission errors (e.g. during setup mode when secrets are placeholder files).
-for secret_name in gateway_token llm_api_key telegram_bot_token groq_api_key brave_api_key; do
+for secret_name in gateway_token llm_api_key telegram_bot_token groq_api_key brave_api_key google_client_id google_client_secret; do
   src="/run/secrets/$secret_name"
   dst="$OC_SECRETS/$secret_name"
   if [ -f "$src" ] && [ -s "$src" ] && [ -r "$src" ]; then
@@ -232,6 +245,8 @@ if [ -d /app/workspace/skills ]; then
   for skill_dir in /app/workspace/skills/*/; do
     [ -d "$skill_dir" ] || continue
     skill_name=$(basename "$skill_dir")
+    # Feature-gated skills: skip if their feature toggle is off
+    [ "$skill_name" = "google-calendar" ] && [ "$GOOGLE_CALENDAR_ENABLED" != "true" ] && continue
     mkdir -p "$OC_WORKSPACE/skills/$skill_name"
     cp "$skill_dir"* "$OC_WORKSPACE/skills/$skill_name/" 2>/dev/null
   done
@@ -382,6 +397,36 @@ else
     log "INFO  Web search enabled in config (BRAVE_API_KEY exported)"
   fi
 
+  # Google Calendar (gws CLI)
+  # When enabled, export env vars that gws reads for auth, and inject
+  # GOOGLE_CALENDAR_ENABLED into the MCP server env so tools can check it.
+  # gws writes a discovery cache to its config dir — point to /tmp so it works
+  # on read-only root filesystems (docker-compose.test.yml has read_only: true).
+  GCAL_CREDS="$OPENCLAW_STATE_DIR/secrets/google_calendar_credentials.json"
+  if [ "$GOOGLE_CALENDAR_ENABLED" = "true" ] && [ -f "$GCAL_CREDS" ]; then
+    export GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE="$GCAL_CREDS"
+    export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND="file"
+    export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="/tmp/gws"
+    mkdir -p /tmp/gws
+    export GOOGLE_CALENDAR_ENABLED
+
+    # Inject GOOGLE_CALENDAR_ENABLED and GWS env vars into the limbo-vault MCP server
+    # so the calendar tools (which live in the same MCP server) can call gws.
+    node -e "
+      const fs = require('fs');
+      const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+      const srv = cfg.mcp.servers['limbo-vault'];
+      if (srv && srv.env) {
+        srv.env.GOOGLE_CALENDAR_ENABLED = 'true';
+        srv.env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE = process.env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE;
+        srv.env.GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND = 'file';
+        srv.env.GOOGLE_WORKSPACE_CLI_CONFIG_DIR = '/tmp/gws';
+      }
+      fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+    " "$OPENCLAW_CONFIG_PATH"
+    log "INFO  Google Calendar enabled (credentials at $GCAL_CREDS)"
+  fi
+
   log "INFO  OpenClaw config written to $OPENCLAW_CONFIG_PATH"
 fi
 
@@ -417,10 +462,18 @@ if [ "$SETUP_MODE" = "true" ]; then
   exec node /app/setup-server/server.js
 fi
 
-# ── Clean up force-setup marker ──────────────────────────────────────────────
+# ── Connect-calendar mode: start reduced wizard for Google Calendar OAuth ───
+# Preserves all existing config, just needs the wizard server to run once.
+if [ "$CONNECT_CALENDAR_ACTIVE" = "true" ]; then
+  log "INFO  CONNECT_CALENDAR_MODE — starting Google Calendar wizard on port $LIMBO_PORT"
+  export CONNECT_CALENDAR_MODE
+  exec node /app/setup-server/server.js
+fi
+
+# ── Clean up force-setup markers ─────────────────────────────────────────────
 # If we reach here, config exists and OpenClaw is about to start normally.
-# Remove the marker so that the NEXT --reconfigure will work.
-rm -f "$FORCE_DONE_MARKER" "$SWITCH_BRAIN_MARKER"
+# Remove the markers so that the NEXT --reconfigure/--switch-brain/--connect-calendar will work.
+rm -f "$FORCE_DONE_MARKER" "$SWITCH_BRAIN_MARKER" "$CONNECT_CALENDAR_MARKER"
 
 # ── Wakeup routine ──────────────────────────────────────────────────────────
 # Deterministic system-level checks that run BEFORE the agent starts.

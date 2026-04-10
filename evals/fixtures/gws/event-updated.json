@@ -1,0 +1,8 @@
+{
+  "id": "mock-evt-003",
+  "summary": "1:1 con Juan",
+  "start": { "dateTime": "2026-04-10T17:00:00-03:00" },
+  "end": { "dateTime": "2026-04-10T17:45:00-03:00" },
+  "status": "confirmed",
+  "htmlLink": "https://calendar.google.com/event?eid=mock003"
+}
