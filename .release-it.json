@@ -1,0 +1,26 @@
+{
+  "plugins": {
+    "@csmith/release-it-calver-plugin": {
+      "cycle": "month"
+    },
+    "@release-it/conventional-changelog": {
+      "preset": "angular",
+      "infile": "CHANGELOG.md"
+    }
+  },
+  "git": {
+    "commit": true,
+    "commitMessage": "chore: release v${version}",
+    "tag": false,
+    "push": false
+  },
+  "npm": {
+    "publish": false
+  },
+  "gitlab": {
+    "release": false
+  },
+  "github": {
+    "release": false
+  }
+}
