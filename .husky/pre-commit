@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+# Pre-commit: fast, deterministic checks on staged files only.
+# Budget: <5s. Blocks commit on failure.
+
+set -e
+
+# Load nvm so lint-staged (which runs `node --check`) uses the pinned Node.
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then
+  . "/opt/homebrew/opt/nvm/nvm.sh"
+elif [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+fi
+if command -v nvm >/dev/null 2>&1; then
+  nvm use --silent >/dev/null 2>&1 || true
+fi
+
+# 1. Syntax check on staged .js files (via lint-staged)
+npx lint-staged
+
+# 2. Secret scan on staged changes only (gitleaks)
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --verbose
+else
+  echo "WARN: gitleaks not installed — skipping secret scan"
+  echo "      install with: brew install gitleaks"
+fi
