@@ -18,6 +18,7 @@ const CONFIG_DIR = path.join(DATA_DIR, 'config');
 const SECRETS_DIR = path.join(OPENCLAW_STATE, 'secrets');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const SETUP_TOKEN_FILE = path.join(CONFIG_DIR, 'setup_token');
+const SWITCH_BRAIN_MODE = process.env.SWITCH_BRAIN_MODE === 'true';
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -648,25 +649,25 @@ async function handleOAuthExchange(req, res) {
   }
 }
 
-async function handleAnthropicToken(req, res) {
-  const body = await readBody(req);
-  const data = parseJSON(body);
+function handleWizardMode(req, res) {
+  let existingConfig = {};
+  try {
+    const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+    for (const line of envContent.split('\n')) {
+      const m = line.match(/^([A-Z_]+)="?([^"]*)"?$/);
+      if (m) existingConfig[m[1]] = m[2];
+    }
+  } catch {}
 
-  if (!data || !data.token) {
-    sendError(res, 400, 'Missing token');
-    return;
-  }
-
-  const token = data.token.trim();
-  if (token.length < 20) {
-    sendError(res, 400, 'Token too short');
-    return;
-  }
-
-  // Anthropic tokens are static (no refresh needed) — store as secret
-  writeSecretFile('llm_api_key', token);
-  log('Anthropic token written to secrets/llm_api_key');
-  sendJSON(res, 200, { success: true });
+  sendJSON(res, 200, {
+    mode: SWITCH_BRAIN_MODE ? 'switch-brain' : 'full',
+    existingConfig: SWITCH_BRAIN_MODE ? {
+      language: existingConfig.CLI_LANGUAGE || 'en',
+      telegramEnabled: existingConfig.TELEGRAM_ENABLED || 'false',
+      voiceEnabled: existingConfig.VOICE_ENABLED || 'false',
+      webSearchEnabled: existingConfig.WEB_SEARCH_ENABLED || 'false',
+    } : null,
+  });
 }
 
 async function handleConfigure(req, res) {
@@ -714,36 +715,59 @@ async function handleConfigure(req, res) {
       writeSecretFile('llm_api_key', data.apiKey);
     }
 
-    // Handle telegram fields (frontend sends nested object)
-    const telegram = data.telegram || {};
-    if (telegram.botToken) {
-      writeSecretFile('telegram_bot_token', telegram.botToken);
-      // chat_id is already captured by /api/telegram/pair during wizard Step 6
-    }
+    // Handle telegram fields and optional features (only in full setup mode)
+    if (!SWITCH_BRAIN_MODE) {
+      const telegram = data.telegram || {};
+      if (telegram.botToken) {
+        writeSecretFile('telegram_bot_token', telegram.botToken);
+        // chat_id is already captured by /api/telegram/pair during wizard Step 6
+      }
 
-    // Handle optional features (voice transcription, web search)
-    const features = data.features || {};
-    if (features.voice && features.voice.enabled && features.voice.apiKey) {
-      writeSecretFile('groq_api_key', features.voice.apiKey);
-    }
-    if (features.webSearch && features.webSearch.enabled && features.webSearch.apiKey) {
-      writeSecretFile('brave_api_key', features.webSearch.apiKey);
+      const features = data.features || {};
+      if (features.voice && features.voice.enabled && features.voice.apiKey) {
+        writeSecretFile('groq_api_key', features.voice.apiKey);
+      }
+      if (features.webSearch && features.webSearch.enabled && features.webSearch.apiKey) {
+        writeSecretFile('brave_api_key', features.webSearch.apiKey);
+      }
     }
 
     const gatewayToken = ensureGatewayToken();
 
     // Build env vars (excluding secrets)
     const modelName = data.model || data.modelName || MODEL_CATALOG[data.provider].defaultModel;
-    const envVars = {
-      CLI_LANGUAGE:               data.language || 'en',
-      AUTH_MODE:                  data.authMode || 'api-key',
-      MODEL_PROVIDER:             data.provider,
-      MODEL_NAME:                 modelName,
-      LIMBO_PORT:                 String(PORT),
-      TELEGRAM_ENABLED:           telegram.enabled ? 'true' : 'false',
-      VOICE_ENABLED:              (features.voice && features.voice.enabled) ? 'true' : 'false',
-      WEB_SEARCH_ENABLED:         (features.webSearch && features.webSearch.enabled) ? 'true' : 'false',
-    };
+
+    let envVars;
+    if (SWITCH_BRAIN_MODE) {
+      let existingEnv = {};
+      try {
+        const content = fs.readFileSync(ENV_FILE, 'utf8');
+        for (const line of content.split('\n')) {
+          const m = line.match(/^([A-Z_]+)="?([^"]*)"?$/);
+          if (m) existingEnv[m[1]] = m[2];
+        }
+      } catch {}
+      envVars = {
+        ...existingEnv,
+        AUTH_MODE: data.authMode || 'api-key',
+        MODEL_PROVIDER: data.provider,
+        MODEL_NAME: modelName,
+      };
+      delete envVars.SWITCH_BRAIN_MODE;
+    } else {
+      const telegram = data.telegram || {};
+      const features = data.features || {};
+      envVars = {
+        CLI_LANGUAGE: data.language || 'en',
+        AUTH_MODE: data.authMode || 'api-key',
+        MODEL_PROVIDER: data.provider,
+        MODEL_NAME: modelName,
+        LIMBO_PORT: String(PORT),
+        TELEGRAM_ENABLED: telegram.enabled ? 'true' : 'false',
+        VOICE_ENABLED: (features.voice && features.voice.enabled) ? 'true' : 'false',
+        WEB_SEARCH_ENABLED: (features.webSearch && features.webSearch.enabled) ? 'true' : 'false',
+      };
+    }
 
     // Write .env file (quote values to handle special chars)
     const envContent = Object.entries(envVars)
@@ -806,6 +830,11 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (method === 'GET' && url.startsWith('/api/wizard-mode')) {
+    handleWizardMode(req, res);
+    return;
+  }
+
   try {
     if (method === 'GET' && url.startsWith('/api/models')) {
       handleGetModels(req, res);
@@ -817,8 +846,6 @@ async function handleRequest(req, res) {
       handleOAuthStatus(req, res);
     } else if (method === 'POST' && url === '/api/auth/openai/exchange') {
       await handleOAuthExchange(req, res);
-    } else if (method === 'POST' && url === '/api/auth/anthropic/token') {
-      await handleAnthropicToken(req, res);
     } else if (method === 'POST' && url === '/api/telegram/validate-token') {
       await handleTelegramValidate(req, res);
     } else if (method === 'POST' && url === '/api/telegram/pair') {

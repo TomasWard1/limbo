@@ -774,3 +774,100 @@ describe('Full config pipeline integration', () => {
     assert.equal(final.tools.profile, 'full');
   });
 });
+
+// ─── Auth-profiles migration (ZeroClaw → OpenClaw format) ──────────────────
+
+describe('auth-profiles migration', () => {
+  // Extract the inline node -e script from entrypoint.sh
+  const ENTRYPOINT = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'entrypoint.sh'), 'utf8');
+
+  // The script is between: node -e "\n ... \n  " "$LEGACY_AUTH" "$AGENT_AUTH"
+  const startMarker = 'LEGACY_AUTH" ] && [ ! -f "$AGENT_AUTH" ]; then\n  node -e "';
+  const endMarker = '" "$LEGACY_AUTH" "$AGENT_AUTH"';
+  const startIdx = ENTRYPOINT.indexOf(startMarker);
+  const scriptStart = startIdx >= 0 ? startIdx + startMarker.length : -1;
+  const scriptEnd = startIdx >= 0 ? ENTRYPOINT.indexOf(endMarker, scriptStart) : -1;
+  const migrationScript = scriptStart >= 0 && scriptEnd >= 0
+    ? ENTRYPOINT.slice(scriptStart, scriptEnd)
+    : null;
+
+  test('entrypoint has auth-profiles migration script', () => {
+    assert.ok(migrationScript, 'Migration node -e script must exist in entrypoint.sh');
+  });
+
+  test('converts ZeroClaw format to OpenClaw format', () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const legacyPath = path.join(dir, 'legacy.json');
+      const outputPath = path.join(dir, 'output.json');
+
+      const zeroclaw = {
+        schema_version: 1,
+        active_profiles: { 'openai-codex': 'openai-codex:default' },
+        profiles: {
+          'openai-codex:default': {
+            provider: 'openai-codex',
+            profile_name: 'default',
+            kind: 'oauth',
+            account_id: 'test-account-123',
+            access_token: 'test-access-token',
+            refresh_token: 'test-refresh-token',
+            expires_at: '2026-12-01T00:00:00.000Z',
+          },
+        },
+      };
+
+      fs.writeFileSync(legacyPath, JSON.stringify(zeroclaw));
+      execFileSync('node', ['-e', migrationScript, legacyPath, outputPath]);
+
+      const result = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+
+      // OpenClaw format
+      assert.equal(result.version, 1, 'Must have version: 1');
+      assert.ok(!result.schema_version, 'Must not have schema_version');
+      assert.ok(!result.active_profiles, 'Must not have active_profiles');
+
+      const profile = result.profiles['openai-codex:default'];
+      assert.ok(profile, 'Profile must exist');
+      assert.equal(profile.type, 'oauth', 'kind → type');
+      assert.equal(profile.access, 'test-access-token', 'access_token → access');
+      assert.equal(profile.refresh, 'test-refresh-token', 'refresh_token → refresh');
+      assert.equal(profile.accountId, 'test-account-123', 'account_id → accountId');
+      assert.ok(!profile.access_token, 'Must not have access_token');
+      assert.ok(!profile.refresh_token, 'Must not have refresh_token');
+      assert.ok(!profile.kind, 'Must not have kind');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('passes through already-OpenClaw format unchanged', () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const legacyPath = path.join(dir, 'legacy.json');
+      const outputPath = path.join(dir, 'output.json');
+
+      const openclaw = {
+        version: 1,
+        profiles: {
+          'openai-codex:default': {
+            type: 'oauth',
+            provider: 'openai-codex',
+            access: 'already-correct',
+            refresh: 'already-correct-refresh',
+            expires: 1764547200000,
+          },
+        },
+      };
+
+      fs.writeFileSync(legacyPath, JSON.stringify(openclaw));
+      execFileSync('node', ['-e', migrationScript, legacyPath, outputPath]);
+
+      const result = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+      assert.equal(result.version, 1);
+      assert.equal(result.profiles['openai-codex:default'].access, 'already-correct');
+    } finally {
+      cleanup();
+    }
+  });
+});

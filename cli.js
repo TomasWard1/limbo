@@ -25,7 +25,8 @@ const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
 const OPENCLAW_STATE_DIR = path.join(LIMBO_DIR, 'openclaw-state');
 const FLAGS_DIR = path.join(LIMBO_DIR, 'flags');
 const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
-const ENV_FILE = path.join(LIMBO_DIR, '.env');
+const CONFIG_DIR = path.join(LIMBO_DIR, 'config');
+const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const DEFAULT_REGISTRY = 'registry.gitlab.com/tomas209/limbo';
 const REGISTRY_IMAGE = process.env.LIMBO_REGISTRY || DEFAULT_REGISTRY;
@@ -185,6 +186,7 @@ function composeContent() {
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
+      - ${CONFIG_DIR}:/data/config
       - ${FLAGS_DIR}:/flags
     secrets:
       - llm_api_key
@@ -193,14 +195,14 @@ function composeContent() {
       - groq_api_key
       - brave_api_key
     env_file:
-      - ${LIMBO_DIR}/.env
+      - ${ENV_FILE}
     environment:
       LIMBO_PORT: "${PORT}"
       NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
 ${resolveExtraEnv()}    healthcheck:
       test:
         - CMD-SHELL
-        - node -e "fetch('http://localhost:'\${LIMBO_PORT:-18789}'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - node -e "fetch('http://localhost:${PORT}/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 3
@@ -248,6 +250,7 @@ function composeContentHardened() {
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
+      - ${CONFIG_DIR}:/data/config
       - ${FLAGS_DIR}:/flags
     secrets:
       - llm_api_key
@@ -256,7 +259,7 @@ function composeContentHardened() {
       - groq_api_key
       - brave_api_key
     env_file:
-      - ${LIMBO_DIR}/.env
+      - ${ENV_FILE}
     environment:
       LIMBO_PORT: "${PORT}"
       NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
@@ -268,7 +271,7 @@ ${resolveExtraEnv()}    networks:
     healthcheck:
       test:
         - CMD-SHELL
-        - node -e "fetch('http://localhost:'\${LIMBO_PORT:-18789}'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - node -e "fetch('http://localhost:${PORT}/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 3
@@ -1111,6 +1114,14 @@ function ensureComposeFile(hardened = false) {
   fs.mkdirSync(FLAGS_DIR, { recursive: true });
   migrateLegacyState();
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
+  // Ensure config dir and .env exist (bind-mounted into container as /data/config/)
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  // Migrate legacy .env from LIMBO_DIR root to config/ subdir
+  const legacyEnv = path.join(LIMBO_DIR, '.env');
+  if (legacyEnv !== ENV_FILE && fs.existsSync(legacyEnv) && !fs.existsSync(ENV_FILE)) {
+    fs.renameSync(legacyEnv, ENV_FILE);
+  }
+  if (!fs.existsSync(ENV_FILE)) fs.writeFileSync(ENV_FILE, '', { mode: 0o600 });
   // Ensure secret files exist (Docker Compose secrets require the files to be present)
   for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
     const fp = path.join(SECRETS_DIR, name);
@@ -2144,18 +2155,21 @@ function cmdUpdate() {
     return;
   }
 
-  // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
-  let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
-  // Migrate from any old registry (ghcr.io, pinned tags) to current REGISTRY_IMAGE
-  const patched = compose.replace(
-    /image:\s*(?:ghcr\.io\/tomasward1\/limbo|registry\.gitlab\.com\/tomas209\/limbo):\S+/g,
-    `image: ${REGISTRY_IMAGE}:${DEFAULT_TAG}`
-  );
-  if (patched !== compose) {
-    compose = patched;
-    fs.writeFileSync(COMPOSE_FILE, compose);
-    log(`Patched compose image to ${REGISTRY_IMAGE}:${DEFAULT_TAG}`);
+  // Restore PORT from existing .env so the regenerated compose uses the right port.
+  const existingEnv = parseEnvFile();
+  if (existingEnv.LIMBO_PORT) {
+    const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
   }
+
+  // Regenerate compose file from current template. This handles:
+  //   - ZeroClaw → OpenClaw migration (volume mounts, healthcheck)
+  //   - Image registry/tag updates
+  //   - Any new compose changes shipped with the CLI
+  // Detect hardened mode from existing compose (squid sidecar present).
+  const existingCompose = fs.readFileSync(COMPOSE_FILE, 'utf8');
+  const hardened = existingCompose.includes('squid:');
+  ensureComposeFile(hardened);
 
   log('Pulling latest image...');
   run(`docker compose -f "${COMPOSE_FILE}" pull -q`);
@@ -2268,6 +2282,65 @@ ${c.bold}Usage:${c.reset}
   }
 }
 
+async function cmdSwitchBrain() {
+  const existingEnv = parseEnvFile();
+  if (!existingEnv.MODEL_PROVIDER) {
+    die('No existing configuration found. Run `limbo start` first to set up.');
+  }
+
+  // Resolve port from existing config before generating compose file
+  if (existingEnv.LIMBO_PORT) {
+    const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
+  }
+
+  ensureComposeFile(false);
+
+  const lang = existingEnv.CLI_LANGUAGE || 'en';
+  const currentProvider = existingEnv.MODEL_PROVIDER || 'unknown';
+  const currentModel = existingEnv.MODEL_NAME || 'unknown';
+
+  header(lang === 'es' ? 'Cambiar Proveedor' : 'Switch Provider');
+  console.log(`  ${c.dim}${lang === 'es' ? 'Proveedor actual' : 'Current provider'}: ${c.reset}${c.bold}${currentProvider}${c.reset} (${currentModel})\n`);
+
+  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+  const cleaned = envContent
+    .replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '')
+    .replace(/^AUTH_MODE=.*\n?/gm, '')
+    .replace(/^MODEL_PROVIDER=.*\n?/gm, '')
+    .replace(/^MODEL_NAME=.*\n?/gm, '');
+  fs.writeFileSync(ENV_FILE, cleaned + 'SWITCH_BRAIN_MODE=true\n', { mode: 0o600 });
+
+  pullOrBuildImage(lang);
+  ensureVolumePermissions();
+
+  log(lang === 'es' ? 'Iniciando wizard de cambio de proveedor...' : 'Starting provider switch wizard...');
+  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
+  if (upResult.status !== 0) {
+    process.stderr.write(upResult.stderr || '');
+    die('Container failed to start. Run `limbo logs` to investigate.');
+  }
+
+  const wizardUrl = extractWizardUrl();
+
+  let tunnel = null;
+  if (isServerEnvironment() || process.argv.includes('--tunnel')) {
+    tunnel = await createSetupTunnel(PORT);
+  }
+
+  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
+  if (!wizardUrl) {
+    warn('Could not extract setup token from container logs.');
+  }
+  printWizardUrl(displayUrl, tunnel);
+
+  try {
+    const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
+    const final = envAfter.replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '');
+    if (final !== envAfter) fs.writeFileSync(ENV_FILE, final, { mode: 0o600 });
+  } catch {}
+}
+
 function cmdHelp() {
   console.log(`
 ${c.bold}limbo${c.reset} - personal AI memory agent
@@ -2282,6 +2355,7 @@ ${c.bold}Commands:${c.reset}
   update        Pull latest image and restart
   status        Show container status
   config        Configure optional features (voice, web-search)
+  switch-brain  Change your AI provider (opens a quick wizard)
   help          Show this help
 
 ${c.bold}Flags:${c.reset}
@@ -2406,6 +2480,7 @@ if (require.main === module) {
       case 'update':  cmdUpdate(); break;
       case 'status':  cmdStatus(); break;
       case 'config':  cmdConfig(); break;
+      case 'switch-brain': await cmdSwitchBrain(); break;
       case 'version':
       case '--version':
       case '-v':      console.log(require('./package.json').version); break;

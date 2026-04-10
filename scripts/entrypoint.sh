@@ -74,10 +74,33 @@ if [ "${FORCE_SETUP_MODE:-}" = "true" ] && [ ! -f "$FORCE_DONE_MARKER" ]; then
   touch "$FORCE_DONE_MARKER"
 fi
 
+# -- Handle switch-brain mode ------------------------------------------------
+# CLI sets SWITCH_BRAIN_MODE=true to re-run the wizard in brain-only mode.
+# Unlike FORCE_SETUP_MODE, this preserves non-brain config (Telegram, features).
+SWITCH_BRAIN_MARKER="/data/.switch-brain-done"
+if [ "${SWITCH_BRAIN_MODE:-}" = "true" ] && [ ! -f "$SWITCH_BRAIN_MARKER" ]; then
+  log "INFO  SWITCH_BRAIN_MODE requested — clearing provider config for brain switch"
+  if [ -f /data/config/.env ]; then
+    sed -i \
+      -e '/^AUTH_MODE=/d' \
+      -e '/^MODEL_PROVIDER=/d' \
+      -e '/^MODEL_NAME=/d' \
+      /data/config/.env
+  fi
+  rm -f "$OPENCLAW_CONFIG_PATH"
+  touch "$SWITCH_BRAIN_MARKER"
+fi
+
 # ── Detect setup mode (no config yet → wizard will handle everything) ────────
 SETUP_MODE=false
 if [ ! -f /data/config/.env ]; then
   SETUP_MODE=true
+elif ! grep -q '^MODEL_PROVIDER=' /data/config/.env 2>/dev/null; then
+  SETUP_MODE=true
+  set -a
+  . /data/config/.env
+  set +a
+  log "INFO  Brain config missing — entering setup mode (preserving features config)"
 else
   # Source wizard-generated config (written by setup-server on first run)
   set -a
@@ -98,21 +121,6 @@ elif [ "$AUTH_MODE" = "subscription" ]; then
   # The wizard writes the token to secrets/llm_api_key during setup.
   # read_secret already loaded it into LLM_API_KEY above.
   case "$MODEL_PROVIDER" in
-    anthropic)
-      if [ -n "$LLM_API_KEY" ]; then
-        # OAuth tokens (sk-ant-oat*) need ANTHROPIC_OAUTH_TOKEN so OpenClaw
-        # routes them through its OAuth adapter instead of the API key path.
-        case "$LLM_API_KEY" in
-          sk-ant-oat*)
-            export ANTHROPIC_OAUTH_TOKEN="${ANTHROPIC_OAUTH_TOKEN:-$LLM_API_KEY}"
-            log "INFO  Exported Anthropic OAuth token"
-            ;;
-          *)
-            export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-$LLM_API_KEY}"
-            ;;
-        esac
-      fi
-      ;;
     openai|openai-codex)
       [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
       ;;
@@ -176,6 +184,40 @@ mkdir -p "$OC_WORKSPACE" "$OC_WORKSPACE/memory" "$OC_AGENT_DIR/memory"
 # MEMORY.md required by OpenClaw's session-memory hook in both workspace and agentDir
 [ -f "$OC_WORKSPACE/MEMORY.md" ] || touch "$OC_WORKSPACE/MEMORY.md"
 [ -f "$OC_AGENT_DIR/memory/MEMORY.md" ] || touch "$OC_AGENT_DIR/memory/MEMORY.md"
+
+# Migrate auth-profiles from legacy ZeroClaw format/location to OpenClaw.
+# ZeroClaw: stored at $OPENCLAW_STATE_DIR/auth-profiles.json with fields
+#   schema_version, active_profiles, kind, access_token, refresh_token
+# OpenClaw: reads from agents/main/agent/auth-profiles.json with fields
+#   version, type, access, refresh
+LEGACY_AUTH="$OPENCLAW_STATE_DIR/auth-profiles.json"
+AGENT_AUTH="$OC_AGENT_DIR/auth-profiles.json"
+if [ -f "$LEGACY_AUTH" ] && [ ! -f "$AGENT_AUTH" ]; then
+  node -e "
+    const fs = require('fs');
+    const src = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    // Already OpenClaw format — just copy
+    if (src.version && !src.schema_version) {
+      fs.writeFileSync(process.argv[2], JSON.stringify(src, null, 2));
+      process.exit(0);
+    }
+    // Convert ZeroClaw → OpenClaw format
+    const out = { version: 1, profiles: {} };
+    for (const [id, p] of Object.entries(src.profiles || {})) {
+      out.profiles[id] = {
+        type: p.kind || 'oauth',
+        provider: p.provider || 'openai-codex',
+        access: p.access_token || '',
+        refresh: p.refresh_token || '',
+        expires: p.expires_at ? new Date(p.expires_at).getTime() : 0,
+        email: p.email || '',
+        accountId: p.account_id || '',
+      };
+    }
+    fs.writeFileSync(process.argv[2], JSON.stringify(out, null, 2));
+  " "$LEGACY_AUTH" "$AGENT_AUTH"
+  log "INFO  Migrated auth-profiles.json to per-agent path (format converted)"
+fi
 
 # System files: copy from image on every boot (overwrite — image is source of truth)
 for f in /app/workspace/system/*.md; do
@@ -360,7 +402,7 @@ fi
 # ── Clean up force-setup marker ──────────────────────────────────────────────
 # If we reach here, config exists and OpenClaw is about to start normally.
 # Remove the marker so that the NEXT --reconfigure will work.
-rm -f "$FORCE_DONE_MARKER"
+rm -f "$FORCE_DONE_MARKER" "$SWITCH_BRAIN_MARKER"
 
 # ── Wakeup routine ──────────────────────────────────────────────────────────
 # Deterministic system-level checks that run BEFORE the agent starts.
