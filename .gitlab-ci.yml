@@ -216,62 +216,81 @@ release:
         exit 1
       fi
 
-      # ── Idempotency: skip if already published to npm ──
+      # ── Idempotency: if npm is already published, reconcile tag/release only ──
       # `npm view` is an unauthenticated read, so no .npmrc needed here.
+      NPM_PUBLISHED=false
       if npm view "limbo-ai@${VERSION}" version >/dev/null 2>&1; then
-        echo "Version ${VERSION} already on npm — skipping publish (idempotent)"
-        exit 0
+        NPM_PUBLISHED=true
+        echo "Version ${VERSION} already on npm — skipping Docker/npm publish and reconciling tag/release"
+      else
+        MAJOR=$(echo "$VERSION" | cut -d. -f1)
+        MINOR=$(echo "$VERSION" | cut -d. -f1-2)
+        echo "Publishing version: $VERSION (major=${MAJOR}, minor=${MINOR})"
+
+        # ── Docker: build and push to GitLab Container Registry ──
+        IMAGE="${CI_REGISTRY_IMAGE}"
+        echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+
+        docker build \
+          --tag "${IMAGE}:${VERSION}" \
+          --tag "${IMAGE}:${MINOR}" \
+          --tag "${IMAGE}:${MAJOR}" \
+          --tag "${IMAGE}:latest" \
+          .
+
+        docker push "${IMAGE}:${VERSION}"
+        docker push "${IMAGE}:${MINOR}"
+        docker push "${IMAGE}:${MAJOR}"
+        docker push "${IMAGE}:latest"
+
+        # ── npm publish via automation token ──
+        # Write auth to a job-scoped .npmrc (not ~/.npmrc) so it doesn't leak
+        # into container layers or persist on the runner host across jobs.
+        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+        trap 'rm -f .npmrc' EXIT
+        npm publish --access public
       fi
-
-      MAJOR=$(echo "$VERSION" | cut -d. -f1)
-      MINOR=$(echo "$VERSION" | cut -d. -f1-2)
-      echo "Publishing version: $VERSION (major=${MAJOR}, minor=${MINOR})"
-
-      # ── Docker: build and push to GitLab Container Registry ──
-      IMAGE="${CI_REGISTRY_IMAGE}"
-      echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-
-      docker build \
-        --tag "${IMAGE}:${VERSION}" \
-        --tag "${IMAGE}:${MINOR}" \
-        --tag "${IMAGE}:${MAJOR}" \
-        --tag "${IMAGE}:latest" \
-        .
-
-      docker push "${IMAGE}:${VERSION}"
-      docker push "${IMAGE}:${MINOR}"
-      docker push "${IMAGE}:${MAJOR}"
-      docker push "${IMAGE}:latest"
-
-      # ── npm publish via automation token ──
-      # Write auth to a job-scoped .npmrc (not ~/.npmrc) so it doesn't leak
-      # into container layers or persist on the runner host across jobs.
-      echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-      trap 'rm -f .npmrc' EXIT
-      npm publish --access public
 
       # ── Git: create annotated tag and push ONLY the tag (no branch mutation) ──
       git config user.name "gitlab-ci[bot]"
       git config user.email "gitlab-ci[bot]@users.noreply.gitlab.com"
       git remote set-url origin "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${CI_PROJECT_PATH}.git"
-      git tag -a "v${VERSION}" -m "Release v${VERSION}"
-      git push origin "v${VERSION}"
+      TAG="v${VERSION}"
+      if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+        echo "Tag ${TAG} already exists on origin — skipping tag push"
+      else
+        git tag -a "${TAG}" -m "Release ${TAG}"
+        git push origin "${TAG}"
+      fi
+      git fetch --tags origin
 
       # ── Create GitLab Release ──
-      PREV_TAG=$(git describe --tags --abbrev=0 "v${VERSION}^" 2>/dev/null || echo "")
+      PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
       if [ -n "$PREV_TAG" ]; then
-        CHANGELOG_BODY=$(git log "${PREV_TAG}..v${VERSION}" --pretty=format:"- %s (%h)" --no-merges)
+        CHANGELOG_BODY=$(git log "${PREV_TAG}..${TAG}" --pretty=format:"- %s (%h)" --no-merges)
       else
-        CHANGELOG_BODY=$(git log "v${VERSION}" --pretty=format:"- %s (%h)" --no-merges)
+        CHANGELOG_BODY=$(git log "${TAG}" --pretty=format:"- %s (%h)" --no-merges)
       fi
 
-      curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
-        -X POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases" \
-        -H "Content-Type: application/json" \
-        -d "{
-          \"tag_name\": \"v${VERSION}\",
-          \"name\": \"Limbo v${VERSION}\",
-          \"description\": $(echo "$CHANGELOG_BODY" | jq -Rs .)
-        }"
+      RELEASE_PAYLOAD=$(jq -n \
+        --arg tag_name "${TAG}" \
+        --arg name "Limbo ${TAG}" \
+        --arg description "$CHANGELOG_BODY" \
+        '{tag_name: $tag_name, name: $name, description: $description}')
+      RELEASE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${TAG}"
+
+      if curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" "${RELEASE_URL}" >/dev/null; then
+        echo "Release ${TAG} already exists — updating it"
+        curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+          -X PUT "${RELEASE_URL}" \
+          -H "Content-Type: application/json" \
+          -d "${RELEASE_PAYLOAD}"
+      else
+        echo "Release ${TAG} does not exist yet — creating it"
+        curl -fsS --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+          -X POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases" \
+          -H "Content-Type: application/json" \
+          -d "${RELEASE_PAYLOAD}"
+      fi
 
       echo "Released v${VERSION}"

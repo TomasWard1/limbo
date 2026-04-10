@@ -10,6 +10,30 @@
   "engines": {
     "node": ">=18"
   },
+  "files": [
+    "Dockerfile",
+    "RELEASES.md",
+    "assets/og-banner.png",
+    "cli.js",
+    "evals/.vault-pristine/",
+    "evals/cases/",
+    "evals/cli.js",
+    "evals/judge/",
+    "evals/lib/",
+    "evals/results/baseline.json",
+    "evals/results/baselines-index.json",
+    "evals/results/baselines/",
+    "evals/vault-seed/",
+    "lib/",
+    "mcp-server/",
+    "migrations/",
+    "openclaw.json.template",
+    "scripts/entrypoint.sh",
+    "scripts/patch-openclaw-audio.mjs",
+    "setup-server/",
+    "squid/",
+    "workspace/"
+  ],
   "dependencies": {
     "@clack/prompts": "^1.1.0"
   },
