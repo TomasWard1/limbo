@@ -333,13 +333,31 @@ else
   fi
 
   # Voice transcription (Groq Whisper)
-  # OpenClaw auto-detects GROQ_API_KEY from env — no config injection needed.
+  # We pin the audio provider to Groq explicitly in tools.media.audio.models
+  # instead of relying on OpenClaw's auto-resolver. The auto-resolver picks the
+  # first provider whose auth is satisfied, without fallover on HTTP errors.
+  # When a model provider like openai-codex has an OAuth profile, it gets
+  # matched as "openai has auth" for audio too, and the resolver picks OpenAI
+  # Whisper — which costs API credits separate from the Codex subscription and
+  # returns HTTP 429 once the OpenAI quota is exhausted. Pinning to Groq
+  # guarantees voice notes go to the free/fast Groq Whisper endpoint.
   _secret_groq="$(read_secret groq_api_key)"
   GROQ_API_KEY="${_secret_groq:-${GROQ_API_KEY:-}}"
 
   if [ "$VOICE_ENABLED" = "true" ] && [ -n "$GROQ_API_KEY" ]; then
     export GROQ_API_KEY
-    log "INFO  Voice transcription enabled (GROQ_API_KEY exported)"
+    node -e "
+      const fs = require('fs');
+      const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+      cfg.tools = cfg.tools || {};
+      cfg.tools.media = cfg.tools.media || {};
+      cfg.tools.media.audio = cfg.tools.media.audio || {};
+      cfg.tools.media.audio.models = [
+        { provider: 'groq', model: 'whisper-large-v3-turbo' }
+      ];
+      fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+    " "$OPENCLAW_CONFIG_PATH"
+    log "INFO  Voice transcription enabled (GROQ_API_KEY exported, audio pinned to groq)"
   fi
 
   # Web search (Brave)
@@ -417,4 +435,9 @@ fi
 
 # ── Start OpenClaw gateway ───────────────────────────────────────────────────
 log "INFO  Starting OpenClaw gateway"
-exec openclaw gateway
+if [ "${LIMBO_VERBOSE:-}" = "true" ]; then
+  log "INFO  LIMBO_VERBOSE=true — enabling OpenClaw verbose logging"
+  exec openclaw gateway --verbose
+else
+  exec openclaw gateway
+fi

@@ -104,3 +104,33 @@ tests:
         value: file://./assertions.js:userProfileMatches
         config:
           pattern: "(?i)santiago"
+
+  # ── REGRESSION TESTS ──────────────────────────────────────────────────────
+
+  # 6. voice-transcription: regression guard for the openclaw voice pipeline.
+  #    Uses a dedicated provider (audio-provider.js) that invokes
+  #    `openclaw infer audio transcribe` directly against a fixture m4a,
+  #    and surfaces both the config pin (tools.media.audio.models) and the
+  #    transcribe JSON in a single output so assertions can catch both
+  #    the multipart patch regressing AND the entrypoint pin regressing.
+  #    See docs/plans/ or the commit message of fix/voice-transcription-
+  #    regression for the full story behind why both checks are needed.
+  - description: "voice-transcription: Groq transcribes a fixture audio via openclaw infer audio"
+    provider: file://./audio-provider.js
+    vars:
+      prompt: "voice-transcription-probe"  # unused by audio provider
+    assert:
+      - type: javascript
+        value: file://./assertions.js:responseMatches
+        config:
+          pattern: '"pinnedProvider":\s*"groq"'
+      - type: javascript
+        value: file://./assertions.js:responseMatches
+        config:
+          pattern: '"pinnedModel":\s*"whisper-large-v3-turbo"'
+      - type: javascript
+        value: file://./assertions.js:responseMatches
+        config:
+          pattern: '"ok":\s*true'
+      - type: not-icontains
+        value: error
