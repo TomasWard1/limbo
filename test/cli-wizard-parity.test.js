@@ -37,8 +37,11 @@ function wizardEnvKeys() {
     path.join(__dirname, '..', 'setup-server', 'server.js'),
     'utf8',
   );
-  // Match the envVars = { ... } block inside handleConfigure
-  const match = src.match(/const envVars\s*=\s*\{([^}]+)\}/);
+  // Match the full-setup envVars = { ... } block inside handleConfigure.
+  // switch-brain mode uses a separate block; we want the else (full setup) block
+  // which contains all env vars. Match the last `envVars = {` occurrence.
+  const matches = [...src.matchAll(/envVars\s*=\s*\{([^}]+)\}/g)];
+  const match = matches.length > 0 ? matches[matches.length - 1] : null;
   assert.ok(match, 'could not find envVars block in setup-server/server.js');
   const keys = [];
   for (const line of match[1].split('\n')) {
