@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "id": "mock-evt-001",
+      "summary": "Team Standup",
+      "start": { "dateTime": "2026-04-10T10:00:00-03:00" },
+      "end": { "dateTime": "2026-04-10T10:30:00-03:00" },
+      "status": "confirmed",
+      "htmlLink": "https://calendar.google.com/event?eid=mock001"
+    },
+    {
+      "id": "mock-evt-002",
+      "summary": "Almuerzo con equipo",
+      "start": { "dateTime": "2026-04-10T13:00:00-03:00" },
+      "end": { "dateTime": "2026-04-10T14:00:00-03:00" },
+      "location": "Oficina",
+      "status": "confirmed",
+      "htmlLink": "https://calendar.google.com/event?eid=mock002"
+    },
+    {
+      "id": "mock-evt-003",
+      "summary": "1:1 con Juan",
+      "start": { "dateTime": "2026-04-10T16:00:00-03:00" },
+      "end": { "dateTime": "2026-04-10T16:45:00-03:00" },
+      "status": "confirmed",
+      "htmlLink": "https://calendar.google.com/event?eid=mock003"
+    }
+  ]
+}

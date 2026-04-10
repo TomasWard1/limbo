@@ -42,12 +42,13 @@ ARG OPENCLAW_VERSION
 #   tini         — minimal init for proper signal handling (PID 1 reaping)
 #   libssl3      — OpenSSL 3 shared lib needed by OpenClaw's ACP runtime (codex-acp)
 #   python3      — required by OpenClaw's pinned-write-helper for safe atomic file writes
-RUN apt-get update && apt-get install -y --no-install-recommends gettext-base tzdata tini libssl3 python3 && rm -rf /var/lib/apt/lists/* \
+RUN apt-get update && apt-get install -y --no-install-recommends gettext-base tzdata tini libssl3 python3 ca-certificates && rm -rf /var/lib/apt/lists/* \
   && groupadd -r limbo && useradd --create-home -r -g limbo limbo
 
 # Install OpenClaw globally — replaces the ZeroClaw Rust binary.
 # Pinned via OPENCLAW_VERSION build arg (default: latest).
-RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
+# @googleworkspace/cli (gws) — Google Calendar integration (optional feature).
+RUN npm install -g "openclaw@${OPENCLAW_VERSION}" "@googleworkspace/cli"
 
 # Apply local patch for openclaw#63851 — the guarded fetch drops FormData fields,
 # breaking Groq audio transcription. Remove this once upstream PR #64349 ships in
@@ -68,6 +69,9 @@ COPY --chown=limbo:limbo setup-server/ /app/setup-server/
 
 # System workspace files (product-owned, root-owned for read-only enforcement via symlinks)
 COPY workspace/system/ ./workspace/system/
+
+# Skills (product-owned, synced to OpenClaw workspace on boot by entrypoint)
+COPY workspace/skills/ ./workspace/skills/
 
 # User workspace templates (limbo-owned, seeded on first run)
 COPY --chown=limbo:limbo workspace/templates/ ./workspace/templates/

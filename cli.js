@@ -768,6 +768,7 @@ function normalizeConfig(cfg, existingEnv = {}) {
     GATEWAY_TOKEN: gatewayToken,
     VOICE_ENABLED: cfg.voiceEnabled || existingEnv.VOICE_ENABLED || 'false',
     WEB_SEARCH_ENABLED: cfg.webSearchEnabled || existingEnv.WEB_SEARCH_ENABLED || 'false',
+    GOOGLE_CALENDAR_ENABLED: cfg.googleCalendarEnabled || existingEnv.GOOGLE_CALENDAR_ENABLED || 'false',
   };
 
   return base;
@@ -2341,6 +2342,63 @@ async function cmdSwitchBrain() {
   } catch {}
 }
 
+async function cmdConnectCalendar() {
+  const existingEnv = parseEnvFile();
+  if (!existingEnv.MODEL_PROVIDER) {
+    die('No existing configuration found. Run `limbo start` first to set up.');
+  }
+
+  if (existingEnv.GOOGLE_CALENDAR_ENABLED === 'true') {
+    ok('Google Calendar is already connected.');
+    return;
+  }
+
+  // Resolve port from existing config
+  if (existingEnv.LIMBO_PORT) {
+    const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
+  }
+
+  ensureComposeFile(false);
+
+  const lang = existingEnv.CLI_LANGUAGE || 'en';
+  header(lang === 'es' ? 'Conectar Google Calendar' : 'Connect Google Calendar');
+
+  // Write CONNECT_CALENDAR_MODE to .env (preserve existing config)
+  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
+  const cleaned = envContent.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
+  fs.writeFileSync(ENV_FILE, cleaned + 'CONNECT_CALENDAR_MODE=true\n', { mode: 0o600 });
+
+  pullOrBuildImage(lang);
+  ensureVolumePermissions();
+
+  log(lang === 'es' ? 'Iniciando wizard de Google Calendar...' : 'Starting Google Calendar setup wizard...');
+  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
+  if (upResult.status !== 0) {
+    process.stderr.write(upResult.stderr || '');
+    die('Container failed to start. Run `limbo logs` to investigate.');
+  }
+
+  const wizardUrl = extractWizardUrl();
+
+  let tunnel = null;
+  if (isServerEnvironment() || process.argv.includes('--tunnel')) {
+    tunnel = await createSetupTunnel(PORT);
+  }
+
+  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
+  if (!wizardUrl) {
+    warn('Could not extract setup token from container logs.');
+  }
+  printWizardUrl(displayUrl, tunnel);
+
+  try {
+    const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
+    const final = envAfter.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
+    if (final !== envAfter) fs.writeFileSync(ENV_FILE, final, { mode: 0o600 });
+  } catch {}
+}
+
 function cmdHelp() {
   console.log(`
 ${c.bold}limbo${c.reset} - personal AI memory agent
@@ -2354,9 +2412,10 @@ ${c.bold}Commands:${c.reset}
   logs          Tail container logs
   update        Pull latest image and restart
   status        Show container status
-  config        Configure optional features (voice, web-search)
-  switch-brain  Change your AI provider (opens a quick wizard)
-  help          Show this help
+  config             Configure optional features (voice, web-search)
+  switch-brain       Change your AI provider (opens a quick wizard)
+  connect-calendar   Connect Google Calendar (opens a quick wizard)
+  help               Show this help
 
 ${c.bold}Flags:${c.reset}
   --cli                Use interactive CLI prompts instead of the web setup wizard
@@ -2481,6 +2540,7 @@ if (require.main === module) {
       case 'status':  cmdStatus(); break;
       case 'config':  cmdConfig(); break;
       case 'switch-brain': await cmdSwitchBrain(); break;
+      case 'connect-calendar': await cmdConnectCalendar(); break;
       case 'version':
       case '--version':
       case '-v':      console.log(require('./package.json').version); break;
