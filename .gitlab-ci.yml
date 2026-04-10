@@ -106,8 +106,10 @@ release:
   services:
     - docker:dind
   id_tokens:
+    NPM_ID_TOKEN:
+      aud: npm:registry.npmjs.org
     SIGSTORE_ID_TOKEN:
-      aud: https://registry.npmjs.org
+      aud: sigstore
   environment: production
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
@@ -160,17 +162,19 @@ release:
 
       # Docker: build and push to GitLab Container Registry
       IMAGE="${CI_REGISTRY_IMAGE}"
-      docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+      echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
 
-      docker buildx create --use --name multiarch 2>/dev/null || true
-      docker buildx build \
-        --platform linux/amd64,linux/arm64 \
-        --push \
+      docker build \
         --tag "${IMAGE}:${VERSION}" \
         --tag "${IMAGE}:${MINOR}" \
         --tag "${IMAGE}:${MAJOR}" \
         --tag "${IMAGE}:latest" \
         .
+
+      docker push "${IMAGE}:${VERSION}"
+      docker push "${IMAGE}:${MINOR}"
+      docker push "${IMAGE}:${MAJOR}"
+      docker push "${IMAGE}:latest"
 
       # npm publish (trusted publishing via OIDC — no token needed)
       npm publish --provenance --access public
@@ -182,6 +186,7 @@ release:
       git add package.json
       git commit -m "chore: release v${VERSION} [skip ci]"
       git tag "v${VERSION}"
+      git checkout -B main
       git push origin main --follow-tags
 
       # Create GitLab Release

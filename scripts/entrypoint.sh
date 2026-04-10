@@ -370,6 +370,17 @@ fi
 # Remove the marker so that the NEXT --reconfigure will work.
 rm -f "$FORCE_DONE_MARKER" "$SWITCH_BRAIN_MARKER"
 
+# ── Wakeup routine ──────────────────────────────────────────────────────────
+# Deterministic system-level checks that run BEFORE the agent starts.
+# Uses Telegram Bot API directly — no dependency on OpenClaw.
+# Non-fatal: if it fails, OpenClaw still starts.
+if [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+  log "INFO  Running wakeup routine"
+  node /app/lib/wakeup.js 2>&1 | while IFS= read -r line; do log "WAKE  $line"; done || true
+else
+  log "INFO  Telegram not enabled — skipping wakeup routine"
+fi
+
 # ── Start OpenClaw gateway ───────────────────────────────────────────────────
 log "INFO  Starting OpenClaw gateway"
 exec openclaw gateway

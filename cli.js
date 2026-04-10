@@ -23,6 +23,7 @@ const LIMBO_DIR = (() => {
 })();
 const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
 const OPENCLAW_STATE_DIR = path.join(LIMBO_DIR, 'openclaw-state');
+const FLAGS_DIR = path.join(LIMBO_DIR, 'flags');
 const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const CONFIG_DIR = path.join(LIMBO_DIR, 'config');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
@@ -186,6 +187,7 @@ function composeContent() {
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
+      - ${FLAGS_DIR}:/flags
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -249,6 +251,7 @@ function composeContentHardened() {
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
+      - ${FLAGS_DIR}:/flags
     secrets:
       - llm_api_key
       - telegram_bot_token
@@ -1108,6 +1111,7 @@ function ensureComposeFile(hardened = false) {
   fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'maps'), { recursive: true });
   fs.mkdirSync(OPENCLAW_STATE_DIR, { recursive: true });
+  fs.mkdirSync(FLAGS_DIR, { recursive: true });
   migrateLegacyState();
   fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
   // Ensure config dir and .env exist (bind-mounted into container as /data/config/)
