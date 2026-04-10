@@ -185,6 +185,40 @@ mkdir -p "$OC_WORKSPACE" "$OC_WORKSPACE/memory" "$OC_AGENT_DIR/memory"
 [ -f "$OC_WORKSPACE/MEMORY.md" ] || touch "$OC_WORKSPACE/MEMORY.md"
 [ -f "$OC_AGENT_DIR/memory/MEMORY.md" ] || touch "$OC_AGENT_DIR/memory/MEMORY.md"
 
+# Migrate auth-profiles from legacy ZeroClaw format/location to OpenClaw.
+# ZeroClaw: stored at $OPENCLAW_STATE_DIR/auth-profiles.json with fields
+#   schema_version, active_profiles, kind, access_token, refresh_token
+# OpenClaw: reads from agents/main/agent/auth-profiles.json with fields
+#   version, type, access, refresh
+LEGACY_AUTH="$OPENCLAW_STATE_DIR/auth-profiles.json"
+AGENT_AUTH="$OC_AGENT_DIR/auth-profiles.json"
+if [ -f "$LEGACY_AUTH" ] && [ ! -f "$AGENT_AUTH" ]; then
+  node -e "
+    const fs = require('fs');
+    const src = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    // Already OpenClaw format — just copy
+    if (src.version && !src.schema_version) {
+      fs.writeFileSync(process.argv[2], JSON.stringify(src, null, 2));
+      process.exit(0);
+    }
+    // Convert ZeroClaw → OpenClaw format
+    const out = { version: 1, profiles: {} };
+    for (const [id, p] of Object.entries(src.profiles || {})) {
+      out.profiles[id] = {
+        type: p.kind || 'oauth',
+        provider: p.provider || 'openai-codex',
+        access: p.access_token || '',
+        refresh: p.refresh_token || '',
+        expires: p.expires_at ? new Date(p.expires_at).getTime() : 0,
+        email: p.email || '',
+        accountId: p.account_id || '',
+      };
+    }
+    fs.writeFileSync(process.argv[2], JSON.stringify(out, null, 2));
+  " "$LEGACY_AUTH" "$AGENT_AUTH"
+  log "INFO  Migrated auth-profiles.json to per-agent path (format converted)"
+fi
+
 # System files: copy from image on every boot (overwrite — image is source of truth)
 for f in /app/workspace/system/*.md; do
   [ -f "$f" ] || continue

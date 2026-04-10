@@ -78,16 +78,18 @@ test('cmdUpdate re-execs when selfUpdateCli returns true', () => {
     'cmdUpdate must re-exec with execFileSync');
 });
 
-// ─── Compose image patching handles multiple registries ────────────────────
+// ─── cmdUpdate regenerates compose from template ──────────────────────────
 
-test('cmdUpdate patches ghcr.io image references', () => {
+test('cmdUpdate regenerates compose via ensureComposeFile', () => {
   const src = require('fs').readFileSync(CLI, 'utf8');
-  assert.ok(src.includes('ghcr\\.io\\/tomasward1\\/limbo'),
-    'Patch regex must match old ghcr.io images');
+  // cmdUpdate must call ensureComposeFile to regenerate compose from template,
+  // handling ZeroClaw → OpenClaw migration and any new compose changes.
+  assert.ok(src.includes('ensureComposeFile(hardened)'),
+    'cmdUpdate must call ensureComposeFile to regenerate compose');
 });
 
-test('cmdUpdate patches old gitlab registry references', () => {
+test('cmdUpdate detects hardened mode from existing compose', () => {
   const src = require('fs').readFileSync(CLI, 'utf8');
-  assert.ok(src.includes('registry\\.gitlab\\.com\\/tomas209\\/limbo'),
-    'Patch regex must match old gitlab images');
+  assert.ok(src.includes("existingCompose.includes('squid:')"),
+    'cmdUpdate must detect hardened mode by checking for squid sidecar');
 });
