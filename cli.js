@@ -202,7 +202,7 @@ function composeContent() {
 ${resolveExtraEnv()}    healthcheck:
       test:
         - CMD-SHELL
-        - node -e "fetch('http://localhost:'\${LIMBO_PORT:-18789}'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - node -e "fetch('http://localhost:${PORT}/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 3
@@ -271,7 +271,7 @@ ${resolveExtraEnv()}    networks:
     healthcheck:
       test:
         - CMD-SHELL
-        - node -e "fetch('http://localhost:'\${LIMBO_PORT:-18789}'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - node -e "fetch('http://localhost:${PORT}/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 3
@@ -2155,18 +2155,21 @@ function cmdUpdate() {
     return;
   }
 
-  // Patch image tag to :latest in existing compose files (handles upgrades from pinned tags)
-  let compose = fs.readFileSync(COMPOSE_FILE, 'utf8');
-  // Migrate from any old registry (ghcr.io, pinned tags) to current REGISTRY_IMAGE
-  const patched = compose.replace(
-    /image:\s*(?:ghcr\.io\/tomasward1\/limbo|registry\.gitlab\.com\/tomas209\/limbo):\S+/g,
-    `image: ${REGISTRY_IMAGE}:${DEFAULT_TAG}`
-  );
-  if (patched !== compose) {
-    compose = patched;
-    fs.writeFileSync(COMPOSE_FILE, compose);
-    log(`Patched compose image to ${REGISTRY_IMAGE}:${DEFAULT_TAG}`);
+  // Restore PORT from existing .env so the regenerated compose uses the right port.
+  const existingEnv = parseEnvFile();
+  if (existingEnv.LIMBO_PORT) {
+    const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
   }
+
+  // Regenerate compose file from current template. This handles:
+  //   - ZeroClaw → OpenClaw migration (volume mounts, healthcheck)
+  //   - Image registry/tag updates
+  //   - Any new compose changes shipped with the CLI
+  // Detect hardened mode from existing compose (squid sidecar present).
+  const existingCompose = fs.readFileSync(COMPOSE_FILE, 'utf8');
+  const hardened = existingCompose.includes('squid:');
+  ensureComposeFile(hardened);
 
   log('Pulling latest image...');
   run(`docker compose -f "${COMPOSE_FILE}" pull -q`);
