@@ -170,6 +170,20 @@ function ensureSetupToken() {
   // 0o777 so both the container (uid 999) and the host CLI (owner) can write.
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
   try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
+
+  // Supervisor path: when the wizard is spawned by the supervisor via the
+  // control plane, SETUP_TOKEN is injected into the child env. The
+  // supervisor also hands the same token back to the CLI caller, so the
+  // setup-server MUST honour it — otherwise the wizard would generate a
+  // fresh token and the CLI would end up with an authentication mismatch.
+  // We write it to the token file so the first-run path (which reads the
+  // file) stays consistent.
+  const injected = (process.env.SETUP_TOKEN || '').trim();
+  if (injected) {
+    try { fs.writeFileSync(SETUP_TOKEN_FILE, injected, { mode: 0o666 }); } catch { /* best effort */ }
+    return injected;
+  }
+
   try {
     const existing = fs.readFileSync(SETUP_TOKEN_FILE, 'utf8').trim();
     if (existing) return existing;

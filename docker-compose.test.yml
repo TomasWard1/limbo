@@ -25,12 +25,16 @@ services:
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:18900:18900"
+      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
+      - "127.0.0.1:18901:18901"
     volumes:
       - limbo-e2e-data:/data
       - /tmp/limbo-e2e-test/vault:/data/vault
       - /tmp/limbo-e2e-test/openclaw-state:/home/limbo/.openclaw
       - /tmp/limbo-e2e-test/config:/data/config
       - /tmp/limbo-e2e-test/flags:/flags
+      # Control plane socket dir — host CLI talks to the supervisor here.
+      - /tmp/limbo-e2e-test/control:/data/control
     env_file:
       - /tmp/limbo-e2e-test/config/.env
     environment:
