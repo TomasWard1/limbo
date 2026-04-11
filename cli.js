@@ -1310,11 +1310,58 @@ async function ensureCloudflareLogin() {
 // Tunnel hostnames are always setup-<slug>.heylimbo.com
 const CF_TUNNEL_BASE_DOMAIN = 'heylimbo.com';
 
+// Pure helpers for tunnel setup (extracted for unit testing)
+const {
+  listStaleLimboTunnels,
+  waitForDnsResolution,
+  buildSetupInstructions,
+} = require('./lib/cf-tunnel');
+
+// Unified side-effectful sweep: find and delete any abandoned limbo-setup-*
+// tunnels on the user's Cloudflare account. Single source of truth for both
+// the pre-flight sweep inside createNamedCfTunnel (where we pass the current
+// tunnel name so we don't nuke the one we're about to use) and the startup
+// cleanup in cmdStart (where there is no "current" tunnel — pass null).
+//
+// Uses `cloudflared tunnel list -o json` as the source of truth rather than
+// the CF_TUNNEL_CONFIG metadata file, so we also catch tunnels that leaked
+// because a previous run crashed before writing metadata.
+//
+// Best-effort only. Never throws, never blocks the main flow. Silently no-ops
+// if cloudflared is missing, the user isn't logged in, or the list command
+// returns garbage.
+function sweepStaleLimboTunnels(currentTunnelName = null) {
+  try {
+    const listResult = spawnSync('cloudflared', ['tunnel', 'list', '-o', 'json'], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+    // listResult.error is set if spawnSync itself failed (PATH issue, etc).
+    // Non-zero exit is tolerated: listStaleLimboTunnels is tolerant of garbage
+    // stdout (returns []) so there's nothing to do either way.
+    if (listResult.error) return;
+    const stale = listStaleLimboTunnels(listResult.stdout, currentTunnelName);
+    for (const t of stale) {
+      // Per-tunnel try so one bad delete doesn't abort the rest of the sweep.
+      try {
+        spawnSync('cloudflared', ['tunnel', 'cleanup', t.name], { stdio: 'pipe' });
+        spawnSync('cloudflared', ['tunnel', 'delete', '-f', t.name], { stdio: 'pipe' });
+      } catch { /* advisory — move on */ }
+    }
+  } catch { /* best-effort; never block the main flow */ }
+}
+
 // Create a named CF tunnel using cloudflared CLI (requires cert.pem from login)
 async function createNamedCfTunnel(port) {
   const slug = crypto.randomBytes(4).toString('hex').slice(0, 7);
   const tunnelName = 'limbo-setup-' + slug;
   const hostname = 'setup-' + slug + '.' + CF_TUNNEL_BASE_DOMAIN;
+
+  // Pre-flight sweep: clean up any stale limbo-setup-* tunnels from prior
+  // failed runs so they don't pile up on the user's Cloudflare account.
+  // Exclude the tunnel we're about to create (tunnelName) just in case there
+  // was a name collision against a leftover record.
+  sweepStaleLimboTunnels(tunnelName);
 
   try {
     // 1. Create tunnel
@@ -1396,24 +1443,37 @@ async function createNamedCfTunnel(port) {
       return null;
     }
 
-    // Wait for DNS propagation (Chromium caches negative DNS lookups aggressively)
-    const https = require('https');
-    for (let i = 0; i < 15; i++) {
-      spinnerWrite('Waiting for DNS (' + (i + 1) + 's)...');
-      try {
-        await new Promise((resolve, reject) => {
-          const req = https.get('https://' + hostname + '/healthz', (res) => {
-            resolve(res.statusCode);
-          });
-          req.on('error', reject);
-          req.setTimeout(3000, () => { req.destroy(); reject(new Error('timeout')); });
-        });
-        break; // DNS resolved and tunnel responded
-      } catch {
-        sleep(1000);
-      }
-    }
+    // Wait for DNS propagation (Chromium caches negative DNS lookups aggressively).
+    // This is BLOCKING: if the hostname never resolves — most commonly because
+    // the user's cert.pem does not include the target zone so the DNS record
+    // landed in the wrong zone — we must cleanup and return null so the caller
+    // falls back to the quick tunnel. Otherwise the user would see a dead URL
+    // like "https://setup-xxx.heylimbo.com" that NXDOMAINs in the browser.
+    spinnerWrite('Waiting for DNS...');
+    const resolveFn = (host) => new Promise((resolve, reject) => {
+      const req = https.get('https://' + host + '/healthz', (res) => {
+        // Any HTTP status means DNS resolved and the tunnel is routing.
+        resolve(res.statusCode > 0);
+      });
+      req.on('error', reject);
+      req.setTimeout(3000, () => { req.destroy(); reject(new Error('timeout')); });
+    });
+    const dnsOk = await waitForDnsResolution({
+      hostname,
+      attempts: 15,
+      intervalMs: 1000,
+      resolveFn,
+    });
     spinnerClear();
+
+    if (!dnsOk) {
+      warn('Cloudflare tunnel came up but the hostname never resolved in DNS.');
+      warn('This usually means the cert.pem does not include the target zone. Falling back to quick tunnel.');
+      try { tunnelProc.kill(); } catch {}
+      spawnSync('cloudflared', ['tunnel', 'cleanup', tunnelName], { stdio: 'pipe' });
+      spawnSync('cloudflared', ['tunnel', 'delete', '-f', tunnelName], { stdio: 'pipe' });
+      return null;
+    }
 
     // Save metadata for cleanup
     const meta = { tunnelName, tunnelId, hostname, type: 'cloudflare-named' };
@@ -1544,18 +1604,22 @@ function installWizardCleanupHandlers(client, session) {
   };
 }
 
-// Clean up leftover CF tunnels from previous runs
+// Clean up leftover CF tunnels from previous runs.
+//
+// Delegates to the unified sweepStaleLimboTunnels() helper — the list from
+// `cloudflared tunnel list -o json` is the source of truth, not the local
+// CF_TUNNEL_CONFIG metadata file (which may be missing if a previous run
+// crashed before writing it, or stale if multiple tunnels leaked).
+//
+// Called at the top of cmdStart(). Also clears local tunnel-config /
+// tunnel-cloudflared.yml files so stale metadata doesn't linger on disk.
 function cleanupCfTunnel() {
-  try {
-    const meta = JSON.parse(fs.readFileSync(CF_TUNNEL_CONFIG, 'utf8'));
-    if (meta.tunnelName) {
-      spawnSync('cloudflared', ['tunnel', 'cleanup', meta.tunnelName], { stdio: 'pipe' });
-      spawnSync('cloudflared', ['tunnel', 'delete', '-f', meta.tunnelName], { stdio: 'pipe' });
-    }
-    fs.unlinkSync(CF_TUNNEL_CONFIG);
-    const tunnelConfig = path.join(LIMBO_DIR, 'tunnel-cloudflared.yml');
-    try { fs.unlinkSync(tunnelConfig); } catch {}
-  } catch {}
+  sweepStaleLimboTunnels(null);
+  // Best-effort: remove local metadata/config files so they don't linger.
+  // The sweep above already deleted the remote tunnels — these files are
+  // only debugging artifacts at this point.
+  try { fs.unlinkSync(CF_TUNNEL_CONFIG); } catch {}
+  try { fs.unlinkSync(path.join(LIMBO_DIR, 'tunnel-cloudflared.yml')); } catch {}
 }
 
 // Read a single env var from ~/.limbo/.env
@@ -1941,7 +2005,10 @@ ${c.green}${c.bold}║            Setup wizard is ready!                      �
 ${c.green}${c.bold}╚════════════════════════════════════════════════════════╝${c.reset}
 `);
 
-  if (tunnel) {
+  if (tunnel && !isSSH) {
+    // When isSSH is true, buildSetupInstructions() below already prints the
+    // public URL (with token) as part of the SSH forwarding block, so skip
+    // this line to avoid duplicating it.
     const tunnelUrl = token ? `${tunnel.url}/?token=${token}` : tunnel.url;
     console.log(`  ${c.green}Public URL (works from any browser):${c.reset}
   ${c.cyan}${c.bold}${tunnelUrl}${c.reset}
@@ -1953,11 +2020,17 @@ ${c.green}${c.bold}╚═══════════════════�
     const sshParts = (process.env.SSH_CONNECTION || '').split(' ');
     const serverHost = sshParts[2] || 'your-server';
     const sshUser = process.env.USER || 'user';
-    console.log(`  ${c.green}SSH port forwarding (recommended):${c.reset}
-  Run this in a ${c.bold}new terminal${c.reset} on your computer:
-  ${c.yellow}ssh -L ${PORT}:localhost:${PORT} ${sshUser}@${serverHost}${c.reset}
-  Then open: ${c.cyan}${c.bold}${localUrl}${c.reset}
-`);
+    // Render via the shared helper so the instructions include an alternate
+    // local port (port + 1000) when the default is already in use on the
+    // user's computer. The helper output is plain text; we still print it
+    // through console.log inside the wizard banner.
+    const instructions = buildSetupInstructions({
+      url: tunnel ? tunnel.url : `http://127.0.0.1:${PORT}`,
+      sshHost: `${sshUser}@${serverHost}`,
+      port: PORT,
+      token,
+    });
+    console.log(instructions + '\n');
   }
 
   if (!tunnel && !isSSH) {
