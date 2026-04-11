@@ -2352,13 +2352,11 @@ async function cmdSwitchBrain() {
     die('No existing configuration found. Run `limbo start` first to set up.');
   }
 
-  // Resolve port from existing config before generating compose file
+  // Resolve port from existing config
   if (existingEnv.LIMBO_PORT) {
     const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
     if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
   }
-
-  ensureComposeFile(false);
 
   const lang = existingEnv.CLI_LANGUAGE || 'en';
   const currentProvider = existingEnv.MODEL_PROVIDER || 'unknown';
@@ -2367,42 +2365,77 @@ async function cmdSwitchBrain() {
   header(lang === 'es' ? 'Cambiar Proveedor' : 'Switch Provider');
   console.log(`  ${c.dim}${lang === 'es' ? 'Proveedor actual' : 'Current provider'}: ${c.reset}${c.bold}${currentProvider}${c.reset} (${currentModel})\n`);
 
-  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
-  const cleaned = envContent
-    .replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '')
-    .replace(/^AUTH_MODE=.*\n?/gm, '')
-    .replace(/^MODEL_PROVIDER=.*\n?/gm, '')
-    .replace(/^MODEL_NAME=.*\n?/gm, '');
-  safeWriteEnvFile(cleaned + 'SWITCH_BRAIN_MODE=true\n');
+  // ── New-world switch-brain flow ──────────────────────────────────────
+  // Talks to the container's wizard supervisor over the bind-mounted Unix
+  // socket. No docker rebuild, no force-recreate, no OpenClaw restart —
+  // the setup-server runs as a sibling process to OpenClaw inside the
+  // container, and OpenClaw hot-reloads its config from disk when the
+  // wizard writes the new MODEL_PROVIDER / MODEL_NAME / LLM_API_KEY.
+  const { createControlClient } = require('./lib/control-client');
+  const client = createControlClient({ socketPath: CONTROL_SOCKET });
 
-  pullOrBuildImage(lang);
-  ensureVolumePermissions();
-
-  log(lang === 'es' ? 'Iniciando wizard de cambio de proveedor...' : 'Starting provider switch wizard...');
-  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
-  if (upResult.status !== 0) {
-    process.stderr.write(upResult.stderr || '');
-    die('Container failed to start. Run `limbo logs` to investigate.');
+  try {
+    await client.health();
+  } catch (err) {
+    die(
+      `Supervisor not reachable at ${CONTROL_SOCKET}.\n` +
+      `Is the container running? Run 'limbo start' first.\n` +
+      `(error: ${err.message})`
+    );
   }
 
-  const wizardUrl = extractWizardUrl();
+  log(lang === 'es' ? 'Solicitando wizard de cambio de proveedor...' : 'Requesting provider switch wizard session...');
+  let session;
+  try {
+    session = await client.requestWizard({
+      feature: 'switch-brain',
+      timeoutMs: 15 * 60 * 1000, // 15 minutes
+    });
+  } catch (err) {
+    die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
+  }
+
+  // The wizard listens on session.port (PORT + 1) inside the container,
+  // exposed on the host via the compose port mapping.
+  const wizardUrl = `http://127.0.0.1:${session.port}/?token=${session.token}`;
 
   let tunnel = null;
   if (isServerEnvironment() || process.argv.includes('--tunnel')) {
-    tunnel = await createSetupTunnel(PORT);
+    tunnel = await createSetupTunnel(session.port);
   }
 
-  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
-  if (!wizardUrl) {
-    warn('Could not extract setup token from container logs.');
-  }
-  printWizardUrl(displayUrl, tunnel);
+  printWizardUrl(wizardUrl, tunnel);
 
+  // Poll the supervisor until the wizard session reaches a terminal state.
   try {
-    const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
-    const final = envAfter.replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '');
-    if (final !== envAfter) safeWriteEnvFile(final);
-  } catch {}
+    while (true) {
+      await new Promise((r) => setTimeout(r, 2000));
+      let status;
+      try {
+        status = await client.getWizard(session.id);
+      } catch (err) {
+        // 404 after completion = session was reaped; treat as done.
+        if (err.status === 404) {
+          ok(lang === 'es' ? 'Proveedor actualizado.' : 'Provider updated.');
+          return;
+        }
+        throw err;
+      }
+      if (status.status === 'done') {
+        ok(lang === 'es' ? 'Proveedor actualizado.' : 'Provider updated.');
+        return;
+      }
+      if (status.status === 'error') {
+        die(`Wizard failed: ${status.error || 'unknown error'}`);
+      }
+      if (status.status === 'timeout') {
+        die(lang === 'es' ? 'El wizard expiró.' : 'Wizard timed out.');
+      }
+      // still pending/ready/active → keep polling
+    }
+  } finally {
+    if (tunnel) teardownSetupTunnel(tunnel);
+  }
 }
 
 async function cmdConnectCalendar() {

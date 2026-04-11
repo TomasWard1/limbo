@@ -91,6 +91,21 @@ test('start: injects SETUP_TOKEN, LIMBO_PORT, and feature mode env vars', async 
   assert.equal(env.CONNECT_CALENDAR_MODE, 'true');
 });
 
+test('start: switch-brain feature sets SWITCH_BRAIN_MODE=true and NO CONNECT_*_MODE', async () => {
+  const { spawner, calls } = makeSpawnerHarness();
+  await spawner.start({ sessionId: 'sess_sb', feature: 'switch-brain', port: 18901, token: 'tok_sb' });
+  const env = calls[0].options.env;
+  assert.equal(env.SWITCH_BRAIN_MODE, 'true', 'switch-brain feature must set SWITCH_BRAIN_MODE=true');
+  assert.equal(env.SETUP_TOKEN, 'tok_sb');
+  assert.equal(env.LIMBO_PORT, '18901');
+  // Regression: must not accidentally leak the calendar mode flag into a
+  // switch-brain child's env — the setup-server branches on the presence of
+  // each flag, so cross-contamination would send the wrong wizard UI.
+  assert.equal(env.CONNECT_CALENDAR_MODE, undefined);
+  assert.equal(env.CONNECT_GMAIL_MODE, undefined);
+  assert.equal(env.CONNECT_DRIVE_MODE, undefined);
+});
+
 test('start: inherits process.env alongside the injected vars', async () => {
   const { spawner, calls } = makeSpawnerHarness();
   await spawner.start({
