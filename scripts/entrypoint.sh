@@ -359,9 +359,11 @@ fi
 
 # ── Start wizard supervisor (manages OpenClaw + on-demand wizards) ──────────
 # The supervisor replaces `exec openclaw gateway`. It launches OpenClaw as a
-# child process and exposes a Unix-socket control plane that the host CLI
+# child process and exposes a TCP control plane (127.0.0.1:LIMBO_PORT+2 inside
+# the container, published via docker-compose port mapping) that the host CLI
 # uses to request wizard sessions (connect-calendar, switch-brain, etc.)
 # without forcing a container rebuild or recreate.
-mkdir -p /data/control
-log "INFO  Starting wizard supervisor (control socket: /data/control/supervisor.sock)"
+LIMBO_CONTROL_PORT="${LIMBO_CONTROL_PORT:-$((LIMBO_PORT + 2))}"
+export LIMBO_CONTROL_PORT
+log "INFO  Starting wizard supervisor (control plane: 127.0.0.1:${LIMBO_CONTROL_PORT})"
 exec node /app/scripts/supervisor.js

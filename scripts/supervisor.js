@@ -46,7 +46,14 @@ function log(level, msg) {
 async function main() {
   const supervisor = createSupervisor({
     controlPort: CONTROL_PORT,
-    controlHost: '127.0.0.1',
+    // Bind to 0.0.0.0 inside the container, NOT 127.0.0.1. Docker's port
+    // mapping routes host → container via eth0, not via the container's
+    // loopback interface — a server bound to the container's 127.0.0.1
+    // would never receive the NAT'd traffic ("Empty reply from server").
+    // The security boundary is preserved by the compose `ports:` entry
+    // `127.0.0.1:18902:18902` which only publishes the port on the HOST's
+    // loopback, so only processes on your machine can reach it.
+    controlHost: '0.0.0.0',
     nodePath: process.execPath,
     setupServerPath: SETUP_SERVER_PATH,
     wizardPortBase: WIZARD_PORT_BASE,
