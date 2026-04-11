@@ -95,6 +95,13 @@ COPY --chown=limbo:limbo openclaw.json.template ./openclaw.json.template
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Wizard supervisor (container main process after entrypoint bootstrap) +
+# standalone regen helper used by both the entrypoint and the setup-server
+# to rewrite openclaw.json on boot and after wizard completion.
+COPY --chown=limbo:limbo scripts/supervisor.js /app/scripts/supervisor.js
+COPY --chown=limbo:limbo scripts/regen-openclaw-config.sh /app/scripts/regen-openclaw-config.sh
+RUN chmod +x /app/scripts/regen-openclaw-config.sh /app/scripts/supervisor.js
+
 # Pre-create dirs with correct ownership for image-layer defaults
 RUN mkdir -p /data && chown limbo:limbo /data
 RUN mkdir -p /flags && chown limbo:limbo /flags

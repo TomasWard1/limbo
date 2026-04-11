@@ -27,6 +27,11 @@ const FLAGS_DIR = path.join(LIMBO_DIR, 'flags');
 const CONFIG_DIR = path.join(LIMBO_DIR, 'config');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const ENV_BACKUP_FILE = path.join(CONFIG_DIR, '.env.bak');
+// Control plane port offset — supervisor listens on LIMBO_PORT + 2 inside
+// the container, published to the host loopback via Docker port mapping.
+// The offset (not an absolute number) means multi-instance installs on
+// custom ports don't collide.
+const CONTROL_PORT_OFFSET = 2;
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const DEFAULT_REGISTRY = 'registry.gitlab.com/tomas209/limbo';
 const REGISTRY_IMAGE = process.env.LIMBO_REGISTRY || DEFAULT_REGISTRY;
@@ -184,6 +189,10 @@ function composeContent() {
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
+      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
+      - "127.0.0.1:${PORT + 1}:${PORT + 1}"
+      # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
+      - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
@@ -230,6 +239,10 @@ function composeContentHardened() {
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
+      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
+      - "127.0.0.1:${PORT + 1}:${PORT + 1}"
+      # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
+      - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
@@ -1487,6 +1500,50 @@ function teardownSetupTunnel(tunnel) {
   if (tunnel.logFile) try { fs.unlinkSync(tunnel.logFile); } catch {}
 }
 
+// Install SIGINT / SIGTERM handlers that cancel an in-flight wizard session
+// on the container before this process exits. Without this, killing the
+// CLI (Ctrl+C, shell exit, etc.) leaves an orphan setup-server child
+// running inside the container — LIMBO_PORT+1 stays bound, and the next
+// wizard attempt collides on the port. Returns an `uninstall` function the
+// caller must run on graceful completion so we do not double-cancel.
+//
+// The handler is intentionally synchronous-ish: Node gives us a few
+// hundred ms between a signal and process death, so the best we can do is
+// fire the DELETE request and hope it reaches the container. The CLI exit
+// does not wait on it, but the supervisor's DELETE path is O(ms) on
+// localhost so the vast majority of signals land before process teardown.
+function installWizardCleanupHandlers(client, session) {
+  let cancelled = false;
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    // Fire-and-forget — we have at most ~100ms before Node kills us.
+    // The DELETE is idempotent on the supervisor side (already-terminal
+    // sessions just return 404, which we ignore).
+    try {
+      client.cancelWizard(session.id).catch(() => {});
+    } catch { /* ignore */ }
+  };
+
+  const onExit = (signal) => {
+    cancel();
+    // Re-raise the default action so the shell sees the usual exit code.
+    process.exit(signal === 'SIGINT' ? 130 : 143);
+  };
+  const sigintHandler = () => onExit('SIGINT');
+  const sigtermHandler = () => onExit('SIGTERM');
+  process.once('SIGINT', sigintHandler);
+  process.once('SIGTERM', sigtermHandler);
+
+  return {
+    uninstall() {
+      process.removeListener('SIGINT', sigintHandler);
+      process.removeListener('SIGTERM', sigtermHandler);
+    },
+    cancel,
+  };
+}
+
 // Clean up leftover CF tunnels from previous runs
 function cleanupCfTunnel() {
   try {
@@ -2342,13 +2399,11 @@ async function cmdSwitchBrain() {
     die('No existing configuration found. Run `limbo start` first to set up.');
   }
 
-  // Resolve port from existing config before generating compose file
+  // Resolve port from existing config
   if (existingEnv.LIMBO_PORT) {
     const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
     if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
   }
-
-  ensureComposeFile(false);
 
   const lang = existingEnv.CLI_LANGUAGE || 'en';
   const currentProvider = existingEnv.MODEL_PROVIDER || 'unknown';
@@ -2357,42 +2412,92 @@ async function cmdSwitchBrain() {
   header(lang === 'es' ? 'Cambiar Proveedor' : 'Switch Provider');
   console.log(`  ${c.dim}${lang === 'es' ? 'Proveedor actual' : 'Current provider'}: ${c.reset}${c.bold}${currentProvider}${c.reset} (${currentModel})\n`);
 
-  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
-  const cleaned = envContent
-    .replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '')
-    .replace(/^AUTH_MODE=.*\n?/gm, '')
-    .replace(/^MODEL_PROVIDER=.*\n?/gm, '')
-    .replace(/^MODEL_NAME=.*\n?/gm, '');
-  safeWriteEnvFile(cleaned + 'SWITCH_BRAIN_MODE=true\n');
+  // ── New-world switch-brain flow ──────────────────────────────────────
+  // Talks to the container's wizard supervisor over the TCP control plane
+  // (127.0.0.1:${PORT+2}). No docker rebuild, no force-recreate, no
+  // OpenClaw restart — the setup-server runs as a sibling process to
+  // OpenClaw inside the container, and OpenClaw hot-reloads its config
+  // from disk when the wizard writes the new MODEL_PROVIDER /
+  // MODEL_NAME / LLM_API_KEY.
+  const { createControlClient } = require('./lib/control-client');
+  const controlPort = PORT + CONTROL_PORT_OFFSET;
+  const client = createControlClient({ port: controlPort });
 
-  pullOrBuildImage(lang);
-  ensureVolumePermissions();
-
-  log(lang === 'es' ? 'Iniciando wizard de cambio de proveedor...' : 'Starting provider switch wizard...');
-  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
-  if (upResult.status !== 0) {
-    process.stderr.write(upResult.stderr || '');
-    die('Container failed to start. Run `limbo logs` to investigate.');
+  try {
+    await client.health();
+  } catch (err) {
+    die(
+      `Supervisor not reachable at 127.0.0.1:${controlPort}.\n` +
+      `Is the container running? Run 'limbo start' first.\n` +
+      `(error: ${err.message})`
+    );
   }
 
-  const wizardUrl = extractWizardUrl();
+  log(lang === 'es' ? 'Solicitando wizard de cambio de proveedor...' : 'Requesting provider switch wizard session...');
+  let session;
+  try {
+    session = await client.requestWizard({
+      feature: 'switch-brain',
+      timeoutMs: 15 * 60 * 1000, // 15 minutes
+    });
+  } catch (err) {
+    if (err.status === 409 && err.body && err.body.activeSessionId) {
+      die(
+        `Another wizard is already active (session ${err.body.activeSessionId}, feature ${err.body.activeSessionFeature || '?'}).\n` +
+        `Complete it in the browser, or cancel it by restarting the container:\n` +
+        `  limbo stop && limbo start`
+      );
+    }
+    die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
+  }
+
+  // Install SIGINT/SIGTERM handlers so Ctrl+C during the wizard cancels
+  // the session on the supervisor and does not orphan the setup-server
+  // child inside the container.
+  const cleanup = installWizardCleanupHandlers(client, session);
+
+  // The wizard listens on session.port (PORT + 1) inside the container,
+  // exposed on the host via the compose port mapping.
+  const wizardUrl = `http://127.0.0.1:${session.port}/?token=${session.token}`;
 
   let tunnel = null;
   if (isServerEnvironment() || process.argv.includes('--tunnel')) {
-    tunnel = await createSetupTunnel(PORT);
+    tunnel = await createSetupTunnel(session.port);
   }
 
-  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
-  if (!wizardUrl) {
-    warn('Could not extract setup token from container logs.');
-  }
-  printWizardUrl(displayUrl, tunnel);
+  printWizardUrl(wizardUrl, tunnel);
 
+  // Poll the supervisor until the wizard session reaches a terminal state.
   try {
-    const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
-    const final = envAfter.replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '');
-    if (final !== envAfter) safeWriteEnvFile(final);
-  } catch {}
+    while (true) {
+      await new Promise((r) => setTimeout(r, 2000));
+      let status;
+      try {
+        status = await client.getWizard(session.id);
+      } catch (err) {
+        // 404 after completion = session was reaped; treat as done.
+        if (err.status === 404) {
+          ok(lang === 'es' ? 'Proveedor actualizado.' : 'Provider updated.');
+          return;
+        }
+        throw err;
+      }
+      if (status.status === 'done') {
+        ok(lang === 'es' ? 'Proveedor actualizado.' : 'Provider updated.');
+        return;
+      }
+      if (status.status === 'error') {
+        die(`Wizard failed: ${status.error || 'unknown error'}`);
+      }
+      if (status.status === 'timeout') {
+        die(lang === 'es' ? 'El wizard expiró.' : 'Wizard timed out.');
+      }
+      // still pending/ready/active → keep polling
+    }
+  } finally {
+    cleanup.uninstall();
+    if (tunnel) teardownSetupTunnel(tunnel);
+  }
 }
 
 async function cmdConnectCalendar() {
@@ -2412,44 +2517,96 @@ async function cmdConnectCalendar() {
     if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
   }
 
-  ensureComposeFile(false);
-
   const lang = existingEnv.CLI_LANGUAGE || 'en';
   header(lang === 'es' ? 'Conectar Google Calendar' : 'Connect Google Calendar');
 
-  // Write CONNECT_CALENDAR_MODE to .env (preserve existing config)
-  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
-  const cleaned = envContent.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-  safeWriteEnvFile(cleaned + 'CONNECT_CALENDAR_MODE=true\n');
+  // ── New-world connect-calendar flow ──────────────────────────────────
+  // Talks to the container's wizard supervisor over the TCP control plane
+  // (127.0.0.1:${PORT+2}). No docker rebuild, no force-recreate, no
+  // OpenClaw restart — the setup-server runs as a sibling process to
+  // OpenClaw inside the container, and OpenClaw hot-reloads its config
+  // from disk when the wizard writes credentials.
+  const { createControlClient } = require('./lib/control-client');
+  const controlPort = PORT + CONTROL_PORT_OFFSET;
+  const client = createControlClient({ port: controlPort });
 
-  pullOrBuildImage(lang);
-  ensureVolumePermissions();
-
-  log(lang === 'es' ? 'Iniciando wizard de Google Calendar...' : 'Starting Google Calendar setup wizard...');
-  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
-  if (upResult.status !== 0) {
-    process.stderr.write(upResult.stderr || '');
-    die('Container failed to start. Run `limbo logs` to investigate.');
+  try {
+    await client.health();
+  } catch (err) {
+    die(
+      `Supervisor not reachable at 127.0.0.1:${controlPort}.\n` +
+      `Is the container running? Run 'limbo start' first.\n` +
+      `(error: ${err.message})`
+    );
   }
 
-  const wizardUrl = extractWizardUrl();
+  log(lang === 'es' ? 'Solicitando wizard de Google Calendar...' : 'Requesting Google Calendar wizard session...');
+  let session;
+  try {
+    session = await client.requestWizard({
+      feature: 'calendar',
+      timeoutMs: 15 * 60 * 1000, // 15 minutes
+    });
+  } catch (err) {
+    if (err.status === 409 && err.body && err.body.activeSessionId) {
+      die(
+        `Another wizard is already active (session ${err.body.activeSessionId}, feature ${err.body.activeSessionFeature || '?'}).\n` +
+        `Complete it in the browser, or cancel it by restarting the container:\n` +
+        `  limbo stop && limbo start`
+      );
+    }
+    die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
+  }
+
+  // Install SIGINT/SIGTERM handlers so Ctrl+C during the wizard cancels
+  // the session on the supervisor and does not orphan the setup-server
+  // child inside the container.
+  const cleanup = installWizardCleanupHandlers(client, session);
+
+  // The wizard listens on session.port (PORT + 1) inside the container,
+  // exposed on the host via the compose port mapping.
+  const wizardUrl = `http://127.0.0.1:${session.port}/?token=${session.token}`;
 
   let tunnel = null;
   if (isServerEnvironment() || process.argv.includes('--tunnel')) {
-    tunnel = await createSetupTunnel(PORT);
+    tunnel = await createSetupTunnel(session.port);
   }
 
-  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
-  if (!wizardUrl) {
-    warn('Could not extract setup token from container logs.');
-  }
-  printWizardUrl(displayUrl, tunnel);
+  printWizardUrl(wizardUrl, tunnel);
 
+  // Poll the supervisor until the wizard session reaches a terminal state.
   try {
-    const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
-    const final = envAfter.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-    if (final !== envAfter) safeWriteEnvFile(final);
-  } catch {}
+    while (true) {
+      await new Promise((r) => setTimeout(r, 2000));
+      let status;
+      try {
+        status = await client.getWizard(session.id);
+      } catch (err) {
+        // 404 after completion = session was reaped; treat as done.
+        if (err.status === 404) {
+          ok(lang === 'es' ? 'Google Calendar conectado.' : 'Google Calendar connected.');
+          return;
+        }
+        throw err;
+      }
+      if (status.status === 'done') {
+        ok(lang === 'es' ? 'Google Calendar conectado.' : 'Google Calendar connected.');
+        return;
+      }
+      if (status.status === 'error') {
+        die(`Wizard failed: ${status.error || 'unknown error'}`);
+      }
+      if (status.status === 'timeout') {
+        die(lang === 'es' ? 'El wizard expiró.' : 'Wizard timed out.');
+      }
+      // still pending/ready/active → keep polling
+    }
+  } finally {
+    // Remove signal handlers so a normal completion does not cancel the
+    // session on the way out (it is already terminal by this point).
+    cleanup.uninstall();
+    if (tunnel) teardownSetupTunnel(tunnel);
+  }
 }
 
 function cmdHelp() {

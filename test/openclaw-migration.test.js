@@ -98,15 +98,17 @@ test('openclaw.json.template does NOT use invalid OpenClaw config keys', () => {
 });
 
 // Regression: entrypoint injected "transcription" and "webSearch" as top-level keys
-test('entrypoint.sh does NOT inject invalid top-level config keys', () => {
-  const ep = read('scripts/entrypoint.sh');
-  // These are NOT valid OpenClaw top-level keys
+// NOTE: the inline injection blocks moved from entrypoint.sh into
+// scripts/regen-openclaw-config.sh (shared by entrypoint boot and post-wizard
+// hot reload). These regression checks now assert against the regen script.
+test('regen script does NOT inject invalid top-level config keys', () => {
+  const ep = read('scripts/regen-openclaw-config.sh');
   assert.ok(!ep.includes('cfg.transcription'), 'Must not inject transcription as top-level key');
   assert.ok(!ep.includes('cfg.webSearch'), 'Must not inject webSearch as top-level key');
 });
 
-test('entrypoint.sh injects web search under tools.web.search', () => {
-  const ep = read('scripts/entrypoint.sh');
+test('regen script injects web search under tools.web.search', () => {
+  const ep = read('scripts/regen-openclaw-config.sh');
   assert.ok(ep.includes('tools.web.search') || ep.includes("cfg.tools.web"),
     'Web search config must go under tools.web.search, not top-level webSearch');
 });
@@ -131,9 +133,38 @@ test('openclaw.json.template gateway.bind uses valid enum value', () => {
 
 // ─── 3. Entrypoint uses OpenClaw ────────────────────────────────────────────
 
-test('entrypoint.sh starts openclaw gateway', () => {
+test('entrypoint.sh hands off to the wizard supervisor (which launches OpenClaw)', () => {
   const ep = read('scripts/entrypoint.sh');
-  assert.ok(ep.includes('exec openclaw gateway'));
+  // Old: exec openclaw gateway. New: exec node /app/scripts/supervisor.js,
+  // which in turn spawns openclaw as a child so that the control plane can
+  // keep running alongside.
+  assert.ok(ep.includes('exec node /app/scripts/supervisor.js'),
+    'entrypoint must hand off to the supervisor');
+  const supervisor = read('scripts/supervisor.js');
+  assert.ok(supervisor.includes("OPENCLAW_BIN") && supervisor.includes("'gateway'"),
+    'supervisor script must launch the openclaw gateway as its managed child');
+});
+
+// Regression: OpenClaw's built-in config reloader does fork+exec self-restart
+// on any config path not classified as hot-reloadable (notably mcp.servers.*.
+// env.*, which is exactly our connect-calendar / switch-brain code path). The
+// self-spawn races against the supervisor's own respawn logic and collides on
+// LIMBO_PORT. OPENCLAW_NO_RESPAWN=1 switches OpenClaw to in-process restart
+// (same PID, no new process, supervisor never sees an exit) — see
+// openclaw/dist/gateway-cli-*.js restartGatewayProcessWithFreshPid().
+// If this ever disappears, expect port-18900 EADDRINUSE crash loops on every
+// wizard that touches MCP env vars.
+test('supervisor.js sets OPENCLAW_NO_RESPAWN=1 in the openclaw child env', () => {
+  const supervisor = read('scripts/supervisor.js');
+  assert.ok(supervisor.includes('OPENCLAW_NO_RESPAWN'),
+    'supervisor must set OPENCLAW_NO_RESPAWN so OpenClaw does in-process restarts');
+  // It must be set in the openclaw child's env specifically, not just
+  // logged about. The spawn() call must spread process.env AND add
+  // OPENCLAW_NO_RESPAWN: '1' so the openclaw process sees it.
+  assert.ok(
+    /OPENCLAW_NO_RESPAWN\s*:\s*['"]1['"]/.test(supervisor),
+    'OPENCLAW_NO_RESPAWN must be set to "1" in the openclaw child env'
+  );
 });
 
 test('entrypoint.sh uses OPENCLAW_STATE_DIR and OPENCLAW_CONFIG_PATH', () => {
@@ -150,16 +181,16 @@ test('entrypoint.sh does not reference zeroclaw binary', () => {
   assert.ok(!nonCommentContent.includes('ZEROCLAW_'), 'Entrypoint should not use ZEROCLAW_ env vars');
 });
 
-test('entrypoint.sh renders openclaw.json from template via envsubst', () => {
-  const ep = read('scripts/entrypoint.sh');
-  assert.ok(ep.includes('openclaw.json.template'));
-  assert.ok(ep.includes('envsubst'));
+test('regen script renders openclaw.json from template via envsubst', () => {
+  const regen = read('scripts/regen-openclaw-config.sh');
+  assert.ok(regen.includes('openclaw.json.template') || regen.includes('OPENCLAW_CONFIG_TEMPLATE'));
+  assert.ok(regen.includes('envsubst'));
 });
 
-test('entrypoint.sh uses node -e for conditional JSON config injection', () => {
-  const ep = read('scripts/entrypoint.sh');
-  assert.ok(ep.includes('node -e'), 'Should use node for safe JSON manipulation');
-  assert.ok(ep.includes('channels.telegram'), 'Should inject telegram config');
+test('regen script uses node -e for conditional JSON config injection', () => {
+  const regen = read('scripts/regen-openclaw-config.sh');
+  assert.ok(regen.includes('node -e'), 'Should use node for safe JSON manipulation');
+  assert.ok(regen.includes('channels.telegram'), 'Should inject telegram config');
 });
 
 // ─── 4. Dockerfile references OpenClaw, not ZeroClaw ────────────────────────

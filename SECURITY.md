@@ -50,14 +50,24 @@ The agent can interact with users via messaging, access vault data through the M
 
 ## API Key Storage
 
-API keys are stored as Docker Compose secrets:
+All tokens (LLM API keys, Telegram bot token, Groq, Brave, Google OAuth, etc.) live in a single file:
 
-- **Secret files**: `~/.limbo/secrets/` with `0600` permissions (user read/write only)
-- **Mounted at runtime**: `/run/secrets/<name>` inside the container (read-only, restricted permissions)
-- **Not in environment**: Secrets are scrubbed from the process environment before the gateway starts
-- **Not in `docker inspect`**: Docker secrets don't appear in container inspect output
-- **`.env` file**: Only contains non-sensitive configuration (model provider, model name, language, etc.)
-- **Gateway auth**: OpenClaw manages its own gateway authentication internally. All secrets (API keys, bot tokens) are scrubbed from the process environment before the daemon starts
+- **Location**: `~/.limbo/config/.env` with `0600` permissions (user read/write only)
+- **Bind-mounted** into the container at `/data/config/.env` (user-owned on the host, world-writable inside because uid 999 ≠ host uid on the bind mount)
+- **Sourced at container boot**: `scripts/entrypoint.sh` runs `set -a; . /data/config/.env; set +a` before doing anything else, so all tokens are in `process.env` for any child process
+- **Automatic migration**: older installs that used `~/.limbo/secrets/*` (plain files) or `/run/secrets/*` (Docker compose secrets) get migrated into `.env` on first `limbo start` after upgrade. The legacy files are left in place for rollback; `~/.limbo/.secrets-migrated` is touched once migration succeeds so the scan is skipped on subsequent starts.
+
+Earlier versions used Docker Compose secrets (`/run/secrets/<name>`). That layer was removed in favor of `env_file:` to simplify permissions and eliminate a class of upgrade bugs where secrets existed in three parallel places at once. The effective threat model is unchanged: tokens are owner-readable, never printed to logs, never committed to the vault, and the container runs as a non-root user.
+
+## Supervisor Control Plane
+
+The `limbo connect-calendar` / `limbo switch-brain` commands talk to the running container via an HTTP control plane:
+
+- **Transport**: TCP `127.0.0.1:LIMBO_PORT+2` (default `127.0.0.1:18791`) inside the container, published via Docker port mapping
+- **Host-side bind**: `127.0.0.1:PORT:PORT` — LAN peers cannot reach the port, only local processes on the host
+- **DNS rebinding defence**: control-server rejects requests whose `Host:` header is not `127.0.0.1` / `localhost` / `::1` with 403
+- **No token auth**: the loopback bind IS the boundary. Adding a token would only differentiate same-host users from each other — not a threat vector in Limbo's single-operator model (personal laptop / dedicated VPS). Wizard sessions themselves still use per-session tokens for the actual UI.
+- **Concurrency**: only one wizard session can be live at a time (second POST returns 409). This prevents the class of port-collision bugs where two wizards fight for `LIMBO_PORT+1`.
 
 ## OpenClaw Security
 
@@ -66,7 +76,7 @@ Limbo uses OpenClaw in a **personal assistant trust model** (one trusted operato
 - `"host": "127.0.0.1"` — loopback only, no LAN exposure
 - `"allowPublicBind": false` — prevents binding to all interfaces
 - `"auth.mode": "token"` — all WebSocket clients must present a valid token
-- `"auth.tokenFile": "/run/secrets/gateway_token"` — reads auth token from Docker secret
+- `"auth.token": "<value from GATEWAY_TOKEN env>"` — the regen script injects the token directly via node (no file reads)
 - `"session.dmScope": "per-channel-peer"` — DM sessions are isolated per sender (when using Telegram)
 - `"channels.telegram.dmPolicy": "pairing"` — unknown Telegram senders must be explicitly approved
 
@@ -93,7 +103,7 @@ The MCP server applies the following protections:
 - **Prompt injection**: AI agents can be manipulated by carefully crafted input. The container sandbox limits blast radius, but agents may still misuse their available tools within the vault
 - **Vault data exposure**: Anything stored in vault notes is accessible to the agent. Do not store passwords, private keys, or other high-sensitivity secrets in notes
 - **Single trust boundary**: The container runs one agent with one set of credentials. All tools and data inside the container share the same trust level
-- **Web fetch exfiltration**: The agent can read vault notes and fetch arbitrary URLs. A successful prompt injection could theoretically exfiltrate vault data via crafted URLs. Mitigation: DM pairing limits who can trigger the bot, strong models resist injection, and API keys are stored in Docker secrets (not in the vault). Do not store high-sensitivity data in vault notes
+- **Web fetch exfiltration**: The agent can read vault notes and fetch arbitrary URLs. A successful prompt injection could theoretically exfiltrate vault data via crafted URLs. Mitigation: DM pairing limits who can trigger the bot, strong models resist injection, and API keys are stored in a 0600 `.env` file (not in the vault). Do not store high-sensitivity data in vault notes
 - **Outbound network**: The agent can reach any internet destination via `web_search`/`web_fetch`. Use `--hardened` mode for strict egress filtering (disables web_fetch)
 
 ## Reporting Vulnerabilities
