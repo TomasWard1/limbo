@@ -1500,6 +1500,50 @@ function teardownSetupTunnel(tunnel) {
   if (tunnel.logFile) try { fs.unlinkSync(tunnel.logFile); } catch {}
 }
 
+// Install SIGINT / SIGTERM handlers that cancel an in-flight wizard session
+// on the container before this process exits. Without this, killing the
+// CLI (Ctrl+C, shell exit, etc.) leaves an orphan setup-server child
+// running inside the container — LIMBO_PORT+1 stays bound, and the next
+// wizard attempt collides on the port. Returns an `uninstall` function the
+// caller must run on graceful completion so we do not double-cancel.
+//
+// The handler is intentionally synchronous-ish: Node gives us a few
+// hundred ms between a signal and process death, so the best we can do is
+// fire the DELETE request and hope it reaches the container. The CLI exit
+// does not wait on it, but the supervisor's DELETE path is O(ms) on
+// localhost so the vast majority of signals land before process teardown.
+function installWizardCleanupHandlers(client, session) {
+  let cancelled = false;
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    // Fire-and-forget — we have at most ~100ms before Node kills us.
+    // The DELETE is idempotent on the supervisor side (already-terminal
+    // sessions just return 404, which we ignore).
+    try {
+      client.cancelWizard(session.id).catch(() => {});
+    } catch { /* ignore */ }
+  };
+
+  const onExit = (signal) => {
+    cancel();
+    // Re-raise the default action so the shell sees the usual exit code.
+    process.exit(signal === 'SIGINT' ? 130 : 143);
+  };
+  const sigintHandler = () => onExit('SIGINT');
+  const sigtermHandler = () => onExit('SIGTERM');
+  process.once('SIGINT', sigintHandler);
+  process.once('SIGTERM', sigtermHandler);
+
+  return {
+    uninstall() {
+      process.removeListener('SIGINT', sigintHandler);
+      process.removeListener('SIGTERM', sigtermHandler);
+    },
+    cancel,
+  };
+}
+
 // Clean up leftover CF tunnels from previous runs
 function cleanupCfTunnel() {
   try {
@@ -2397,8 +2441,20 @@ async function cmdSwitchBrain() {
       timeoutMs: 15 * 60 * 1000, // 15 minutes
     });
   } catch (err) {
+    if (err.status === 409 && err.body && err.body.activeSessionId) {
+      die(
+        `Another wizard is already active (session ${err.body.activeSessionId}, feature ${err.body.activeSessionFeature || '?'}).\n` +
+        `Complete it in the browser, or cancel it by restarting the container:\n` +
+        `  limbo stop && limbo start`
+      );
+    }
     die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
   }
+
+  // Install SIGINT/SIGTERM handlers so Ctrl+C during the wizard cancels
+  // the session on the supervisor and does not orphan the setup-server
+  // child inside the container.
+  const cleanup = installWizardCleanupHandlers(client, session);
 
   // The wizard listens on session.port (PORT + 1) inside the container,
   // exposed on the host via the compose port mapping.
@@ -2439,6 +2495,7 @@ async function cmdSwitchBrain() {
       // still pending/ready/active → keep polling
     }
   } finally {
+    cleanup.uninstall();
     if (tunnel) teardownSetupTunnel(tunnel);
   }
 }
@@ -2491,8 +2548,20 @@ async function cmdConnectCalendar() {
       timeoutMs: 15 * 60 * 1000, // 15 minutes
     });
   } catch (err) {
+    if (err.status === 409 && err.body && err.body.activeSessionId) {
+      die(
+        `Another wizard is already active (session ${err.body.activeSessionId}, feature ${err.body.activeSessionFeature || '?'}).\n` +
+        `Complete it in the browser, or cancel it by restarting the container:\n` +
+        `  limbo stop && limbo start`
+      );
+    }
     die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
   }
+
+  // Install SIGINT/SIGTERM handlers so Ctrl+C during the wizard cancels
+  // the session on the supervisor and does not orphan the setup-server
+  // child inside the container.
+  const cleanup = installWizardCleanupHandlers(client, session);
 
   // The wizard listens on session.port (PORT + 1) inside the container,
   // exposed on the host via the compose port mapping.
@@ -2533,6 +2602,9 @@ async function cmdConnectCalendar() {
       // still pending/ready/active → keep polling
     }
   } finally {
+    // Remove signal handlers so a normal completion does not cancel the
+    // session on the way out (it is already terminal by this point).
+    cleanup.uninstall();
     if (tunnel) teardownSetupTunnel(tunnel);
   }
 }

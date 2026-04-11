@@ -90,3 +90,114 @@ describe('CLI command registration', () => {
     );
   });
 });
+
+describe('connect-calendar CLI lifecycle management', () => {
+  function extractCmdBody(src) {
+    const start = src.indexOf('async function cmdConnectCalendar(');
+    if (start === -1) return '';
+    const bodyStart = src.indexOf('{', start);
+    let depth = 0;
+    for (let i = bodyStart; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) return src.slice(bodyStart, i + 1);
+      }
+    }
+    return '';
+  }
+
+  test('cmdConnectCalendar installs SIGINT cleanup so Ctrl+C does not orphan the wizard', () => {
+    const cliSrc = fs.readFileSync(path.join(__dirname, '..', 'cli.js'), 'utf8');
+    const body = extractCmdBody(cliSrc);
+    assert.ok(body.length > 0, 'cmdConnectCalendar must be found');
+    assert.ok(
+      body.includes('installWizardCleanupHandlers'),
+      'cmdConnectCalendar must install SIGINT/SIGTERM cleanup handlers'
+    );
+    assert.ok(
+      body.includes('cleanup.uninstall'),
+      'cmdConnectCalendar must uninstall the cleanup handlers on normal completion'
+    );
+  });
+
+  test('cmdConnectCalendar handles 409 with a helpful error message', () => {
+    const cliSrc = fs.readFileSync(path.join(__dirname, '..', 'cli.js'), 'utf8');
+    const body = extractCmdBody(cliSrc);
+    assert.ok(
+      /err\.status\s*===\s*409/.test(body),
+      'cmdConnectCalendar must branch on 409 Conflict from the control plane'
+    );
+    assert.ok(
+      body.includes('already active'),
+      'cmdConnectCalendar must surface "already active" to the user'
+    );
+  });
+});
+
+describe('installWizardCleanupHandlers helper', () => {
+  const { spawnSync } = require('node:child_process');
+  const os = require('node:os');
+
+  // Black box test: spawn a child Node process that loads the helper out
+  // of cli.js source, wires a fake client, and signals itself. We assert
+  // on the side-effect (a marker file the fake cancelWizard writes).
+
+  function extractHelperSource() {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'cli.js'), 'utf8');
+    const m = src.match(/function installWizardCleanupHandlers\([^]*?\n\}\n/);
+    assert.ok(m, 'installWizardCleanupHandlers source must be findable in cli.js');
+    return m[0];
+  }
+
+  test('SIGINT fires client.cancelWizard with the active session id', () => {
+    const helperSrc = extractHelperSource();
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'limbo-cleanup-'));
+    const scriptPath = path.join(tmpDir, 'run.js');
+    const resultPath = path.join(tmpDir, 'result.txt');
+    const script = `
+${helperSrc}
+const fs = require('fs');
+const client = {
+  cancelWizard: (id) => { fs.writeFileSync(${JSON.stringify(resultPath)}, 'CANCELLED:' + id); return Promise.resolve(); },
+};
+installWizardCleanupHandlers(client, { id: 'sess-sigint-test' });
+setImmediate(() => process.kill(process.pid, 'SIGINT'));
+setInterval(() => {}, 1000);
+`;
+    fs.writeFileSync(scriptPath, script);
+    try {
+      spawnSync(process.execPath, [scriptPath], { encoding: 'utf8', timeout: 5000 });
+      assert.ok(fs.existsSync(resultPath), 'result file not found — handler did not run');
+      assert.equal(fs.readFileSync(resultPath, 'utf8'), 'CANCELLED:sess-sigint-test');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('uninstall removes the signal listener so cancel does NOT fire', () => {
+    const helperSrc = extractHelperSource();
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'limbo-cleanup-'));
+    const scriptPath = path.join(tmpDir, 'run.js');
+    const resultPath = path.join(tmpDir, 'result.txt');
+    const script = `
+${helperSrc}
+const fs = require('fs');
+const client = {
+  cancelWizard: () => { fs.writeFileSync(${JSON.stringify(resultPath)}, 'CANCELLED'); return Promise.resolve(); },
+};
+const h = installWizardCleanupHandlers(client, { id: 'sess' });
+h.uninstall();
+setImmediate(() => process.kill(process.pid, 'SIGINT'));
+setInterval(() => {}, 1000);
+`;
+    fs.writeFileSync(scriptPath, script);
+    try {
+      spawnSync(process.execPath, [scriptPath], { encoding: 'utf8', timeout: 5000 });
+      assert.equal(fs.existsSync(resultPath), false, 'uninstalled handler must not fire cancel');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});

@@ -94,6 +94,32 @@ describe('switch-brain CLI uses the control plane, not container restart', () =>
       'cmdSwitchBrain must poll the session until terminal via getWizard'
     );
   });
+
+  test('cmdSwitchBrain installs SIGINT cleanup for the wizard session', () => {
+    const cliSrc = fs.readFileSync(path.join(__dirname, '..', 'cli.js'), 'utf8');
+    const body = extractCmdSwitchBrain(cliSrc);
+    assert.ok(
+      body.includes('installWizardCleanupHandlers'),
+      'cmdSwitchBrain must install SIGINT/SIGTERM cleanup handlers so Ctrl+C cancels the session'
+    );
+    assert.ok(
+      body.includes('cleanup.uninstall'),
+      'cmdSwitchBrain must uninstall the cleanup handlers on normal completion'
+    );
+  });
+
+  test('cmdSwitchBrain handles 409 with a helpful error message', () => {
+    const cliSrc = fs.readFileSync(path.join(__dirname, '..', 'cli.js'), 'utf8');
+    const body = extractCmdSwitchBrain(cliSrc);
+    assert.ok(
+      /err\.status\s*===\s*409/.test(body),
+      'cmdSwitchBrain must branch on 409 Conflict from the control plane'
+    );
+    assert.ok(
+      body.includes('already active'),
+      'cmdSwitchBrain must surface "already active" to the user'
+    );
+  });
 });
 
 describe('CLI command registration', () => {

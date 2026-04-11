@@ -149,6 +149,106 @@ test('POST /wizard: does not call handler before validation', async () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
+// POST /wizard — concurrency guard
+// ──────────────────────────────────────────────────────────────────────────
+
+test('POST /wizard: second request while one is live returns 409 with active session id', async () => {
+  const { router } = makeRouter();
+  const first = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'calendar', timeoutMs: 900_000 },
+  });
+  assert.equal(first.status, 201);
+  assert.equal(first.body.status, 'ready');
+
+  const second = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'switch-brain', timeoutMs: 900_000 },
+  });
+  assert.equal(second.status, 409);
+  assert.match(second.body.error, /already active/i);
+  assert.equal(second.body.activeSessionId, first.body.id);
+  assert.equal(second.body.activeSessionFeature, 'calendar');
+  assert.equal(second.body.activeSessionStatus, 'ready');
+});
+
+test('POST /wizard: second request does NOT invoke handler (no spawn, no EADDRINUSE)', async () => {
+  let handlerCalls = 0;
+  const { router } = makeRouter({
+    onWizardRequested: async () => {
+      handlerCalls++;
+      return { port: 18901, token: 'tok' };
+    },
+  });
+  await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'calendar', timeoutMs: 900_000 },
+  });
+  assert.equal(handlerCalls, 1);
+
+  // Second POST must NOT trigger a second spawn — that's the whole point.
+  await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'switch-brain', timeoutMs: 900_000 },
+  });
+  assert.equal(handlerCalls, 1);
+});
+
+test('POST /wizard: after cancelling the live session, a new one can be created', async () => {
+  const { router } = makeRouter();
+  const first = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'calendar', timeoutMs: 900_000 },
+  });
+  await router.handle({ method: 'DELETE', path: `/wizard/${first.body.id}` });
+
+  const second = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'switch-brain', timeoutMs: 900_000 },
+  });
+  assert.equal(second.status, 201);
+  assert.equal(second.body.feature, 'switch-brain');
+});
+
+test('POST /wizard: after the live session terminates (done), a new one can be created', async () => {
+  const { router, store } = makeRouter();
+  const first = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'calendar', timeoutMs: 900_000 },
+  });
+  // Flip the session to a terminal state directly via the store (simulates
+  // the supervisor observing the spawner's exit and calling update()).
+  store.update(first.body.id, { status: 'done', exitCode: 0 });
+
+  const second = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'switch-brain', timeoutMs: 900_000 },
+  });
+  assert.equal(second.status, 201);
+});
+
+test('POST /wizard: timed-out session does NOT block a new request', async () => {
+  // Use the harness's advanceable clock to drive past the session's expiry.
+  const clock = makeClock(1_000_000);
+  const { router } = makeRouter({ clock });
+  const first = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'calendar', timeoutMs: 1000 },
+  });
+  assert.equal(first.status, 201);
+
+  // Move clock past the session's expiresAt — the session surfaces as
+  // 'timeout' on read, which means it's no longer in the live set.
+  clock.advance(2000);
+
+  const second = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'switch-brain', timeoutMs: 900_000 },
+  });
+  assert.equal(second.status, 201, 'timed-out session should not block new requests');
+});
+
+// ──────────────────────────────────────────────────────────────────────────
 // GET /wizard/:id
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -255,17 +355,30 @@ test('GET /health: returns 200 with ok and active session count', async () => {
 });
 
 test('GET /health: active session count reflects store state', async () => {
+  // The concurrency guard allows only one live session at a time. We
+  // still need health to report live-session presence correctly, so
+  // create-cancel-create-cancel sequences should both increment and
+  // decrement activeSessions.
   const { router } = makeRouter();
-  await router.handle({
+  const first = await router.handle({
     method: 'POST', path: '/wizard',
     body: { feature: 'calendar', timeoutMs: 900_000 },
   });
+  const mid = await router.handle({ method: 'GET', path: '/health', body: null });
+  assert.equal(mid.body.activeSessions, 1, 'one live session after first POST');
+
+  // DELETE the first, then POST another — activeSessions should land
+  // at 1 again (old session removed, new one live).
+  await router.handle({ method: 'DELETE', path: `/wizard/${first.body.id}` });
+  const afterDelete = await router.handle({ method: 'GET', path: '/health', body: null });
+  assert.equal(afterDelete.body.activeSessions, 0, 'zero live sessions after DELETE');
+
   await router.handle({
     method: 'POST', path: '/wizard',
     body: { feature: 'gmail', timeoutMs: 900_000 },
   });
-  const res = await router.handle({ method: 'GET', path: '/health', body: null });
-  assert.equal(res.body.activeSessions, 2);
+  const afterSecond = await router.handle({ method: 'GET', path: '/health', body: null });
+  assert.equal(afterSecond.body.activeSessions, 1, 'one live session after second POST');
 });
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -305,15 +418,21 @@ test('Wrong method on /health returns 405', async () => {
   assert.equal(res.status, 405);
 });
 
-test('handle is safe to call concurrently (no shared mutable request state)', async () => {
+test('handle is safe to call concurrently: concurrency guard picks exactly one winner', async () => {
+  // Before the concurrency guard, concurrent POSTs could create multiple
+  // live sessions. With the guard, exactly ONE wins (201) and the other
+  // gets 409. The router has no shared mutable request state — this
+  // still exercises that invariant because both requests run through
+  // handle() on the same router instance.
   const { router } = makeRouter();
   const [a, b] = await Promise.all([
     router.handle({ method: 'POST', path: '/wizard', body: { feature: 'calendar', timeoutMs: 900_000 } }),
     router.handle({ method: 'POST', path: '/wizard', body: { feature: 'gmail', timeoutMs: 900_000 } }),
   ]);
-  assert.equal(a.status, 201);
-  assert.equal(b.status, 201);
-  assert.notEqual(a.body.id, b.body.id);
-  assert.equal(a.body.feature, 'calendar');
-  assert.equal(b.body.feature, 'gmail');
+  const statuses = [a.status, b.status].sort();
+  assert.deepEqual(statuses, [201, 409], 'exactly one winner, exactly one rejection');
+  const winner = a.status === 201 ? a : b;
+  const loser = a.status === 201 ? b : a;
+  assert.ok(winner.body.id);
+  assert.equal(loser.body.activeSessionId, winner.body.id);
 });

@@ -350,7 +350,12 @@ test('Large request body beyond limit returns 413', async () => {
 // Concurrency
 // ──────────────────────────────────────────────────────────────────────────
 
-test('handles concurrent requests without cross-contamination', async () => {
+test('handles concurrent requests without cross-contamination (concurrency guard picks 1 winner)', async () => {
+  // The control plane allows only ONE live wizard session at a time. The
+  // concurrency-safety property we care about is not "N sessions from N
+  // concurrent requests" but "no shared mutable state in the HTTP
+  // wrapper" — exactly one request wins (201), the rest get a clean 409
+  // response (not a crash or a mangled body).
   const { server, port } = await makeServer();
   try {
     const results = await Promise.all([
@@ -358,11 +363,14 @@ test('handles concurrent requests without cross-contamination', async () => {
       request({ port, method: 'POST', path: '/wizard', body: { feature: 'gmail', timeoutMs: 900_000 } }),
       request({ port, method: 'POST', path: '/wizard', body: { feature: 'drive', timeoutMs: 900_000 } }),
     ]);
-    for (const r of results) assert.equal(r.status, 201);
-    const features = results.map((r) => r.body.feature).sort();
-    assert.deepEqual(features, ['calendar', 'drive', 'gmail']);
-    const ids = new Set(results.map((r) => r.body.id));
-    assert.equal(ids.size, 3, 'concurrent POSTs must get distinct session ids');
+    const statuses = results.map((r) => r.status).sort();
+    assert.deepEqual(statuses, [201, 409, 409], 'exactly one winner, two rejections');
+    const winner = results.find((r) => r.status === 201);
+    const losers = results.filter((r) => r.status === 409);
+    assert.ok(winner.body.id);
+    for (const l of losers) {
+      assert.equal(l.body.activeSessionId, winner.body.id, 'losers point at the winner');
+    }
   } finally {
     await server.stop();
   }
