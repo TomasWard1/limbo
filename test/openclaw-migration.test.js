@@ -145,6 +145,28 @@ test('entrypoint.sh hands off to the wizard supervisor (which launches OpenClaw)
     'supervisor script must launch the openclaw gateway as its managed child');
 });
 
+// Regression: OpenClaw's built-in config reloader does fork+exec self-restart
+// on any config path not classified as hot-reloadable (notably mcp.servers.*.
+// env.*, which is exactly our connect-calendar / switch-brain code path). The
+// self-spawn races against the supervisor's own respawn logic and collides on
+// LIMBO_PORT. OPENCLAW_NO_RESPAWN=1 switches OpenClaw to in-process restart
+// (same PID, no new process, supervisor never sees an exit) — see
+// openclaw/dist/gateway-cli-*.js restartGatewayProcessWithFreshPid().
+// If this ever disappears, expect port-18900 EADDRINUSE crash loops on every
+// wizard that touches MCP env vars.
+test('supervisor.js sets OPENCLAW_NO_RESPAWN=1 in the openclaw child env', () => {
+  const supervisor = read('scripts/supervisor.js');
+  assert.ok(supervisor.includes('OPENCLAW_NO_RESPAWN'),
+    'supervisor must set OPENCLAW_NO_RESPAWN so OpenClaw does in-process restarts');
+  // It must be set in the openclaw child's env specifically, not just
+  // logged about. The spawn() call must spread process.env AND add
+  // OPENCLAW_NO_RESPAWN: '1' so the openclaw process sees it.
+  assert.ok(
+    /OPENCLAW_NO_RESPAWN\s*:\s*['"]1['"]/.test(supervisor),
+    'OPENCLAW_NO_RESPAWN must be set to "1" in the openclaw child env'
+  );
+});
+
 test('entrypoint.sh uses OPENCLAW_STATE_DIR and OPENCLAW_CONFIG_PATH', () => {
   const ep = read('scripts/entrypoint.sh');
   assert.ok(ep.includes('OPENCLAW_STATE_DIR'));

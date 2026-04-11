@@ -61,9 +61,20 @@ async function main() {
     launchOpenclawFn: () => {
       const args = OPENCLAW_VERBOSE ? ['gateway', '--verbose'] : ['gateway'];
       log('INFO ', `launching ${OPENCLAW_BIN} ${args.join(' ')}`);
+      // OPENCLAW_NO_RESPAWN=1 tells OpenClaw to do in-process restarts
+      // instead of fork+exec detached children when its config watcher
+      // detects a change that requires a gateway restart (e.g. any
+      // mcp.servers.*.env.* after a wizard writes new credentials).
+      // Without this, OpenClaw would self-spawn a new process that
+      // races against our supervisor's own respawn logic, resulting in
+      // a port collision on LIMBO_PORT and a crash loop. With it,
+      // OpenClaw resets state inside the same PID and our supervisor
+      // never sees the child exit — the restart is transparent.
+      // See lib/supervisor.js's openclaw restart loop for the safety
+      // net that still catches actual crashes.
       return spawn(OPENCLAW_BIN, args, {
         stdio: 'inherit',
-        env: process.env,
+        env: { ...process.env, OPENCLAW_NO_RESPAWN: '1' },
       });
     },
   });
