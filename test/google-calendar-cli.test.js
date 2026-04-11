@@ -37,47 +37,30 @@ function parseEnvFile(envPath) {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe('connect-calendar env manipulation', () => {
-  let tmp;
-  before(() => { tmp = makeTmpDir(); });
-  after(() => { tmp.cleanup(); });
-
-  test('writes CONNECT_CALENDAR_MODE=true preserving existing vars', () => {
-    const envPath = writeEnvFile(tmp.dir, {
-      MODEL_PROVIDER: 'anthropic',
-      MODEL_NAME: 'claude-opus-4-6',
-      TELEGRAM_ENABLED: 'true',
-      VOICE_ENABLED: 'false',
-    });
-
-    // Simulate what cmdConnectCalendar does: read, strip mode, append mode
-    const content = fs.readFileSync(envPath, 'utf8');
-    const cleaned = content.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-    fs.writeFileSync(envPath, cleaned + 'CONNECT_CALENDAR_MODE=true\n', { mode: 0o600 });
-
-    const vars = parseEnvFile(envPath);
-    assert.equal(vars.CONNECT_CALENDAR_MODE, 'true');
-    assert.equal(vars.MODEL_PROVIDER, 'anthropic');
-    assert.equal(vars.TELEGRAM_ENABLED, 'true');
-    assert.equal(vars.VOICE_ENABLED, 'false');
+describe('connect-calendar CLI does not write CONNECT_CALENDAR_MODE to .env', () => {
+  // Pre-refactor, the CLI wrote CONNECT_CALENDAR_MODE=true to .env, restarted
+  // the container, and let entrypoint.sh dispatch to the setup-server. That
+  // flow is gone: the CLI now talks to the wizard supervisor over a Unix
+  // socket, and the spawner injects CONNECT_CALENDAR_MODE=true into the
+  // setup-server child's env (not into the shared .env file).
+  test('cli.js cmdConnectCalendar does not mutate .env with CONNECT_CALENDAR_MODE', () => {
+    const cliSrc = fs.readFileSync(path.join(__dirname, '..', 'cli.js'), 'utf8');
+    // Grep the source for any write of CONNECT_CALENDAR_MODE=true. If this
+    // ever comes back, the container restart path has regressed.
+    assert.ok(
+      !/CONNECT_CALENDAR_MODE=true/.test(cliSrc),
+      'cli.js must not write CONNECT_CALENDAR_MODE to the shared .env file'
+    );
   });
 
-  test('cleans CONNECT_CALENDAR_MODE after completion', () => {
-    const envPath = writeEnvFile(tmp.dir, {
-      MODEL_PROVIDER: 'anthropic',
-      CONNECT_CALENDAR_MODE: 'true',
-      GOOGLE_CALENDAR_ENABLED: 'true',
-    });
-
-    // Simulate cleanup
-    const content = fs.readFileSync(envPath, 'utf8');
-    const cleaned = content.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-    fs.writeFileSync(envPath, cleaned, { mode: 0o600 });
-
-    const vars = parseEnvFile(envPath);
-    assert.ok(!vars.CONNECT_CALENDAR_MODE, 'CONNECT_CALENDAR_MODE should be removed');
-    assert.equal(vars.MODEL_PROVIDER, 'anthropic');
-    assert.equal(vars.GOOGLE_CALENDAR_ENABLED, 'true');
+  test('spawner (lib/wizard-spawner.js) is the only writer of CONNECT_CALENDAR_MODE', () => {
+    // Wizard-spawner injects CONNECT_CALENDAR_MODE=true into the child
+    // process env when spawning a calendar wizard. That's the new interface.
+    const spawnerSrc = fs.readFileSync(path.join(__dirname, '..', 'lib', 'wizard-spawner.js'), 'utf8');
+    assert.ok(
+      /CONNECT_CALENDAR_MODE/.test(spawnerSrc),
+      'wizard-spawner must still carry the env var — setup-server reads it to pick wizard mode'
+    );
   });
 });
 

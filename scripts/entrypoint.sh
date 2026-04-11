@@ -89,17 +89,10 @@ if [ "${SWITCH_BRAIN_MODE:-}" = "true" ] && [ ! -f "$SWITCH_BRAIN_MARKER" ]; the
   touch "$SWITCH_BRAIN_MARKER"
 fi
 
-# -- Handle connect-calendar mode --------------------------------------------
-# CLI sets CONNECT_CALENDAR_MODE=true to run a reduced wizard that only
-# handles Google Calendar OAuth. Unlike SWITCH_BRAIN_MODE, this preserves
-# ALL existing config — it just needs to force the wizard server to run.
-CONNECT_CALENDAR_MARKER="/data/.connect-calendar-done"
-CONNECT_CALENDAR_ACTIVE=false
-if [ "${CONNECT_CALENDAR_MODE:-}" = "true" ] && [ ! -f "$CONNECT_CALENDAR_MARKER" ]; then
-  log "INFO  CONNECT_CALENDAR_MODE requested — forcing wizard for Google Calendar OAuth"
-  CONNECT_CALENDAR_ACTIVE=true
-  touch "$CONNECT_CALENDAR_MARKER"
-fi
+# Connect-calendar mode used to be handled here by setting CONNECT_CALENDAR_MODE=true
+# in the container env and letting the entrypoint exec the setup-server instead of
+# OpenClaw. That path is gone: the host CLI now talks to the wizard supervisor over a
+# Unix socket and the supervisor spawns the setup-server as a sibling of OpenClaw.
 
 # ── Detect setup mode (no config yet → wizard will handle everything) ────────
 # Two states are treated as "setup mode": (a) no .env at all, and (b) .env
@@ -346,21 +339,12 @@ if [ "$SETUP_MODE" = "true" ]; then
   exec node /app/setup-server/server.js
 fi
 
-# ── Connect-calendar mode (LEGACY) ──────────────────────────────────────────
-# This branch is kept temporarily for rollback safety while the supervisor
-# takes over. New-world connect-calendar flows through the control plane and
-# no longer sets CONNECT_CALENDAR_MODE on the container env. If we ever see
-# this flag again in a new-world container it means something upstream is
-# still on the old code path — log it and fall through to the supervisor.
-if [ "$CONNECT_CALENDAR_ACTIVE" = "true" ]; then
-  log "WARN  CONNECT_CALENDAR_MODE flag observed — this path is deprecated, supervisor handles wizards now"
-  unset CONNECT_CALENDAR_MODE
-fi
-
 # ── Clean up force-setup markers ─────────────────────────────────────────────
-# If we reach here, config exists and OpenClaw is about to start normally.
-# Remove the markers so that the NEXT --reconfigure/--switch-brain/--connect-calendar will work.
-rm -f "$FORCE_DONE_MARKER" "$SWITCH_BRAIN_MARKER" "$CONNECT_CALENDAR_MARKER"
+# If we reach here, config exists and the supervisor is about to start. Remove
+# the markers so that the NEXT --reconfigure / --switch-brain run works. The
+# connect-calendar marker is gone: that flow lives in the control plane now
+# and does not touch entrypoint state.
+rm -f "$FORCE_DONE_MARKER" "$SWITCH_BRAIN_MARKER"
 
 # ── Wakeup routine ──────────────────────────────────────────────────────────
 # Deterministic system-level checks that run BEFORE the agent starts.
