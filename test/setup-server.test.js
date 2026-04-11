@@ -387,7 +387,7 @@ describe('Wizard → Entrypoint integration', () => {
     assert.ok(fs.existsSync(envPath), '.env file must exist at DATA_DIR/config/.env');
   });
 
-  it('handleConfigure writes all secrets to OPENCLAW_STATE_DIR/secrets/', async () => {
+  it('handleConfigure writes all tokens into .env', async () => {
     await startServer();
     const res = await requestTo(srv, 'POST', '/api/configure', {
       provider: 'anthropic',
@@ -400,33 +400,30 @@ describe('Wizard → Entrypoint integration', () => {
     });
     assert.strictEqual(res.statusCode, 200);
 
-    const secretsDir = path.join(openclawState, 'secrets');
-    assert.ok(fs.existsSync(path.join(secretsDir, 'llm_api_key')), 'llm_api_key secret');
-    assert.ok(fs.existsSync(path.join(secretsDir, 'telegram_bot_token')), 'telegram_bot_token secret');
-    assert.ok(fs.existsSync(path.join(secretsDir, 'groq_api_key')), 'groq_api_key secret');
-    assert.ok(fs.existsSync(path.join(secretsDir, 'brave_api_key')), 'brave_api_key secret');
-    assert.ok(fs.existsSync(path.join(secretsDir, 'gateway_token')), 'gateway_token secret');
+    const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
+    assert.ok(envContent.includes('LLM_API_KEY="sk-ant-test-key-1234567890abcdef"'), 'LLM_API_KEY in .env');
+    assert.ok(envContent.includes('TELEGRAM_BOT_TOKEN="bot-token-123"'), 'TELEGRAM_BOT_TOKEN in .env');
+    assert.ok(envContent.includes('GROQ_API_KEY="groq-key-abc"'), 'GROQ_API_KEY in .env');
+    assert.ok(envContent.includes('BRAVE_API_KEY="brave-key-xyz"'), 'BRAVE_API_KEY in .env');
+    assert.ok(envContent.match(/GATEWAY_TOKEN="[^"]+"/), 'GATEWAY_TOKEN present');
 
-    // Verify content matches what was sent
-    assert.strictEqual(fs.readFileSync(path.join(secretsDir, 'llm_api_key'), 'utf8'), 'sk-ant-test-key-1234567890abcdef');
-    assert.strictEqual(fs.readFileSync(path.join(secretsDir, 'telegram_bot_token'), 'utf8'), 'bot-token-123');
-    assert.strictEqual(fs.readFileSync(path.join(secretsDir, 'groq_api_key'), 'utf8'), 'groq-key-abc');
-    assert.strictEqual(fs.readFileSync(path.join(secretsDir, 'brave_api_key'), 'utf8'), 'brave-key-xyz');
+    // Legacy secrets/ directory must NOT be created
+    assert.ok(
+      !fs.existsSync(path.join(openclawState, 'secrets')),
+      'openclaw-state/secrets must not be created'
+    );
   });
 
-  it('secret paths match what entrypoint read_secret expects', async () => {
-    // The entrypoint reads: ${OPENCLAW_STATE_DIR}/secrets/<name>
-    // The wizard writes to: OPENCLAW_STATE_DIR/secrets/<name>
-    // These must be the same directory.
+  it('token paths match what entrypoint .env sourcing expects', async () => {
+    // The entrypoint now sources /data/config/.env; all tokens must be there.
     await startServer();
     await requestTo(srv, 'POST', '/api/configure', {
       provider: 'openai',
       apiKey: 'sk-test-openai-key-1234567890abcdef',
     });
 
-    const entrypointPath = path.join(openclawState, 'secrets', 'llm_api_key');
-    assert.ok(fs.existsSync(entrypointPath), 'secret must be at OPENCLAW_STATE_DIR/secrets/llm_api_key');
-    assert.strictEqual(fs.readFileSync(entrypointPath, 'utf8'), 'sk-test-openai-key-1234567890abcdef');
+    const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
+    assert.ok(envContent.includes('LLM_API_KEY="sk-test-openai-key-1234567890abcdef"'));
   });
 
   // ── 2. .env format: shell-sourceable ─────────────────────────────────────
@@ -524,35 +521,13 @@ describe('Wizard → Entrypoint integration', () => {
     assert.ok(envContent.includes('WEB_SEARCH_ENABLED="false"'), 'web search defaults to false');
   });
 
-  // ── 3. Secret file permissions ───────────────────────────────────────────
+  // ── 3. File permissions ─────────────────────────────────────────────────
+  // With the secrets-in-.env consolidation, the container (uid 999) must be
+  // able to write inside the host-owned config dir. The mode is intentionally
+  // permissive because ~/.limbo/ lives under the user's home and is not
+  // exposed to other users of the host.
 
-  it('secret files have mode 0600', async () => {
-    await startServer();
-    await requestTo(srv, 'POST', '/api/configure', {
-      provider: 'anthropic',
-      apiKey: 'sk-ant-test-key-1234567890abcdef',
-    });
-
-    const secretPath = path.join(openclawState, 'secrets', 'llm_api_key');
-    const stat = fs.statSync(secretPath);
-    const perms = stat.mode & 0o777;
-    assert.strictEqual(perms, 0o600, `secret file perms should be 0600, got ${perms.toString(8)}`);
-  });
-
-  it('secrets directory has mode 0700', async () => {
-    await startServer();
-    await requestTo(srv, 'POST', '/api/configure', {
-      provider: 'anthropic',
-      apiKey: 'sk-ant-test-key-1234567890abcdef',
-    });
-
-    const secretsDirPath = path.join(openclawState, 'secrets');
-    const stat = fs.statSync(secretsDirPath);
-    const perms = stat.mode & 0o777;
-    assert.strictEqual(perms, 0o700, `secrets dir perms should be 0700, got ${perms.toString(8)}`);
-  });
-
-  it('.env file has mode 0600', async () => {
+  it('.env file has mode 0666 (writable by container uid)', async () => {
     await startServer();
     await requestTo(srv, 'POST', '/api/configure', {
       provider: 'anthropic',
@@ -562,7 +537,20 @@ describe('Wizard → Entrypoint integration', () => {
     const envPath = path.join(dataDir, 'config', '.env');
     const stat = fs.statSync(envPath);
     const perms = stat.mode & 0o777;
-    assert.strictEqual(perms, 0o600, `.env perms should be 0600, got ${perms.toString(8)}`);
+    assert.strictEqual(perms, 0o666, `.env perms should be 0666, got ${perms.toString(8)}`);
+  });
+
+  it('config directory has mode 0777 (writable by container uid)', async () => {
+    await startServer();
+    await requestTo(srv, 'POST', '/api/configure', {
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test-key-1234567890abcdef',
+    });
+
+    const configDir = path.join(dataDir, 'config');
+    const stat = fs.statSync(configDir);
+    const perms = stat.mode & 0o777;
+    assert.strictEqual(perms, 0o777, `config dir perms should be 0777, got ${perms.toString(8)}`);
   });
 
   // ── 4. Auth profile consistency ──────────────────────────────────────────
@@ -633,15 +621,14 @@ describe('Wizard → Entrypoint integration', () => {
     });
     assert.strictEqual(res.statusCode, 200);
 
-    const secretsDir = path.join(openclawState, 'secrets');
-    assert.ok(fs.existsSync(path.join(secretsDir, 'llm_api_key')), 'llm_api_key written');
-    assert.ok(fs.existsSync(path.join(secretsDir, 'gateway_token')), 'gateway_token auto-generated');
-    // Optional secrets should NOT exist
-    assert.ok(!fs.existsSync(path.join(secretsDir, 'telegram_bot_token')), 'no telegram token');
-    assert.ok(!fs.existsSync(path.join(secretsDir, 'groq_api_key')), 'no groq key');
-    assert.ok(!fs.existsSync(path.join(secretsDir, 'brave_api_key')), 'no brave key');
-
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
+    assert.ok(envContent.includes('LLM_API_KEY="sk-ant-test-minimal-key-12345678"'), 'llm key in env');
+    assert.ok(envContent.match(/GATEWAY_TOKEN="[^"]+"/), 'gateway_token auto-generated');
+    // Optional tokens should be empty (or absent)
+    assert.ok(
+      envContent.includes('TELEGRAM_BOT_TOKEN=""') || !envContent.includes('TELEGRAM_BOT_TOKEN='),
+      'no telegram token set'
+    );
     assert.ok(envContent.includes('TELEGRAM_ENABLED="false"'));
     assert.ok(envContent.includes('VOICE_ENABLED="false"'));
     assert.ok(envContent.includes('WEB_SEARCH_ENABLED="false"'));
@@ -662,16 +649,15 @@ describe('Wizard → Entrypoint integration', () => {
     });
     assert.strictEqual(res.statusCode, 200);
 
-    const secretsDir = path.join(openclawState, 'secrets');
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
 
-    // All secrets present with correct content
-    assert.strictEqual(fs.readFileSync(path.join(secretsDir, 'llm_api_key'), 'utf8'), 'sk-or-all-features-key-1234567890');
-    assert.strictEqual(fs.readFileSync(path.join(secretsDir, 'telegram_bot_token'), 'utf8'), 'bot-telegram-token');
-    assert.strictEqual(fs.readFileSync(path.join(secretsDir, 'groq_api_key'), 'utf8'), 'groq-voice-key');
-    assert.strictEqual(fs.readFileSync(path.join(secretsDir, 'brave_api_key'), 'utf8'), 'brave-search-key');
+    // All tokens present with correct content in .env
+    assert.ok(envContent.includes('LLM_API_KEY="sk-or-all-features-key-1234567890"'));
+    assert.ok(envContent.includes('TELEGRAM_BOT_TOKEN="bot-telegram-token"'));
+    assert.ok(envContent.includes('GROQ_API_KEY="groq-voice-key"'));
+    assert.ok(envContent.includes('BRAVE_API_KEY="brave-search-key"'));
 
-    // All features enabled in .env
+    // All features enabled
     assert.ok(envContent.includes('TELEGRAM_ENABLED="true"'));
     assert.ok(envContent.includes('VOICE_ENABLED="true"'));
     assert.ok(envContent.includes('WEB_SEARCH_ENABLED="true"'));
@@ -680,18 +666,20 @@ describe('Wizard → Entrypoint integration', () => {
     assert.ok(envContent.includes('CLI_LANGUAGE="es"'));
   });
 
-  it('special characters in API keys survive round-trip', async () => {
+  it('special characters in API keys survive round-trip through .env', async () => {
     await startServer();
-    const trickyKey = 'sk-ant-key-with$pecial"chars\\and/slashes+base64==';
+    // Double-quotes are not supported inside quoted .env values (would break
+    // the encoding). Every other shell metachar is fair game.
+    const trickyKey = 'sk-ant-key-with$pecial*chars\\and/slashes+base64==';
     const res = await requestTo(srv, 'POST', '/api/configure', {
       provider: 'anthropic',
       apiKey: trickyKey,
     });
     assert.strictEqual(res.statusCode, 200);
 
-    // Secret file stores the raw key (no quoting — plain file read by cat)
-    const stored = fs.readFileSync(path.join(openclawState, 'secrets', 'llm_api_key'), 'utf8');
-    assert.strictEqual(stored, trickyKey, 'secret file must store exact key bytes');
+    // The value lives inside KEY="..." in the .env file.
+    const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
+    assert.ok(envContent.includes(`LLM_API_KEY="${trickyKey}"`), 'key stored verbatim in .env');
   });
 
   it('gateway token is auto-generated on first run', async () => {
@@ -701,19 +689,18 @@ describe('Wizard → Entrypoint integration', () => {
       apiKey: 'sk-ant-test-gateway-gen-1234567890',
     });
 
-    const tokenPath = path.join(openclawState, 'secrets', 'gateway_token');
-    assert.ok(fs.existsSync(tokenPath), 'gateway_token must be created');
-    const token = fs.readFileSync(tokenPath, 'utf8');
-    assert.ok(token.length > 0, 'token must not be empty');
-    assert.ok(token.length >= 20, 'token should be sufficiently long (24 bytes base64url)');
+    const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
+    const m = envContent.match(/GATEWAY_TOKEN="([^"]+)"/);
+    assert.ok(m, 'GATEWAY_TOKEN must be present in .env');
+    assert.ok(m[1].length >= 20, 'token should be sufficiently long (24 bytes base64url)');
   });
 
   it('gateway token is preserved on subsequent runs', async () => {
-    // Pre-create a gateway token (simulates first run already happened)
-    const secretsDir = path.join(openclawState, 'secrets');
-    fs.mkdirSync(secretsDir, { recursive: true });
+    // Pre-populate the .env with a known gateway token.
+    const configDir = path.join(dataDir, 'config');
+    fs.mkdirSync(configDir, { recursive: true });
     const existingToken = 'pre-existing-gateway-token-abc123';
-    fs.writeFileSync(path.join(secretsDir, 'gateway_token'), existingToken);
+    fs.writeFileSync(path.join(configDir, '.env'), `GATEWAY_TOKEN="${existingToken}"\n`);
 
     await startServer();
     await requestTo(srv, 'POST', '/api/configure', {
@@ -721,8 +708,8 @@ describe('Wizard → Entrypoint integration', () => {
       apiKey: 'sk-ant-test-preserve-1234567890ab',
     });
 
-    const storedToken = fs.readFileSync(path.join(secretsDir, 'gateway_token'), 'utf8');
-    assert.strictEqual(storedToken, existingToken, 'existing gateway token must be preserved');
+    const envContent = fs.readFileSync(path.join(configDir, '.env'), 'utf8');
+    assert.ok(envContent.includes(`GATEWAY_TOKEN="${existingToken}"`), 'existing gateway token must be preserved');
   });
 
   it('configure rejects missing provider', async () => {

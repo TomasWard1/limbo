@@ -745,8 +745,10 @@ function normalizeConfig(cfg, existingEnv = {}) {
 // because the .env is also written from inside the container (uid 999, non-owner
 // of the host-mounted config dir); world-writable on a file inside ~/.limbo
 // does not widen exposure beyond what the home directory already permits.
+// Explicit chmod after write defeats the process umask.
 function writeEnv(cfg, existingEnv = {}) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
+  try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
   if (fs.existsSync(ENV_FILE)) {
     try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
   }
@@ -754,6 +756,7 @@ function writeEnv(cfg, existingEnv = {}) {
     .map(([key, value]) => `${key}=${value}`)
     .join('\n') + '\n';
   fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
+  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
 }
 
 
@@ -1119,6 +1122,7 @@ function migrateLegacySecretsToEnv() {
     .map(([k, v]) => `${k}=${v}`)
     .join('\n') + '\n';
   fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
+  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
   log('Migrated legacy secrets into .env');
 }
 
@@ -1894,6 +1898,7 @@ function writeMinimalEnv() {
     try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
   }
   fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
+  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
   return gatewayToken;
 }
 
@@ -2282,6 +2287,7 @@ ${c.bold}Usage:${c.reset}
     try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
   }
   fs.writeFileSync(ENV_FILE, newContent, { mode: 0o666 });
+  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
   ok(`${featureLabel} ${hasEnable ? 'enabled' : 'disabled'}.`);
 
   if (fs.existsSync(COMPOSE_FILE)) {
