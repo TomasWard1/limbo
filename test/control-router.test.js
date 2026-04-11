@@ -354,6 +354,36 @@ test('GET /health: returns 200 with ok and active session count', async () => {
   assert.equal(res.body.activeSessions, 0);
 });
 
+test('GET /health: activeSessions counts only LIVE sessions, not terminals', async () => {
+  // Regression: previously this counted store.list().length which included
+  // done/error/timeout sessions that had not been reaped yet, so a completed
+  // wizard would keep activeSessions=1 until cleanup() ran. The user-facing
+  // expectation is that activeSessions drops to 0 as soon as the wizard
+  // reaches a terminal state — which is what we test here via store.update.
+  const { router, store } = makeRouter();
+  const created = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'calendar', timeoutMs: 900_000 },
+  });
+  const mid = await router.handle({ method: 'GET', path: '/health', body: null });
+  assert.equal(mid.body.activeSessions, 1, 'one live session after POST');
+
+  // Flip the session to done (simulates the supervisor observing the
+  // spawner's exit). The session is still in the store, but not LIVE.
+  store.update(created.body.id, { status: 'done', exitCode: 0 });
+  const afterDone = await router.handle({ method: 'GET', path: '/health', body: null });
+  assert.equal(afterDone.body.activeSessions, 0, 'done session must not count as active');
+
+  // And an error session also must not count.
+  const next = await router.handle({
+    method: 'POST', path: '/wizard',
+    body: { feature: 'gmail', timeoutMs: 900_000 },
+  });
+  store.update(next.body.id, { status: 'error', error: 'boom' });
+  const afterError = await router.handle({ method: 'GET', path: '/health', body: null });
+  assert.equal(afterError.body.activeSessions, 0, 'error session must not count as active');
+});
+
 test('GET /health: active session count reflects store state', async () => {
   // The concurrency guard allows only one live session at a time. We
   // still need health to report live-session presence correctly, so
