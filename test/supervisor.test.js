@@ -73,13 +73,20 @@ function makeHarness(opts = {}) {
   });
 
   let idSeed = 0;
+  // Advanceable fake clock so restart-window tests can drive time forward
+  // without relying on wall clock. Start in the middle of epoch so the
+  // prune window maths (`now - WINDOW_MS`) never produces a negative.
+  let clockValue = 1_000_000_000;
+  const clock = () => clockValue;
+  function advanceClock(ms) { clockValue += ms; }
+
   const supervisor = createSupervisor({
     controlPort: 0, // ephemeral, parallel-safe
     spawnSetupServerFn,
     launchOpenclawFn,
     nodePath: '/fake/bin/node',
     setupServerPath: '/fake/app/setup-server/server.js',
-    clock: () => 1_000_000,
+    clock,
     idGenerator: () => `sess_${++idSeed}`,
     tokenGenerator: () => 'tok_fake',
     wizardPortBase: 18901,
@@ -92,7 +99,7 @@ function makeHarness(opts = {}) {
     return createControlClient({ port: supervisor.controlPort });
   }
 
-  return { supervisor, bindClient, setupChildren, openclawChildren };
+  return { supervisor, bindClient, setupChildren, openclawChildren, advanceClock };
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -162,7 +169,7 @@ test('wizard lifecycle: setup exits non-zero -> session error', async () => {
 // OpenClaw-driven shutdown
 // ──────────────────────────────────────────────────────────────────────────
 
-test('openclaw exits: waitForShutdown resolves with that exit code and closes the listener', async () => {
+test('openclaw exits with non-zero code: waitForShutdown resolves + listener closes', async () => {
   const { supervisor, bindClient, openclawChildren } = makeHarness();
   await supervisor.start();
   const client = bindClient();
@@ -176,6 +183,122 @@ test('openclaw exits: waitForShutdown resolves with that exit code and closes th
     async () => client.health(),
     (err) => err.code === 'ECONNREFUSED'
   );
+});
+
+test('openclaw exits via SIGTERM: treated as abnormal, triggers shutdown', async () => {
+  // A signal-driven exit is never a self-restart — OpenClaw's own restart
+  // path does code 0 + no signal. If we see a signal here it means
+  // something else killed the process (OOM, docker stop, etc.) and we
+  // should NOT respawn.
+  const { supervisor, openclawChildren } = makeHarness();
+  await supervisor.start();
+  const shutdownPromise = supervisor.waitForShutdown();
+  openclawChildren[0]._simulateExit(null, 'SIGTERM');
+  const result = await shutdownPromise;
+  assert.equal(result.reason, 'openclaw_exit');
+  assert.equal(result.signal, 'SIGTERM');
+  assert.equal(openclawChildren.length, 1, 'must NOT respawn after signal-driven exit');
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// OpenClaw self-restart loop (required for connect-calendar / switch-brain)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// When OpenClaw's chokidar watcher detects a config change that requires a
+// gateway restart (e.g. mcp.servers.*.env.* after a wizard writes new
+// Google Calendar credentials), OpenClaw does an internal SIGUSR1 self
+// restart: the old process exits with code 0 / no signal, and a fresh
+// process takes over. The supervisor MUST respawn on these clean exits or
+// the container cascades to shutdown mid-reload — which is exactly what
+// killed the e2e smoke test before this fix existed.
+
+test('openclaw exits cleanly (code 0, no signal): supervisor respawns and stays up', async () => {
+  const { supervisor, bindClient, openclawChildren } = makeHarness();
+  await supervisor.start();
+  const client = bindClient();
+  assert.equal(openclawChildren.length, 1);
+
+  // Simulate OpenClaw self-restart: clean exit.
+  openclawChildren[0]._simulateExit(0, null);
+
+  // Give the exit handler a tick to run.
+  await new Promise((r) => setImmediate(r));
+
+  // Supervisor must have spawned a fresh OpenClaw child.
+  assert.equal(openclawChildren.length, 2, 'supervisor must spawn a new openclaw after clean exit');
+  // Control plane must still be up.
+  const h = await client.health();
+  assert.equal(h.ok, true);
+
+  try { await supervisor.stop(); } catch {}
+});
+
+test('multiple clean self-restarts in a short window all respawn', async () => {
+  const { supervisor, openclawChildren, advanceClock } = makeHarness();
+  await supervisor.start();
+
+  // 3 self-restarts spaced 1s apart — well under the 5-in-60s limit.
+  for (let i = 0; i < 3; i++) {
+    openclawChildren[i]._simulateExit(0, null);
+    await new Promise((r) => setImmediate(r));
+    advanceClock(1000);
+  }
+  assert.equal(openclawChildren.length, 4, 'each clean restart spawns a new child');
+
+  try { await supervisor.stop(); } catch {}
+});
+
+test('crash loop: 6 clean restarts within window triggers shutdown with openclaw_restart_loop reason', async () => {
+  const { supervisor, openclawChildren, advanceClock } = makeHarness();
+  await supervisor.start();
+  const shutdownPromise = supervisor.waitForShutdown();
+
+  // Burn through the window limit. After MAX_RESTARTS (5), the next clean
+  // exit must trigger a shutdown with reason=openclaw_restart_loop.
+  for (let i = 0; i < 6; i++) {
+    openclawChildren[i]._simulateExit(0, null);
+    await new Promise((r) => setImmediate(r));
+    advanceClock(100); // tight window — all within 60s
+  }
+
+  const result = await shutdownPromise;
+  assert.equal(result.reason, 'openclaw_restart_loop');
+  // 5 successful respawns + 1 rejected = 6 spawns total. The 6th spawn
+  // was NEVER made because the supervisor hit the limit BEFORE calling
+  // spawnOpenclaw a 7th time.
+  assert.equal(openclawChildren.length, 6);
+});
+
+test('clean restarts spaced outside the window do not trip crash-loop guard', async () => {
+  const { supervisor, openclawChildren, advanceClock } = makeHarness();
+  await supervisor.start();
+
+  // 10 restarts, but each spaced 30s apart. The sliding window (60s) only
+  // holds 2 at a time, so we never approach the 5-restart cap.
+  for (let i = 0; i < 10; i++) {
+    openclawChildren[i]._simulateExit(0, null);
+    await new Promise((r) => setImmediate(r));
+    advanceClock(30_000);
+  }
+
+  assert.equal(openclawChildren.length, 11, '10 spaced restarts should all succeed');
+
+  try { await supervisor.stop(); } catch {}
+});
+
+test('stop() during a clean-exit race: does NOT respawn after stop', async () => {
+  const { supervisor, openclawChildren } = makeHarness();
+  await supervisor.start();
+  assert.equal(openclawChildren.length, 1);
+
+  // stop() kills OpenClaw; the fake child's kill() schedules a clean
+  // code-0 exit on the next tick. The exit handler MUST see
+  // shutdownInitiated=true and skip the respawn, otherwise stop() would
+  // race a fresh child forever.
+  await supervisor.stop();
+
+  // Only the one original child — no respawn during shutdown.
+  assert.equal(openclawChildren.length, 1, 'stop() must not trigger respawn');
 });
 
 // ──────────────────────────────────────────────────────────────────────────
