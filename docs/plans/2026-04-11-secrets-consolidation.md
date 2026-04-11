@@ -423,3 +423,22 @@ npm test
 - **Rollback of the migration:** the legacy files are left in place; a user can manually restore from them or from `.env.bak` if something goes wrong.
 - **Perms trade-off:** `0666` on `.env` and `0777` on `config/` are permissive. Justified because `~/.limbo/` lives in the user's home (typically 0755 or 0700 at the home root), so world-writable at the subdirectory level does not expose to other system users any more than the home root already does.
 - **Google Calendar secrets** (`google_client_id`, `google_client_secret`) are handled by the setup-server and stored as runtime env vars today (not in the main flow). The migration does NOT touch those — they stay out of scope.
+
+## Post-review addendum
+
+Code review surfaced findings not covered by the original plan. Fixes applied in the same MR by a team of four parallel agents:
+
+**Critical:**
+
+- **C1** — `setup-server/server.js` `handleConfigure` full-setup branch rebuilt `envVars` from scratch, clobbering `TELEGRAM_CHAT_ID` written earlier by `handleTelegramPair` (step-6 wizard). Fix: spread `existingEnv` first in the else branch, matching `SWITCH_BRAIN_MODE`/`CONNECT_CALENDAR_MODE`. Regression test added in `test/setup-server.test.js`.
+- **C2** — Seven call sites in `cli.js` still wrote `.env` with `mode: 0o600` (`persistEnvVars`, `cmdStart` reconfigure + cleanup, `cmdSwitchBrain` write + cleanup, `cmdConnectCalendar` write + cleanup). This would lock out the container uid 999 from rewriting the file after any reconfigure. Fix: extracted `safeWriteEnvFile(content)` helper (mkdir 0o777 + backup + write 0o666 + chmod 0o666) and funneled every writer through it. Exactly one `fs.writeFileSync(ENV_FILE,...)` now remains in cli.js, inside the helper. Guarded by a single-call-site invariant test.
+- **C3** — `evals/promptfoo/audio-provider.js` still read `/home/limbo/.openclaw/secrets/groq_api_key` from inside the eval container. Fix: replaced the file read with `docker exec <container> printenv GROQ_API_KEY` (the entrypoint sources `.env` with `set -a` so the var is always exported).
+- **C4** — `migrateLegacySecretsToEnv` map only covered 5 secrets. Users upgrading with Google Calendar or mid-wizard Telegram pairing would lose `google_client_id`, `google_client_secret`, and `telegram_chat_id`. Fix: added all three to the `SECRET_TO_ENV` map. New tests cover each.
+
+**Important:**
+
+- **I1** — `entrypoint.sh` SETUP_MODE detection used `[ -z "${MODEL_PROVIDER:-}" ]` after the script sourced `.env` at the top. If `SWITCH_BRAIN_MODE` sed-stripped `MODEL_PROVIDER=` from the file, the in-memory var was still set — latent trap. Fix: re-grep the file with `grep -q '^MODEL_PROVIDER=' /data/config/.env`. Guard test added.
+- **I2** — Two lying comments: `setup-server/server.js:228` said Google Calendar client credentials are read from secrets; `evals/.env.eval:2` said tokens come from the host's secrets dir. Both updated to reflect the new `.env`-only flow.
+- **I3** — E2E state migration was undocumented. New section added to `handoff.md` (post-review migration steps) and a note in `CLAUDE.md` Local Development pointing at `/tmp/limbo-e2e-test/config/.env` (new path) with the one-shot `mv` command.
+- **I4** — `writeMinimalEnv` wrote a 3-line `.env` from scratch, which would clobber any `LLM_API_KEY` / `TELEGRAM_BOT_TOKEN` that `migrateLegacySecretsToEnv` had just populated on a legacy upgrade path. Fix: merge-based — read existing .env, set only `CLI_LANGUAGE`/`LIMBO_PORT`/`GATEWAY_TOKEN`, preserve everything else.
+- **I5** — Test gap for `cmdSwitchBrain`/`cmdConnectCalendar`/post-wizard cleanup paths (the exact call sites with `0o600`) and the pair-then-configure wizard flow. Tests added for all of these.

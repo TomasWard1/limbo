@@ -712,6 +712,36 @@ describe('Wizard → Entrypoint integration', () => {
     assert.ok(envContent.includes(`GATEWAY_TOKEN="${existingToken}"`), 'existing gateway token must be preserved');
   });
 
+  it('TELEGRAM_CHAT_ID written by step-6 pairing is preserved across configure', async () => {
+    // Regression guard for C1: handleConfigure used to rebuild envVars from
+    // scratch in the full-setup branch, clobbering keys written by earlier
+    // wizard steps such as TELEGRAM_CHAT_ID (set by handleTelegramPair).
+    const configDir = path.join(dataDir, 'config');
+    fs.mkdirSync(configDir, { recursive: true });
+    const existingChatId = '999888';
+    fs.writeFileSync(
+      path.join(configDir, '.env'),
+      `TELEGRAM_CHAT_ID="${existingChatId}"\n`,
+    );
+
+    await startServer();
+    const res = await requestTo(srv, 'POST', '/api/configure', {
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test-chatid-preserve-12345',
+      telegram: { enabled: true, botToken: 'bot-token-xyz' },
+    });
+    assert.strictEqual(res.statusCode, 200);
+
+    const envContent = fs.readFileSync(path.join(configDir, '.env'), 'utf8');
+    assert.ok(
+      envContent.includes(`TELEGRAM_CHAT_ID="${existingChatId}"`),
+      'TELEGRAM_CHAT_ID from step-6 pairing must survive handleConfigure',
+    );
+    // And the wizard-supplied keys still take effect.
+    assert.ok(envContent.includes('TELEGRAM_BOT_TOKEN="bot-token-xyz"'));
+    assert.ok(envContent.includes('TELEGRAM_ENABLED="true"'));
+  });
+
   it('configure rejects missing provider', async () => {
     await startServer();
     const res = await requestTo(srv, 'POST', '/api/configure', {

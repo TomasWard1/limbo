@@ -102,13 +102,18 @@ if [ "${CONNECT_CALENDAR_MODE:-}" = "true" ] && [ ! -f "$CONNECT_CALENDAR_MARKER
 fi
 
 # ── Detect setup mode (no config yet → wizard will handle everything) ────────
-# The .env was already sourced at the top of the script. Two states are
-# treated as "setup mode": (a) no .env at all, and (b) .env present but
-# without MODEL_PROVIDER (half-configured — preserve features, ask brain).
+# Two states are treated as "setup mode": (a) no .env at all, and (b) .env
+# present but without MODEL_PROVIDER (half-configured — preserve features,
+# ask brain).
+#
+# IMPORTANT: we re-grep the file instead of checking the in-memory
+# $MODEL_PROVIDER. The .env was sourced at the top of the script; an earlier
+# stage (SWITCH_BRAIN_MODE) may have stripped MODEL_PROVIDER from the file
+# but the value is still in this shell's memory. Trust the file, not RAM.
 SETUP_MODE=false
 if [ ! -f /data/config/.env ]; then
   SETUP_MODE=true
-elif [ -z "${MODEL_PROVIDER:-}" ]; then
+elif ! grep -q '^MODEL_PROVIDER=' /data/config/.env 2>/dev/null; then
   SETUP_MODE=true
   log "INFO  Brain config missing — entering setup mode (preserving features config)"
 else

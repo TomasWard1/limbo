@@ -225,7 +225,8 @@ let pkceSession = null;
 // Track OAuth completion for polling
 let oauthResult = null;
 
-// Google Calendar OAuth — client credentials read from secrets at runtime
+// Google Calendar OAuth — client credentials read from .env at runtime
+// (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET via readEnvFile())
 const GOOGLE_OAUTH = {
   authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
   tokenUrl: 'https://oauth2.googleapis.com/token',
@@ -903,7 +904,11 @@ async function handleConfigure(req, res) {
     } else {
       const telegram = data.telegram || {};
       const features = data.features || {};
+      // Spread existingEnv first so anything written by earlier wizard steps
+      // (e.g. TELEGRAM_CHAT_ID from handleTelegramPair in step 6) is preserved.
+      // The wizard-supplied keys below override existingEnv where they overlap.
       envVars = {
+        ...existingEnv,
         CLI_LANGUAGE: data.language || 'en',
         AUTH_MODE: data.authMode || 'api-key',
         MODEL_PROVIDER: data.provider,

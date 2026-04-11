@@ -330,6 +330,45 @@ describe('Token resolution via .env sourcing', () => {
     );
   });
 
+  test('SETUP_MODE detection re-reads the file, not the in-memory var', () => {
+    // The .env is sourced at the top of the script, so $MODEL_PROVIDER may
+    // already be in shell memory by the time we check setup mode. If
+    // SWITCH_BRAIN_MODE stripped it from the file, an in-memory check would
+    // miss the strip and skip wizard mode. Guard: detection must grep the
+    // file, not test the variable.
+    const entrypoint = fs.readFileSync(
+      path.join(__dirname, '..', 'scripts', 'entrypoint.sh'),
+      'utf8'
+    );
+    assert.ok(
+      /grep -q '\^MODEL_PROVIDER=' \/data\/config\/\.env/.test(entrypoint),
+      'SETUP_MODE detection must grep MODEL_PROVIDER from /data/config/.env'
+    );
+    // And it must NOT use the in-memory shortcut for the same check.
+    assert.ok(
+      !/elif \[ -z "\$\{MODEL_PROVIDER:-\}" \]/.test(entrypoint),
+      'SETUP_MODE detection must not test the in-memory $MODEL_PROVIDER'
+    );
+  });
+
+  test('.env is sourced before SWITCH_BRAIN_MODE strips MODEL_PROVIDER', () => {
+    // Documents the invariant: tokens are loaded once at the top, then
+    // SWITCH_BRAIN_MODE may rewrite the file. Detection must trust the file
+    // afterwards (covered by the test above).
+    const entrypoint = fs.readFileSync(
+      path.join(__dirname, '..', 'scripts', 'entrypoint.sh'),
+      'utf8'
+    );
+    const sourceLine = entrypoint.indexOf('. /data/config/.env');
+    const switchBrainStrip = entrypoint.indexOf("'/^MODEL_PROVIDER=/d'");
+    assert.ok(sourceLine !== -1, 'entrypoint must source /data/config/.env');
+    assert.ok(switchBrainStrip !== -1, 'SWITCH_BRAIN must strip MODEL_PROVIDER from .env');
+    assert.ok(
+      sourceLine < switchBrainStrip,
+      '.env must be sourced before SWITCH_BRAIN strips MODEL_PROVIDER'
+    );
+  });
+
   test('entrypoint.sh no longer defines read_secret', () => {
     const entrypoint = fs.readFileSync(
       path.join(__dirname, '..', 'scripts', 'entrypoint.sh'),

@@ -740,23 +740,31 @@ function normalizeConfig(cfg, existingEnv = {}) {
   return base;
 }
 
-// Write .env with a pre-write single-slot backup (.env.bak) so that a crashed
-// write or a bad wizard run can be manually rolled back. Mode 0666 is chosen
-// because the .env is also written from inside the container (uid 999, non-owner
-// of the host-mounted config dir); world-writable on a file inside ~/.limbo
-// does not widen exposure beyond what the home directory already permits.
-// Explicit chmod after write defeats the process umask.
-function writeEnv(cfg, existingEnv = {}) {
+// Write the .env atomically with a pre-write single-slot backup (.env.bak) so
+// that a crashed write or a bad wizard run can be manually rolled back. Mode
+// 0666 is chosen because the .env is also written from inside the container
+// (uid 999, non-owner of the host-mounted config dir); world-writable on a file
+// inside ~/.limbo does not widen exposure beyond what the home directory
+// already permits. Explicit chmod after write defeats the process umask.
+//
+// All callers in cli.js MUST go through this helper rather than calling
+// fs.writeFileSync(ENV_FILE, ...) directly — that's the only way to guarantee
+// the container (uid 999) can rewrite the .env after the host CLI touches it.
+function safeWriteEnvFile(content) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
   try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
   if (fs.existsSync(ENV_FILE)) {
     try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
   }
+  fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
+  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
+}
+
+function writeEnv(cfg, existingEnv = {}) {
   const content = Object.entries(normalizeConfig(cfg, existingEnv))
     .map(([key, value]) => `${key}=${value}`)
     .join('\n') + '\n';
-  fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
-  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
+  safeWriteEnvFile(content);
 }
 
 
@@ -1079,9 +1087,12 @@ function migrateLegacySecretsToEnv() {
   const SECRET_TO_ENV = {
     llm_api_key: 'LLM_API_KEY',
     telegram_bot_token: 'TELEGRAM_BOT_TOKEN',
+    telegram_chat_id: 'TELEGRAM_CHAT_ID',
     gateway_token: 'GATEWAY_TOKEN',
     groq_api_key: 'GROQ_API_KEY',
     brave_api_key: 'BRAVE_API_KEY',
+    google_client_id: 'GOOGLE_CLIENT_ID',
+    google_client_secret: 'GOOGLE_CLIENT_SECRET',
   };
   // Priority order: newer paths win over older ones. The openclaw-state path
   // was written by setup-server inside the container, the top-level secrets/
@@ -1113,16 +1124,10 @@ function migrateLegacySecretsToEnv() {
 
   if (!changed) return;
 
-  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
-  try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
-  if (fs.existsSync(ENV_FILE)) {
-    try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
-  }
   const content = Object.entries(existingEnv)
     .map(([k, v]) => `${k}=${v}`)
     .join('\n') + '\n';
-  fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
-  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
+  safeWriteEnvFile(content);
   log('Migrated legacy secrets into .env');
 }
 
@@ -1145,7 +1150,7 @@ function ensureComposeFile(hardened = false) {
   if (legacyEnv !== ENV_FILE && fs.existsSync(legacyEnv) && !fs.existsSync(ENV_FILE)) {
     fs.renameSync(legacyEnv, ENV_FILE);
   }
-  if (!fs.existsSync(ENV_FILE)) fs.writeFileSync(ENV_FILE, '', { mode: 0o666 });
+  if (!fs.existsSync(ENV_FILE)) safeWriteEnvFile('');
   // Migrate tokens from legacy secret files (~/.limbo/secrets/ and
   // ~/.limbo/zeroclaw-state/secrets/) into the .env — idempotent per-file.
   migrateLegacySecretsToEnv();
@@ -1492,7 +1497,7 @@ function persistEnvVars(vars) {
         content = content.trimEnd() + '\n' + key + '=' + value + '\n';
       }
     }
-    fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
+    safeWriteEnvFile(content);
   } catch {}
 }
 
@@ -1891,14 +1896,22 @@ ${c.green}${c.bold}╚═══════════════════�
 
 function writeMinimalEnv() {
   ensureComposeFile(false);
+  // Merge into the existing .env rather than clobbering it. ensureComposeFile()
+  // above just ran migrateLegacySecretsToEnv(), which may have populated
+  // LLM_API_KEY, TELEGRAM_BOT_TOKEN, etc. Wiping those would force the user
+  // to re-enter every secret in the wizard.
   const existingEnv = parseEnvFile();
   const gatewayToken = existingEnv.GATEWAY_TOKEN || generateGatewayToken();
-  const content = `CLI_LANGUAGE=en\nLIMBO_PORT=${PORT}\nGATEWAY_TOKEN=${gatewayToken}\n`;
-  if (fs.existsSync(ENV_FILE)) {
-    try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
-  }
-  fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
-  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
+  const merged = {
+    ...existingEnv,
+    CLI_LANGUAGE: existingEnv.CLI_LANGUAGE || 'en',
+    LIMBO_PORT: String(PORT),
+    GATEWAY_TOKEN: gatewayToken,
+  };
+  const content = Object.entries(merged)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n') + '\n';
+  safeWriteEnvFile(content);
   return gatewayToken;
 }
 
@@ -2021,7 +2034,7 @@ async function cmdStart() {
   if (reconfig) {
     log('Resetting configuration for setup wizard...');
     const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\nFORCE_SETUP_MODE=true\n`;
-    fs.writeFileSync(ENV_FILE, minimalContent, { mode: 0o600 });
+    safeWriteEnvFile(minimalContent);
     ensureGatewayToken(existingEnv);
   }
 
@@ -2065,7 +2078,7 @@ async function cmdStart() {
   try {
     const envContent = fs.readFileSync(ENV_FILE, 'utf8');
     const cleaned = envContent.replace(/^FORCE_SETUP_MODE=.*\n?/m, '');
-    if (cleaned !== envContent) fs.writeFileSync(ENV_FILE, cleaned, { mode: 0o600 });
+    if (cleaned !== envContent) safeWriteEnvFile(cleaned);
   } catch {}
 }
 
@@ -2283,11 +2296,7 @@ ${c.bold}Usage:${c.reset}
   const newContent = Object.entries(existingEnv)
     .map(([key, value]) => `${key}=${value}`)
     .join('\n') + '\n';
-  if (fs.existsSync(ENV_FILE)) {
-    try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
-  }
-  fs.writeFileSync(ENV_FILE, newContent, { mode: 0o666 });
-  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
+  safeWriteEnvFile(newContent);
   ok(`${featureLabel} ${hasEnable ? 'enabled' : 'disabled'}.`);
 
   if (fs.existsSync(COMPOSE_FILE)) {
@@ -2328,7 +2337,7 @@ async function cmdSwitchBrain() {
     .replace(/^AUTH_MODE=.*\n?/gm, '')
     .replace(/^MODEL_PROVIDER=.*\n?/gm, '')
     .replace(/^MODEL_NAME=.*\n?/gm, '');
-  fs.writeFileSync(ENV_FILE, cleaned + 'SWITCH_BRAIN_MODE=true\n', { mode: 0o600 });
+  safeWriteEnvFile(cleaned + 'SWITCH_BRAIN_MODE=true\n');
 
   pullOrBuildImage(lang);
   ensureVolumePermissions();
@@ -2356,7 +2365,7 @@ async function cmdSwitchBrain() {
   try {
     const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
     const final = envAfter.replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '');
-    if (final !== envAfter) fs.writeFileSync(ENV_FILE, final, { mode: 0o600 });
+    if (final !== envAfter) safeWriteEnvFile(final);
   } catch {}
 }
 
@@ -2385,7 +2394,7 @@ async function cmdConnectCalendar() {
   // Write CONNECT_CALENDAR_MODE to .env (preserve existing config)
   const envContent = fs.readFileSync(ENV_FILE, 'utf8');
   const cleaned = envContent.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-  fs.writeFileSync(ENV_FILE, cleaned + 'CONNECT_CALENDAR_MODE=true\n', { mode: 0o600 });
+  safeWriteEnvFile(cleaned + 'CONNECT_CALENDAR_MODE=true\n');
 
   pullOrBuildImage(lang);
   ensureVolumePermissions();
@@ -2413,7 +2422,7 @@ async function cmdConnectCalendar() {
   try {
     const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
     const final = envAfter.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-    if (final !== envAfter) fs.writeFileSync(ENV_FILE, final, { mode: 0o600 });
+    if (final !== envAfter) safeWriteEnvFile(final);
   } catch {}
 }
 
@@ -2541,8 +2550,10 @@ module.exports = {
   buildOAuthUrl,
   // Exported for tests — the real commands still run through the CLI entrypoint.
   writeEnv,
+  safeWriteEnvFile,
   ensureComposeFile,
   migrateLegacySecretsToEnv,
+  writeMinimalEnv,
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────

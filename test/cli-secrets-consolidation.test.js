@@ -480,3 +480,238 @@ describe('ensureComposeFile — perms and layout', () => {
     }
   });
 });
+
+// ─── 6. safeWriteEnvFile — mode 0o666 + container-writable ─────────────────
+
+describe('safeWriteEnvFile — .env mode after writes', () => {
+  test('exports safeWriteEnvFile helper', () => {
+    assert.ok(
+      /function\s+safeWriteEnvFile\s*\(/.test(CLI_SOURCE),
+      'safeWriteEnvFile helper should exist in cli.js'
+    );
+    const exportsIdx = CLI_SOURCE.indexOf('module.exports');
+    const exportsBlock = CLI_SOURCE.slice(exportsIdx, exportsIdx + 2000);
+    assert.ok(
+      exportsBlock.includes('safeWriteEnvFile'),
+      'safeWriteEnvFile must be exported for test access'
+    );
+  });
+
+  test('exactly one fs.writeFileSync(ENV_FILE, ...) call site remains', () => {
+    // After the refactor every other writer should funnel through
+    // safeWriteEnvFile. This guards against regressions where a future
+    // change re-introduces a 0o600 (host-only) write that breaks the
+    // container's ability to rewrite the .env. Strip line comments first
+    // so a `// fs.writeFileSync(ENV_FILE, ...)` mention in a docstring
+    // doesn't trip the count.
+    const codeOnly = CLI_SOURCE
+      .split('\n')
+      .map((line) => line.replace(/^\s*\/\/.*$/, ''))
+      .join('\n');
+    const matches = codeOnly.match(/fs\.writeFileSync\(ENV_FILE\b/g) || [];
+    assert.equal(
+      matches.length,
+      1,
+      `expected exactly one fs.writeFileSync(ENV_FILE, ...) call site, found ${matches.length}`
+    );
+  });
+
+  test('safeWriteEnvFile writes .env with mode 0o666', () => {
+    const { dir, cleanup } = makeTmpHome();
+    try {
+      const home = path.join(dir, '.limbo');
+      const envPath = path.join(home, 'config', '.env');
+
+      const result = runCliExport(
+        home,
+        'safeWriteEnvFile',
+        JSON.stringify(['LLM_API_KEY=sk-test\n'])
+      );
+      assert.ok(result.ok, 'safeWriteEnvFile should succeed: ' + (result.stderr || ''));
+
+      assert.ok(fs.existsSync(envPath), '.env must be created');
+      const stat = fs.statSync(envPath);
+      const mode = stat.mode & 0o777;
+      assert.equal(
+        mode,
+        0o666,
+        `.env mode must be 0o666 (got 0o${mode.toString(8)}) so the uid 999 container can rewrite it`
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('repeated safeWriteEnvFile calls keep mode 0o666 (cmdSwitchBrain-style)', () => {
+    // cmdSwitchBrain reads .env, mutates it, writes it back. Simulate that
+    // sequence: an initial write (mode should be 0666), then a follow-up
+    // overwrite (mode should still be 0666). This guards against C2 — the
+    // pre-fix code wrote with mode 0o600 here, breaking the container.
+    const { dir, cleanup } = makeTmpHome();
+    try {
+      const home = path.join(dir, '.limbo');
+      const envPath = path.join(home, 'config', '.env');
+
+      assert.ok(
+        runCliExport(home, 'safeWriteEnvFile', JSON.stringify(['MODEL_PROVIDER=anthropic\n'])).ok
+      );
+      assert.ok(
+        runCliExport(
+          home,
+          'safeWriteEnvFile',
+          JSON.stringify(['MODEL_PROVIDER=anthropic\nSWITCH_BRAIN_MODE=true\n'])
+        ).ok
+      );
+
+      const mode = fs.statSync(envPath).mode & 0o777;
+      assert.equal(mode, 0o666, `mode must remain 0o666 after a cmdSwitchBrain-style rewrite (got 0o${mode.toString(8)})`);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('reconfigure-cleanup style write keeps mode 0o666', () => {
+    // cmdStart's post-wizard cleanup reads .env, strips FORCE_SETUP_MODE=,
+    // writes it back. The pre-fix path wrote mode 0o600 — breaking the
+    // container's ability to update .env on next boot.
+    const { dir, cleanup } = makeTmpHome();
+    try {
+      const home = path.join(dir, '.limbo');
+      const envPath = path.join(home, 'config', '.env');
+
+      assert.ok(
+        runCliExport(
+          home,
+          'safeWriteEnvFile',
+          JSON.stringify(['CLI_LANGUAGE=en\nLIMBO_PORT=18900\nFORCE_SETUP_MODE=true\n'])
+        ).ok
+      );
+      // Cleanup write — strips FORCE_SETUP_MODE.
+      assert.ok(
+        runCliExport(
+          home,
+          'safeWriteEnvFile',
+          JSON.stringify(['CLI_LANGUAGE=en\nLIMBO_PORT=18900\n'])
+        ).ok
+      );
+
+      const mode = fs.statSync(envPath).mode & 0o777;
+      assert.equal(mode, 0o666, `mode must remain 0o666 after reconfigure cleanup (got 0o${mode.toString(8)})`);
+      const env = parseEnvFile(envPath);
+      assert.ok(!('FORCE_SETUP_MODE' in env), 'FORCE_SETUP_MODE should be stripped');
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+// ─── 7. migrateLegacySecretsToEnv — completeness ───────────────────────────
+
+describe('migrateLegacySecretsToEnv — extended secret coverage', () => {
+  test('migrates google_client_id and google_client_secret', () => {
+    const { dir, cleanup } = makeTmpHome();
+    try {
+      const home = path.join(dir, '.limbo');
+      fs.mkdirSync(path.join(home, 'config'), { recursive: true });
+      writeSecret(path.join(home, 'secrets'), 'google_client_id', 'gci-legacy');
+      writeSecret(path.join(home, 'secrets'), 'google_client_secret', 'gcs-legacy');
+
+      const result = runCliExport(home, 'migrateLegacySecretsToEnv');
+      assert.ok(result.ok, 'migration should succeed: ' + (result.stderr || ''));
+
+      const env = parseEnvFile(path.join(home, 'config', '.env'));
+      assert.equal(env.GOOGLE_CLIENT_ID, 'gci-legacy');
+      assert.equal(env.GOOGLE_CLIENT_SECRET, 'gcs-legacy');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('migrates telegram_chat_id', () => {
+    const { dir, cleanup } = makeTmpHome();
+    try {
+      const home = path.join(dir, '.limbo');
+      fs.mkdirSync(path.join(home, 'config'), { recursive: true });
+      writeSecret(path.join(home, 'openclaw-state', 'secrets'), 'telegram_chat_id', '1234567890');
+
+      const result = runCliExport(home, 'migrateLegacySecretsToEnv');
+      assert.ok(result.ok, 'migration should succeed: ' + (result.stderr || ''));
+
+      const env = parseEnvFile(path.join(home, 'config', '.env'));
+      assert.equal(env.TELEGRAM_CHAT_ID, '1234567890');
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+// ─── 8. writeMinimalEnv — merge with migrated secrets ──────────────────────
+
+describe('writeMinimalEnv — merge behavior', () => {
+  test('preserves a pre-existing LLM_API_KEY in .env', () => {
+    // Guard against I4 — the pre-fix writeMinimalEnv built a 3-line .env
+    // from scratch and clobbered LLM_API_KEY (and any other secret) that
+    // migrateLegacySecretsToEnv had just populated.
+    const { dir, cleanup } = makeTmpHome();
+    try {
+      const home = path.join(dir, '.limbo');
+      fs.mkdirSync(path.join(home, 'config'), { recursive: true });
+      const envPath = path.join(home, 'config', '.env');
+      fs.writeFileSync(
+        envPath,
+        'LLM_API_KEY=sk-preserve-me\nTELEGRAM_BOT_TOKEN=tg-preserve-me\nGATEWAY_TOKEN=gw-existing\n'
+      );
+
+      const result = runCliExport(home, 'writeMinimalEnv');
+      assert.ok(result.ok, 'writeMinimalEnv should succeed: ' + (result.stderr || ''));
+
+      const env = parseEnvFile(envPath);
+      assert.equal(env.LLM_API_KEY, 'sk-preserve-me', 'LLM_API_KEY must be preserved');
+      assert.equal(env.TELEGRAM_BOT_TOKEN, 'tg-preserve-me', 'TELEGRAM_BOT_TOKEN must be preserved');
+      assert.equal(env.GATEWAY_TOKEN, 'gw-existing', 'GATEWAY_TOKEN must be preserved when set');
+      assert.ok(env.CLI_LANGUAGE, 'CLI_LANGUAGE must be set');
+      assert.ok(env.LIMBO_PORT, 'LIMBO_PORT must be set');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('preserves migrated secrets after running on a legacy install', () => {
+    // End-to-end I4 check: legacy secret files exist, no .env yet.
+    // writeMinimalEnv() calls ensureComposeFile() which migrates the
+    // secrets, then merges in CLI_LANGUAGE/LIMBO_PORT/GATEWAY_TOKEN.
+    const { dir, cleanup } = makeTmpHome();
+    try {
+      const home = path.join(dir, '.limbo');
+      writeSecret(path.join(home, 'secrets'), 'llm_api_key', 'sk-migrated');
+      writeSecret(path.join(home, 'secrets'), 'telegram_bot_token', 'tg-migrated');
+
+      const result = runCliExport(home, 'writeMinimalEnv');
+      assert.ok(result.ok, 'writeMinimalEnv should succeed: ' + (result.stderr || ''));
+
+      const env = parseEnvFile(path.join(home, 'config', '.env'));
+      assert.equal(env.LLM_API_KEY, 'sk-migrated', 'migrated LLM_API_KEY must survive writeMinimalEnv');
+      assert.equal(env.TELEGRAM_BOT_TOKEN, 'tg-migrated', 'migrated TELEGRAM_BOT_TOKEN must survive');
+      assert.ok(env.GATEWAY_TOKEN, 'GATEWAY_TOKEN must be generated');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('generates a fresh GATEWAY_TOKEN when none exists', () => {
+    const { dir, cleanup } = makeTmpHome();
+    try {
+      const home = path.join(dir, '.limbo');
+
+      const result = runCliExport(home, 'writeMinimalEnv');
+      assert.ok(result.ok, 'writeMinimalEnv should succeed: ' + (result.stderr || ''));
+
+      const env = parseEnvFile(path.join(home, 'config', '.env'));
+      assert.ok(env.GATEWAY_TOKEN && env.GATEWAY_TOKEN.length >= 16, 'GATEWAY_TOKEN must be generated');
+      assert.ok(env.CLI_LANGUAGE, 'CLI_LANGUAGE must be set');
+      assert.ok(env.LIMBO_PORT, 'LIMBO_PORT must be set');
+    } finally {
+      cleanup();
+    }
+  });
+});
