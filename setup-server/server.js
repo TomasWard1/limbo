@@ -936,11 +936,36 @@ async function handleConfigure(req, res) {
     log(`Configuration written: provider=${data.provider} model=${modelName}`);
     sendJSON(res, 200, { success: true });
 
-    // Keep serving the success page for a bit, then exit for container restart
+    // Regenerate openclaw.json from the updated .env so OpenClaw's file
+    // watcher picks up the new config and hot-reloads WITHOUT a container
+    // restart. This runs inside the same container as the already-running
+    // OpenClaw gateway; the atomic rename inside the regen script lines up
+    // with chokidar's awaitWriteFinish, so the reload fires once.
+    // Only needed when the wizard was triggered on an existing container
+    // (wizard mode is CONNECT_CALENDAR_MODE / SWITCH_BRAIN_MODE / similar).
+    // Full first-run installs still exit and let the container restart.
+    const isIncrementalWizard = SWITCH_BRAIN_MODE || CONNECT_CALENDAR_MODE;
+    if (isIncrementalWizard) {
+      try {
+        const { execFileSync } = require('node:child_process');
+        execFileSync('sh', ['/app/scripts/regen-openclaw-config.sh'], {
+          stdio: 'inherit',
+          env: process.env,
+        });
+        log('OpenClaw config regenerated — hot reload will fire');
+      } catch (regenErr) {
+        log(`WARN regen-openclaw-config.sh failed: ${regenErr.message}`);
+      }
+    }
+
+    // Keep serving the success page for a bit, then exit. For first-run
+    // installs, this exits to trigger a container restart (compose restart
+    // policy). For incremental wizards (connect-calendar, switch-brain),
+    // the supervisor observes the exit and transitions the session to done.
     setTimeout(() => {
-      log('Configuration complete. Exiting for container restart...');
+      log('Configuration complete. Exiting.');
       process.exit(0);
-    }, 10000);
+    }, isIncrementalWizard ? 1000 : 10000);
 
   } catch (err) {
     log(`Configure error: ${err.message}`);

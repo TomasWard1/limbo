@@ -27,6 +27,8 @@ const FLAGS_DIR = path.join(LIMBO_DIR, 'flags');
 const CONFIG_DIR = path.join(LIMBO_DIR, 'config');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const ENV_BACKUP_FILE = path.join(CONFIG_DIR, '.env.bak');
+const CONTROL_DIR = path.join(LIMBO_DIR, 'control');
+const CONTROL_SOCKET = path.join(CONTROL_DIR, 'supervisor.sock');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const DEFAULT_REGISTRY = 'registry.gitlab.com/tomas209/limbo';
 const REGISTRY_IMAGE = process.env.LIMBO_REGISTRY || DEFAULT_REGISTRY;
@@ -184,11 +186,13 @@ function composeContent() {
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
+      - "127.0.0.1:${PORT + 1}:${PORT + 1}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
+      - ${CONTROL_DIR}:/data/control
       - ${FLAGS_DIR}:/flags
     env_file:
       - ${ENV_FILE}
@@ -230,11 +234,13 @@ function composeContentHardened() {
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
+      - "127.0.0.1:${PORT + 1}:${PORT + 1}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
+      - ${CONTROL_DIR}:/data/control
       - ${FLAGS_DIR}:/flags
     env_file:
       - ${ENV_FILE}
@@ -1171,6 +1177,10 @@ function ensureComposeFile(hardened = false) {
   // anything beyond what the home root already permits.
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
   try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort on existing dirs */ }
+  // Control plane socket dir (bind-mounted as /data/control/). Host side needs
+  // to exist before docker compose up, otherwise Docker creates it owned by
+  // root and the supervisor running as uid 999 cannot bind a socket inside.
+  fs.mkdirSync(CONTROL_DIR, { recursive: true, mode: 0o700 });
   // Migrate legacy .env from LIMBO_DIR root to config/ subdir
   const legacyEnv = path.join(LIMBO_DIR, '.env');
   if (legacyEnv !== ENV_FILE && fs.existsSync(legacyEnv) && !fs.existsSync(ENV_FILE)) {
@@ -2412,44 +2422,80 @@ async function cmdConnectCalendar() {
     if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
   }
 
-  ensureComposeFile(false);
-
   const lang = existingEnv.CLI_LANGUAGE || 'en';
   header(lang === 'es' ? 'Conectar Google Calendar' : 'Connect Google Calendar');
 
-  // Write CONNECT_CALENDAR_MODE to .env (preserve existing config)
-  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
-  const cleaned = envContent.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-  safeWriteEnvFile(cleaned + 'CONNECT_CALENDAR_MODE=true\n');
+  // ── New-world connect-calendar flow ──────────────────────────────────
+  // Talks to the container's wizard supervisor over the bind-mounted Unix
+  // socket. No docker rebuild, no force-recreate, no OpenClaw restart —
+  // the setup-server runs as a sibling process to OpenClaw inside the
+  // container, and OpenClaw hot-reloads its config from disk when the
+  // wizard writes credentials.
+  const { createControlClient } = require('./lib/control-client');
+  const client = createControlClient({ socketPath: CONTROL_SOCKET });
 
-  pullOrBuildImage(lang);
-  ensureVolumePermissions();
-
-  log(lang === 'es' ? 'Iniciando wizard de Google Calendar...' : 'Starting Google Calendar setup wizard...');
-  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
-  if (upResult.status !== 0) {
-    process.stderr.write(upResult.stderr || '');
-    die('Container failed to start. Run `limbo logs` to investigate.');
+  try {
+    await client.health();
+  } catch (err) {
+    die(
+      `Supervisor not reachable at ${CONTROL_SOCKET}.\n` +
+      `Is the container running? Run 'limbo start' first.\n` +
+      `(error: ${err.message})`
+    );
   }
 
-  const wizardUrl = extractWizardUrl();
+  log(lang === 'es' ? 'Solicitando wizard de Google Calendar...' : 'Requesting Google Calendar wizard session...');
+  let session;
+  try {
+    session = await client.requestWizard({
+      feature: 'calendar',
+      timeoutMs: 15 * 60 * 1000, // 15 minutes
+    });
+  } catch (err) {
+    die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
+  }
+
+  // The wizard listens on session.port (PORT + 1) inside the container,
+  // exposed on the host via the compose port mapping.
+  const wizardUrl = `http://127.0.0.1:${session.port}/?token=${session.token}`;
 
   let tunnel = null;
   if (isServerEnvironment() || process.argv.includes('--tunnel')) {
-    tunnel = await createSetupTunnel(PORT);
+    tunnel = await createSetupTunnel(session.port);
   }
 
-  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
-  if (!wizardUrl) {
-    warn('Could not extract setup token from container logs.');
-  }
-  printWizardUrl(displayUrl, tunnel);
+  printWizardUrl(wizardUrl, tunnel);
 
+  // Poll the supervisor until the wizard session reaches a terminal state.
   try {
-    const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
-    const final = envAfter.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-    if (final !== envAfter) safeWriteEnvFile(final);
-  } catch {}
+    while (true) {
+      await new Promise((r) => setTimeout(r, 2000));
+      let status;
+      try {
+        status = await client.getWizard(session.id);
+      } catch (err) {
+        // 404 after completion = session was reaped; treat as done.
+        if (err.status === 404) {
+          ok(lang === 'es' ? 'Google Calendar conectado.' : 'Google Calendar connected.');
+          return;
+        }
+        throw err;
+      }
+      if (status.status === 'done') {
+        ok(lang === 'es' ? 'Google Calendar conectado.' : 'Google Calendar connected.');
+        return;
+      }
+      if (status.status === 'error') {
+        die(`Wizard failed: ${status.error || 'unknown error'}`);
+      }
+      if (status.status === 'timeout') {
+        die(lang === 'es' ? 'El wizard expiró.' : 'Wizard timed out.');
+      }
+      // still pending/ready/active → keep polling
+    }
+  } finally {
+    if (tunnel) teardownSetupTunnel(tunnel);
+  }
 }
 
 function cmdHelp() {

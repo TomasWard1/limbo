@@ -288,128 +288,30 @@ LIMBO_PORT="${LIMBO_PORT:-18789}"
 if [ "$SETUP_MODE" = "true" ]; then
   log "INFO  Setup mode — skipping config generation"
 else
-  # Subscription (OAuth) mode uses "openai-codex" provider, not "openai".
-  # The wizard saves MODEL_PROVIDER=openai in .env, but OpenClaw's auth-profiles
-  # use "openai-codex" for OAuth-based auth. Remap here so config matches.
-  if [ "$AUTH_MODE" = "subscription" ] && [ "$MODEL_PROVIDER" = "openai" ]; then
-    MODEL_PROVIDER="openai-codex"
-    log "INFO  Subscription mode: remapped provider openai → openai-codex"
-  fi
-
-  log "INFO  Generating OpenClaw config from template"
-  export MODEL_PROVIDER MODEL_NAME LIMBO_PORT RUNTIME_REASONING_EFFORT OPENCLAW_STATE_DIR
-  envsubst '$MODEL_PROVIDER $MODEL_NAME $LIMBO_PORT $RUNTIME_REASONING_EFFORT $OPENCLAW_STATE_DIR' \
-    < /app/openclaw.json.template > "$OPENCLAW_CONFIG_PATH"
-
-  # Inject gateway token via node to safely handle special characters in tokens
-  export GATEWAY_TOKEN
-  node -e "
-    const fs = require('fs');
-    const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-    cfg.gateway.auth.token = process.env.GATEWAY_TOKEN || '';
-    fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
-  " "$OPENCLAW_CONFIG_PATH"
-
-  # Telegram: channel is enabled by section presence, not a boolean flag.
-  # Only merge telegram config when the user actually configured it.
-  if [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
-    export TELEGRAM_BOT_TOKEN
-    node -e "
-      const fs = require('fs');
-      const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-      cfg.channels = cfg.channels || {};
-      cfg.channels.telegram = {
-        enabled: true,
-        botToken: process.env.TELEGRAM_BOT_TOKEN,
-        allowFrom: ['*']
-      };
-      fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
-    " "$OPENCLAW_CONFIG_PATH"
-    log "INFO  Telegram channel enabled in config"
-  fi
-
-  # Voice transcription (Groq Whisper)
-  # We pin the audio provider to Groq explicitly in tools.media.audio.models
-  # instead of relying on OpenClaw's auto-resolver. The auto-resolver picks the
-  # first provider whose auth is satisfied, without fallover on HTTP errors.
-  # When a model provider like openai-codex has an OAuth profile, it gets
-  # matched as "openai has auth" for audio too, and the resolver picks OpenAI
-  # Whisper — which costs API credits separate from the Codex subscription and
-  # returns HTTP 429 once the OpenAI quota is exhausted. Pinning to Groq
-  # guarantees voice notes go to the free/fast Groq Whisper endpoint.
-  # GROQ_API_KEY was already sourced from .env at the top of the script.
-  if [ "$VOICE_ENABLED" = "true" ] && [ -n "$GROQ_API_KEY" ]; then
-    export GROQ_API_KEY
-    node -e "
-      const fs = require('fs');
-      const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-      cfg.tools = cfg.tools || {};
-      cfg.tools.media = cfg.tools.media || {};
-      cfg.tools.media.audio = cfg.tools.media.audio || {};
-      cfg.tools.media.audio.models = [
-        { provider: 'groq', model: 'whisper-large-v3-turbo' }
-      ];
-      fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
-    " "$OPENCLAW_CONFIG_PATH"
-    log "INFO  Voice transcription enabled (GROQ_API_KEY exported, audio pinned to groq)"
-  fi
-
-  # Web search (Brave)
-  # OpenClaw schema: tools.web.search with provider and env-based API key.
-  # BRAVE_API_KEY was already sourced from .env at the top of the script.
-  if [ "$WEB_SEARCH_ENABLED" = "true" ] && [ -n "$BRAVE_API_KEY" ]; then
-    export BRAVE_API_KEY
-    node -e "
-      const fs = require('fs');
-      const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-      cfg.tools = cfg.tools || {};
-      cfg.tools.web = cfg.tools.web || {};
-      cfg.tools.web.search = {
-        enabled: true,
-        provider: 'brave',
-        maxResults: 5
-      };
-      fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
-    " "$OPENCLAW_CONFIG_PATH"
-    log "INFO  Web search enabled in config (BRAVE_API_KEY exported)"
-  fi
-
-  # Google Calendar (gws CLI)
-  # When enabled, export env vars that gws reads for auth, and inject
-  # GOOGLE_CALENDAR_ENABLED into the MCP server env so tools can check it.
-  # gws writes a discovery cache to its config dir — point to /tmp so it works
-  # on read-only root filesystems (docker-compose.test.yml has read_only: true).
-  # Check the new consolidated location first, fall back to legacy path for
-  # instances that went through the old secrets/ layout.
-  GCAL_CREDS="$OPENCLAW_STATE_DIR/google/credentials.json"
-  if [ ! -f "$GCAL_CREDS" ] && [ -f "$OPENCLAW_STATE_DIR/secrets/google_calendar_credentials.json" ]; then
-    GCAL_CREDS="$OPENCLAW_STATE_DIR/secrets/google_calendar_credentials.json"
-  fi
-  if [ "$GOOGLE_CALENDAR_ENABLED" = "true" ] && [ -f "$GCAL_CREDS" ]; then
-    export GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE="$GCAL_CREDS"
-    export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND="file"
-    export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="/tmp/gws"
-    mkdir -p /tmp/gws
-    export GOOGLE_CALENDAR_ENABLED
-
-    # Inject GOOGLE_CALENDAR_ENABLED and GWS env vars into the limbo-vault MCP server
-    # so the calendar tools (which live in the same MCP server) can call gws.
-    node -e "
-      const fs = require('fs');
-      const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-      const srv = cfg.mcp.servers['limbo-vault'];
-      if (srv && srv.env) {
-        srv.env.GOOGLE_CALENDAR_ENABLED = 'true';
-        srv.env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE = process.env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE;
-        srv.env.GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND = 'file';
-        srv.env.GOOGLE_WORKSPACE_CLI_CONFIG_DIR = '/tmp/gws';
-      }
-      fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
-    " "$OPENCLAW_CONFIG_PATH"
-    log "INFO  Google Calendar enabled (credentials at $GCAL_CREDS)"
-  fi
-
+  # Generate openclaw.json from template + .env. The logic lives in a
+  # standalone script so both this boot path and the post-wizard hot-reload
+  # path (triggered by setup-server/server.js after a wizard completes)
+  # share the exact same code. DRY and always consistent. The regen script
+  # re-sources /data/config/.env so it always sees the latest secrets that
+  # the wizard may have just written.
+  log "INFO  Generating OpenClaw config from template (regen-openclaw-config.sh)"
+  export OPENCLAW_STATE_DIR OPENCLAW_CONFIG_PATH
+  sh /app/scripts/regen-openclaw-config.sh
   log "INFO  OpenClaw config written to $OPENCLAW_CONFIG_PATH"
+
+  # Operator-visibility logs. The actual JSON injection lives in the regen
+  # script — we only log which optional features ended up enabled so that
+  # limbo logs is immediately informative. GROQ_API_KEY / BRAVE_API_KEY /
+  # TELEGRAM_BOT_TOKEN are already in the environment thanks to the .env
+  # sourcing at the top of this script.
+  [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_BOT_TOKEN" ] && \
+    log "INFO  Telegram channel enabled in config"
+  [ "$VOICE_ENABLED" = "true" ] && [ -n "$GROQ_API_KEY" ] && \
+    log "INFO  Voice transcription enabled (audio pinned to groq)"
+  [ "$WEB_SEARCH_ENABLED" = "true" ] && [ -n "$BRAVE_API_KEY" ] && \
+    log "INFO  Web search enabled in config"
+  [ "$GOOGLE_CALENDAR_ENABLED" = "true" ] && \
+    log "INFO  Google Calendar enabled"
 fi
 
 # ── Run migrations ────────────────────────────────────────────────────────────
@@ -444,12 +346,15 @@ if [ "$SETUP_MODE" = "true" ]; then
   exec node /app/setup-server/server.js
 fi
 
-# ── Connect-calendar mode: start reduced wizard for Google Calendar OAuth ───
-# Preserves all existing config, just needs the wizard server to run once.
+# ── Connect-calendar mode (LEGACY) ──────────────────────────────────────────
+# This branch is kept temporarily for rollback safety while the supervisor
+# takes over. New-world connect-calendar flows through the control plane and
+# no longer sets CONNECT_CALENDAR_MODE on the container env. If we ever see
+# this flag again in a new-world container it means something upstream is
+# still on the old code path — log it and fall through to the supervisor.
 if [ "$CONNECT_CALENDAR_ACTIVE" = "true" ]; then
-  log "INFO  CONNECT_CALENDAR_MODE — starting Google Calendar wizard on port $LIMBO_PORT"
-  export CONNECT_CALENDAR_MODE
-  exec node /app/setup-server/server.js
+  log "WARN  CONNECT_CALENDAR_MODE flag observed — this path is deprecated, supervisor handles wizards now"
+  unset CONNECT_CALENDAR_MODE
 fi
 
 # ── Clean up force-setup markers ─────────────────────────────────────────────
@@ -468,11 +373,11 @@ else
   log "INFO  Telegram not enabled — skipping wakeup routine"
 fi
 
-# ── Start OpenClaw gateway ───────────────────────────────────────────────────
-log "INFO  Starting OpenClaw gateway"
-if [ "${LIMBO_VERBOSE:-}" = "true" ]; then
-  log "INFO  LIMBO_VERBOSE=true — enabling OpenClaw verbose logging"
-  exec openclaw gateway --verbose
-else
-  exec openclaw gateway
-fi
+# ── Start wizard supervisor (manages OpenClaw + on-demand wizards) ──────────
+# The supervisor replaces `exec openclaw gateway`. It launches OpenClaw as a
+# child process and exposes a Unix-socket control plane that the host CLI
+# uses to request wizard sessions (connect-calendar, switch-brain, etc.)
+# without forcing a container rebuild or recreate.
+mkdir -p /data/control
+log "INFO  Starting wizard supervisor (control socket: /data/control/supervisor.sock)"
+exec node /app/scripts/supervisor.js
