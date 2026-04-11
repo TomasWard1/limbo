@@ -80,11 +80,17 @@ test('compose: NODE_OPTIONS max-old-space-size is 512 (OpenClaw needs more heap 
   assert.equal(parseInt(m[1], 10), 512, `max-old-space-size should be 512 for OpenClaw`);
 });
 
-test('compose: secrets section references all required secret files', () => {
-  const requiredSecrets = ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key'];
-  for (const name of requiredSecrets) {
-    assert.ok(normalTemplate.includes(name), `Missing secret: ${name}`);
-  }
+test('compose: no secrets section (tokens now live in .env)', () => {
+  assert.ok(!/\nsecrets:\s*\n/.test(normalTemplate), 'Must not declare a top-level secrets block');
+  assert.ok(
+    !/\n\s+secrets:\s*\n\s+-\s+llm_api_key/.test(normalTemplate),
+    'Must not list secrets under the limbo service'
+  );
+});
+
+test('compose: references env_file as the single source of config', () => {
+  assert.ok(normalTemplate.includes('env_file:'), 'env_file directive must be present');
+  assert.ok(normalTemplate.includes('${ENV_FILE}'), 'env_file must reference ENV_FILE');
 });
 
 test('compose: uses openclaw-state host directory (not zeroclaw-state)', () => {
@@ -154,11 +160,12 @@ test('hardened compose: NODE_OPTIONS max-old-space-size is 512', () => {
   assert.equal(parseInt(m[1], 10), 512, `Hardened max-old-space-size should be 512`);
 });
 
-test('hardened compose: secrets section references all required secrets', () => {
-  const requiredSecrets = ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key'];
-  for (const name of requiredSecrets) {
-    assert.ok(hardenedTemplate.includes(name), `Hardened missing secret: ${name}`);
-  }
+test('hardened compose: no secrets section (tokens now live in .env)', () => {
+  assert.ok(!/\nsecrets:\s*\n/.test(hardenedTemplate), 'Hardened must not declare a top-level secrets block');
+  assert.ok(
+    !/\n\s+secrets:\s*\n\s+-\s+llm_api_key/.test(hardenedTemplate),
+    'Hardened must not list secrets under the limbo service'
+  );
 });
 
 // ─── 3. Volume migration logic ──────────────────────────────────────────────
@@ -332,71 +339,23 @@ test('ensureComposeFile: creates expected directory structure', () => {
     const limboDir = path.join(tmpDir, '.limbo');
     const vaultDir = path.join(limboDir, 'vault');
     const stateDir = path.join(limboDir, 'openclaw-state');
-    const secretsDir = path.join(limboDir, 'secrets');
+    const configDir = path.join(limboDir, 'config');
 
-    // Replicate ensureComposeFile directory creation
+    // Replicate ensureComposeFile directory creation (post-consolidation)
     fs.mkdirSync(limboDir, { recursive: true });
     fs.mkdirSync(path.join(vaultDir, 'notes'), { recursive: true });
     fs.mkdirSync(path.join(vaultDir, 'maps'), { recursive: true });
     fs.mkdirSync(stateDir, { recursive: true });
-    fs.mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(configDir, { recursive: true, mode: 0o777 });
 
     // Verify
     assert.ok(fs.existsSync(limboDir));
     assert.ok(fs.existsSync(path.join(vaultDir, 'notes')));
     assert.ok(fs.existsSync(path.join(vaultDir, 'maps')));
     assert.ok(fs.existsSync(stateDir));
-    assert.ok(fs.existsSync(secretsDir));
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('ensureComposeFile: creates empty secret placeholder files', () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'limbo-test-'));
-  try {
-    const secretsDir = path.join(tmpDir, 'secrets');
-    fs.mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
-
-    const expectedSecrets = ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key'];
-    for (const name of expectedSecrets) {
-      const fp = path.join(secretsDir, name);
-      if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o644 });
-    }
-
-    for (const name of expectedSecrets) {
-      const fp = path.join(secretsDir, name);
-      assert.ok(fs.existsSync(fp), `Secret file ${name} should exist`);
-      assert.equal(fs.readFileSync(fp, 'utf8'), '', `Secret file ${name} should be empty`);
-    }
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
-});
-
-test('ensureComposeFile: does not overwrite existing secret files', () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'limbo-test-'));
-  try {
-    const secretsDir = path.join(tmpDir, 'secrets');
-    fs.mkdirSync(secretsDir, { recursive: true });
-
-    // Pre-populate one secret
-    fs.writeFileSync(path.join(secretsDir, 'llm_api_key'), 'sk-existing-key');
-
-    // Run the same logic as ensureComposeFile
-    for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
-      const fp = path.join(secretsDir, name);
-      if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o644 });
-    }
-
-    // Existing secret must be preserved
-    assert.equal(
-      fs.readFileSync(path.join(secretsDir, 'llm_api_key'), 'utf8'),
-      'sk-existing-key',
-      'Must not overwrite existing secret'
-    );
-    // New ones should be created
-    assert.ok(fs.existsSync(path.join(secretsDir, 'telegram_bot_token')));
+    assert.ok(fs.existsSync(configDir));
+    // No secrets/ dir should be created
+    assert.ok(!fs.existsSync(path.join(limboDir, 'secrets')));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -420,18 +379,14 @@ test('ensureComposeFile: idempotent — running twice does not error', () => {
     const limboDir = path.join(tmpDir, '.limbo');
     const vaultDir = path.join(limboDir, 'vault');
     const stateDir = path.join(limboDir, 'openclaw-state');
-    const secretsDir = path.join(limboDir, 'secrets');
+    const configDir = path.join(limboDir, 'config');
 
     const scaffold = () => {
       fs.mkdirSync(limboDir, { recursive: true });
       fs.mkdirSync(path.join(vaultDir, 'notes'), { recursive: true });
       fs.mkdirSync(path.join(vaultDir, 'maps'), { recursive: true });
       fs.mkdirSync(stateDir, { recursive: true });
-      fs.mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
-      for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
-        const fp = path.join(secretsDir, name);
-        if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o644 });
-      }
+      fs.mkdirSync(configDir, { recursive: true, mode: 0o777 });
     };
 
     // Run twice — should not throw
@@ -439,7 +394,7 @@ test('ensureComposeFile: idempotent — running twice does not error', () => {
     scaffold();
 
     assert.ok(fs.existsSync(path.join(vaultDir, 'notes')));
-    assert.ok(fs.existsSync(path.join(secretsDir, 'gateway_token')));
+    assert.ok(fs.existsSync(configDir));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -447,11 +402,9 @@ test('ensureComposeFile: idempotent — running twice does not error', () => {
 
 // ─── 5. Consistency between normal and hardened compose ─────────────────────
 
-test('both compose variants share the same secrets list', () => {
-  const secretNames = ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key'];
-  for (const name of secretNames) {
-    assert.ok(normalTemplate.includes(name), `Normal template missing secret: ${name}`);
-    assert.ok(hardenedTemplate.includes(name), `Hardened template missing secret: ${name}`);
+test('neither compose variant declares a secrets section', () => {
+  for (const [label, tpl] of [['normal', normalTemplate], ['hardened', hardenedTemplate]]) {
+    assert.ok(!/\nsecrets:\s*\n/.test(tpl), `${label} must not declare secrets`);
   }
 });
 

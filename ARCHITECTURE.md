@@ -1,25 +1,43 @@
 # Limbo — Architecture Reference
 
 > This file is loaded by AI assistants to avoid re-scanning the codebase every session.
-> Keep it updated when structure changes. Last verified: 2026-04-10.
+> Keep it updated when structure changes. Last verified: 2026-04-11.
 
 ## What Is Limbo
 
-Self-hosted personal AI memory agent. Runs as a Docker container exposing an OpenClaw gateway (WebSocket on :18789). Users interact via Telegram. The agent stores and retrieves knowledge from a markdown vault using MCP tools.
+Self-hosted personal AI memory agent. Runs as a Docker container where a **supervisor** orchestrates three things: an **OpenClaw gateway** (the agent runtime, default :18789), an **on-demand wizard port** (LIMBO_PORT+1, used by `limbo connect-calendar` / `limbo switch-brain`), and a **control plane** (LIMBO_PORT+2, TCP loopback, how the host CLI talks to the container without restarting it). Users interact via Telegram. The agent stores and retrieves knowledge from a markdown vault using MCP tools.
 
-**Stack**: OpenClaw (Node.js agent runtime) + Node.js MCP server + SQLite FTS5 + Telegram bot.
+**Stack**: OpenClaw (Node.js agent runtime) + Node.js MCP server + SQLite FTS5 + Telegram bot + Node.js supervisor (`lib/supervisor.js` + `scripts/supervisor.js`).
 
 **Published as**: `limbo-ai` on npm — the CLI (`npx limbo-ai`) handles install, start, stop, update, and setup.
 
 ## High-Level Flow
 
 ```
-User (Telegram) → OpenClaw Gateway (:18789) → LLM (configurable provider)
-                                                    ↓
-                                              MCP Tools (stdio)
-                                                    ↓
-                                         Vault (markdown + SQLite FTS5)
+User (Telegram) → OpenClaw Gateway (:LIMBO_PORT) → LLM (configurable provider)
+                         │                              ↓
+                         │                        MCP Tools (stdio)
+                         │                              ↓
+                         │                 Vault (markdown + SQLite FTS5)
+                         │
+    Host CLI ────────────┘
+    (limbo connect-calendar / switch-brain)
+         │
+         ▼
+    Supervisor control plane (TCP 127.0.0.1:LIMBO_PORT+2)
+    HTTP API: POST /wizard · GET /wizard/:id · DELETE /wizard/:id · GET /health
+         │
+         ▼
+    Wizard spawner — forks setup-server on LIMBO_PORT+1 on demand
+    Config regen → atomic rename → OpenClaw in-process reload
 ```
+
+Three ports are published per instance:
+- `127.0.0.1:LIMBO_PORT:LIMBO_PORT`             — OpenClaw gateway (agent + HTTP API)
+- `127.0.0.1:LIMBO_PORT+1:LIMBO_PORT+1`         — On-demand wizard (only live during connect-calendar / switch-brain)
+- `127.0.0.1:LIMBO_PORT+2:LIMBO_PORT+2`         — Supervisor control plane (host CLI ↔ supervisor)
+
+All three are bound to host loopback — never LAN-accessible.
 
 ## Directory Structure
 
@@ -56,14 +74,27 @@ limbo/
 │       └── USER.md.template  # Rendered with envsubst on first run
 │
 ├── setup-server/             # Zero-dependency HTTP setup wizard (pure Node.js)
-│   └── server.js             # Serves on :18789 until config complete, then exits
+│   └── server.js             # First-run: serves on LIMBO_PORT. Incremental (connect-calendar / switch-brain):
+│                             # serves on LIMBO_PORT+1, spawned by the supervisor with SETUP_TOKEN in env
+│
+├── lib/                      # Supervisor + control-plane modules (all pure, testable)
+│   ├── supervisor.js         # Orchestrator: wires session-store + router + server + spawner + OpenClaw
+│   ├── session-store.js      # In-memory state machine: pending → ready → active → done/error/timeout
+│   ├── control-router.js     # Pure HTTP router (POST /wizard, GET /wizard/:id, DELETE /wizard/:id, GET /health)
+│   ├── control-server.js     # TCP HTTP server (bind 0.0.0.0 in-container, host-header allowlist)
+│   ├── control-client.js     # Host-side HTTP client — talks to supervisor via 127.0.0.1:CONTROL_PORT
+│   ├── wizard-spawner.js     # Forks setup-server with SETUP_TOKEN + LIMBO_PORT + CONNECT_*_MODE / SWITCH_BRAIN_MODE
+│   ├── cf-tunnel.js          # Cloudflare tunnel helpers (zombie sweep, DNS polling, URL builder)
+│   └── telegram-notify.js    # Notification helper used by wakeup routine
 │
 ├── migrations/               # Data migration runner
 │   ├── index.js              # Runner — executes versioned migrations sequentially
-│   └── versions/             # Individual migration files (4 versions)
+│   └── versions/             # Individual migration files (6 versions)
 │
 ├── scripts/
-│   ├── entrypoint.sh         # Container startup (13KB) — 12-stage orchestration
+│   ├── entrypoint.sh         # Container startup (~15KB) — dirs, .env source, config regen, exec supervisor
+│   ├── supervisor.js         # Container main process — wires real child_process.spawn into lib/supervisor.js
+│   ├── regen-openclaw-config.sh  # Single source of truth for openclaw.json generation (envsubst + node -e)
 │   └── install.sh            # Server provisioning (Ubuntu/Debian)
 │
 ├── evals/                    # End-to-end eval framework
@@ -79,17 +110,20 @@ limbo/
 │
 ├── test/                     # Unit tests (node --test) — see package.json "test" script
 │   │                         # for the authoritative list of files run by npm test.
-│   ├── cli-filter.test.js
-│   ├── cli-auth.test.js
-│   ├── cli-compose.test.js
+│   ├── cli-filter.test.js / cli-auth.test.js / cli-compose.test.js
 │   ├── cli-wizard-parity.test.js
-│   ├── openclaw-migration.test.js
+│   ├── openclaw-migration.test.js / entrypoint.test.js / update-system.test.js
 │   ├── setup-server.test.js
-│   ├── entrypoint.test.js
-│   ├── fts.test.js
-│   ├── mcp-tools.test.js
-│   ├── sanitize-control-chars.test.js
-│   └── update-system.test.js
+│   ├── fts.test.js / mcp-tools.test.js / sanitize-control-chars.test.js
+│   ├── session-store.test.js       # pure state machine unit tests
+│   ├── control-router.test.js      # pure router unit tests (routing, 409, health)
+│   ├── control-server.test.js      # TCP HTTP server integration (ephemeral ports)
+│   ├── control-client.test.js      # host-side client integration
+│   ├── wizard-spawner.test.js      # spawner harness (fake children)
+│   ├── supervisor.test.js          # full supervisor integration (restart loop, shutdown)
+│   ├── google-calendar-cli.test.js # cmdConnectCalendar regression guards
+│   ├── switch-brain-cli.test.js    # cmdSwitchBrain regression guards
+│   └── cf-tunnel.test.js           # cf-tunnel.js unit tests (zombie sweep, DNS polling)
 │
 ├── docs/                     # Public documentation
 ├── agents/                   # Paperclip agent configs (not deployed in Limbo)
@@ -105,19 +139,43 @@ limbo/
 
 ## Entrypoint Flow (scripts/entrypoint.sh)
 
-12-stage startup:
-1. Directory setup (`/data/*`)
-2. Secrets sync (`/run/secrets/` → `$OPENCLAW_STATE_DIR/secrets/`)
-3. First-run detection (presence of `.env` in /data)
-4. Setup wizard (if no `MODEL_PROVIDER` in .env → serve wizard on :18789)
-5. Workspace file seeding (templates → /data, system files symlinked)
-6. Config template rendering (envsubst on openclaw.json.template)
-7. Feature sections (Telegram, Voice, Web Search) conditionally merged into openclaw.json
-8. Auth profiles generation
-9. Migration runner
-10. FTS index build
-11. MCP server registration
-12. OpenClaw launch
+1. Directory setup (`/data/*`, `/flags`, `/home/limbo/.openclaw`)
+2. **.env sourcing** — `set -a; . /data/config/.env; set +a` exports all tokens as env vars (post secrets consolidation)
+3. First-run detection (absence of `MODEL_PROVIDER` in .env → setup mode)
+4. Setup wizard (first-run path: exec `node /app/setup-server/server.js` directly on `LIMBO_PORT`)
+5. Workspace file seeding (system files copied fresh, user templates seeded only if missing)
+6. USER.md regeneration via envsubst
+7. OpenClaw config generation (`sh /app/scripts/regen-openclaw-config.sh`) — envsubst + node -e to inject Telegram / Voice / Web Search / Google Calendar
+8. Migration runner
+9. Workspace ownership check
+10. Wakeup routine (Telegram startup message)
+11. **Exec supervisor** (`exec node /app/scripts/supervisor.js`) — replaces the old `exec openclaw gateway`
+
+## Supervisor & Control Plane (lib/supervisor.js + scripts/supervisor.js)
+
+The supervisor replaces the old direct `exec openclaw gateway` at the end of entrypoint.sh. It becomes the container's PID 2 (tini is PID 1), and it:
+
+1. Binds the TCP control plane on `0.0.0.0:LIMBO_PORT+2` inside the container (loopback-only on the host via compose port mapping)
+2. Spawns OpenClaw as a managed child with `OPENCLAW_NO_RESPAWN=1` injected into the child env
+3. Listens for POST /wizard requests from the host CLI
+4. On a wizard request: spawns a `setup-server` child on `LIMBO_PORT+1` with `SETUP_TOKEN` + the feature-specific mode env var (`CONNECT_CALENDAR_MODE` / `SWITCH_BRAIN_MODE` / ...) — returns the token + port to the CLI
+5. Tracks the session in an in-memory state machine. CLI polls `GET /wizard/:id` until terminal
+6. Observes OpenClaw clean-exit: if it happens (e.g. a real crash), **respawns it** up to 5 times in 60s. After that the supervisor shuts down.
+7. Forwards SIGTERM/SIGINT from tini into a graceful `supervisor.stop()` that kills active wizards + OpenClaw in order
+
+### Why `OPENCLAW_NO_RESPAWN=1`
+
+OpenClaw ships with an internal config-reloader (chokidar on `openclaw.json`). For any config path that isn't explicitly classified as "hot" or "none", it triggers a **full process restart**: fork+exec a new detached OpenClaw, then the old process exits code 0. On our code path (`mcp.servers.*.env.*` after a connect-calendar / switch-brain wizard), that restart ALWAYS fires.
+
+Without intervention, the supervisor sees the old OpenClaw exit, respawns a new one, and races the already-running OpenClaw sibling for `LIMBO_PORT` — EADDRINUSE crash loop.
+
+`OPENCLAW_NO_RESPAWN=1` (read by OpenClaw itself at startup) switches the restart into **in-process** mode: same PID, release/reacquire the gateway lock, server reopens inside the existing process. The supervisor never sees an exit event; the restart is transparent.
+
+The supervisor's own restart-loop (item 6 above) remains as a safety net for *real* crashes.
+
+### Why TCP loopback, not a Unix domain socket
+
+Original design used a Unix socket on a bind-mounted host path. Docker Desktop and OrbStack on macOS do NOT proxy AF_UNIX sockets through their file-sharing layer — virtiofs marshals file ops but not `connect(2)`. The socket file appeared on the host, but `nc -U` / `http.request({socketPath})` from the host kernel returned ECONNREFUSED because the listener lived in the Linux VM. TCP port mapping is the primitive Docker ships reliably on every platform; the security boundary is the host-side `127.0.0.1:PORT:PORT` binding + a `Host:` header allowlist in control-server.
 
 ## MCP Server Details
 
@@ -166,16 +224,19 @@ These are documented in the vault but rarely change:
 ## Environment Variables
 
 Key env vars (see `.env.example` for full list):
-- `MODEL_PROVIDER` — anthropic, openai, etc.
+- `MODEL_PROVIDER` — anthropic, openai, openrouter, etc.
 - `TELEGRAM_ENABLED` — true/false
-- `LIMBO_PORT` — gateway port (default 18789)
+- `LIMBO_PORT` — gateway port (default 18789). The wizard port is `LIMBO_PORT+1`; the control plane is `LIMBO_PORT+2`.
+- `LIMBO_CONTROL_PORT` — optional override for the control plane port (default `LIMBO_PORT+2`)
 - `OPENCLAW_STATE_DIR` — where OpenClaw stores its state
+- `OPENCLAW_NO_RESPAWN` — set to `1` automatically by the supervisor for OpenClaw children. Do NOT unset. See "Why OPENCLAW_NO_RESPAWN=1" above.
 - `LIMBO_EVAL` — enables MCP tool call logging
+- `SETUP_TOKEN` — injected into wizard children by the spawner so the setup-server uses the same token the CLI receives from `POST /wizard`
 
 ## Testing
 
 ```bash
-npm test    # full unit suite (314 tests across 32 suites, ~10s on Node 22)
+npm test    # full unit suite (443 tests across 39 suites, ~10s on Node 22)
 ```
 
 Tests use Node.js built-in test runner (`node --test`). The `package.json` `test` script is the authoritative list of files. `npm test` is also what the pre-push git hook runs — see `CONTRIBUTING.md` for the hook setup.

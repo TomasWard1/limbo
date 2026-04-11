@@ -7,28 +7,28 @@ const os = require('node:os');
 // ── telegram-notify tests ──────────────────────────────────────────────────
 
 describe('telegram-notify', () => {
-  let tmpDir;
-  let origEnv;
+  // Post-consolidation, telegram-notify reads tokens straight from
+  // process.env (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID). The entrypoint
+  // sources /data/config/.env with `set -a` before spawning any node child,
+  // so the env is the single source of truth.
+  let origToken;
+  let origChatId;
 
   before(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'limbo-notify-test-'));
-    origEnv = process.env.OPENCLAW_STATE_DIR;
-    process.env.OPENCLAW_STATE_DIR = tmpDir;
-
-    // Create secrets dir with test values
-    const secretsDir = path.join(tmpDir, 'secrets');
-    fs.mkdirSync(secretsDir, { recursive: true });
-    fs.writeFileSync(path.join(secretsDir, 'telegram_bot_token'), 'test-token-123');
-    fs.writeFileSync(path.join(secretsDir, 'telegram_chat_id'), '456789');
+    origToken = process.env.TELEGRAM_BOT_TOKEN;
+    origChatId = process.env.TELEGRAM_CHAT_ID;
+    process.env.TELEGRAM_BOT_TOKEN = 'test-token-123';
+    process.env.TELEGRAM_CHAT_ID = '456789';
   });
 
   after(() => {
-    process.env.OPENCLAW_STATE_DIR = origEnv;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    if (origToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
+    else process.env.TELEGRAM_BOT_TOKEN = origToken;
+    if (origChatId === undefined) delete process.env.TELEGRAM_CHAT_ID;
+    else process.env.TELEGRAM_CHAT_ID = origChatId;
   });
 
-  it('readSecret reads from secrets dir', () => {
-    // Re-require to pick up new env
+  it('readSecret reads from process.env', () => {
     delete require.cache[require.resolve('../lib/telegram-notify.js')];
     const { readSecret } = require('../lib/telegram-notify.js');
     assert.equal(readSecret('telegram_bot_token'), 'test-token-123');
@@ -42,11 +42,8 @@ describe('telegram-notify', () => {
   });
 
   it('sendMessage rejects when secrets are missing', async () => {
-    // Point to empty dir
-    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'limbo-notify-empty-'));
-    process.env.OPENCLAW_STATE_DIR = emptyDir;
-    fs.mkdirSync(path.join(emptyDir, 'secrets'), { recursive: true });
-
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_CHAT_ID;
     delete require.cache[require.resolve('../lib/telegram-notify.js')];
     const { sendMessage } = require('../lib/telegram-notify.js');
 
@@ -55,8 +52,9 @@ describe('telegram-notify', () => {
       { message: /missing bot_token or chat_id/ }
     );
 
-    process.env.OPENCLAW_STATE_DIR = tmpDir;
-    fs.rmSync(emptyDir, { recursive: true, force: true });
+    // Restore for downstream tests in the same suite
+    process.env.TELEGRAM_BOT_TOKEN = 'test-token-123';
+    process.env.TELEGRAM_CHAT_ID = '456789';
   });
 });
 

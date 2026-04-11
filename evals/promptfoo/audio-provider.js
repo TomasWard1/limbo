@@ -36,7 +36,6 @@ const path = require('path');
 
 const CONTAINER = process.env.LIMBO_EVAL_CONTAINER || 'limbo-eval';
 const OPENCLAW_CONFIG = '/home/limbo/.openclaw/openclaw.json';
-const GROQ_SECRET = '/home/limbo/.openclaw/secrets/groq_api_key';
 
 const FIXTURE_HOST_PATH = path.join(__dirname, '..', 'fixtures', 'voice-sample.m4a');
 const FIXTURE_CONTAINER_PATH = '/home/limbo/.openclaw/media/inbound/eval-voice-sample.m4a';
@@ -56,6 +55,26 @@ function readFileInContainer(filePath) {
     throw new Error(`Failed to read ${filePath} in container: ${(proc.stderr || '').trim()}`);
   }
   return proc.stdout;
+}
+
+// Reads an environment variable from inside the eval container.
+//
+// Post-secrets-consolidation, tokens like GROQ_API_KEY no longer live as
+// individual files under /home/limbo/.openclaw/secrets/. They live in
+// /data/config/.env, which the entrypoint sources with `set -a` so every
+// child process inherits them. `printenv` is the simplest way to grab the
+// resolved value without re-parsing the .env file ourselves.
+function readContainerEnv(varName) {
+  const proc = spawnSync('docker', ['exec', CONTAINER, 'printenv', varName], {
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+  if (proc.status !== 0) {
+    throw new Error(
+      `Failed to read env ${varName} from ${CONTAINER}: ${(proc.stderr || '').trim() || `exit ${proc.status}`}`
+    );
+  }
+  return (proc.stdout || '').trim();
 }
 
 function resolveAudioPin() {
@@ -160,10 +179,16 @@ class LimboAudioProvider {
       };
     }
 
-    // 3. Read the groq secret from the container so the exec inherits auth.
+    // 3. Read the groq key from the container's process env. After the
+    //    secrets-consolidation refactor, GROQ_API_KEY lives in
+    //    /data/config/.env and is sourced by the entrypoint with `set -a`,
+    //    so it's available to every process inside the container.
     let groqKey;
     try {
-      groqKey = readFileInContainer(GROQ_SECRET).trim();
+      groqKey = readContainerEnv('GROQ_API_KEY');
+      if (!groqKey) {
+        throw new Error('GROQ_API_KEY is empty inside container');
+      }
     } catch (err) {
       return {
         output: JSON.stringify({

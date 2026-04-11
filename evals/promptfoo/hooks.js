@@ -100,10 +100,12 @@ function setupGoogleCalendarMock() {
 
   // 1. Write dummy authorized_user credentials into the state volume so
   //    the entrypoint's `[ -f "$GCAL_CREDS" ]` check passes and enables
-  //    the calendar tools (see scripts/entrypoint.sh ~L390).
-  const secretsDir = `${AGENT_HOME}/secrets`;
-  const credsTarget = `${secretsDir}/google_calendar_credentials.json`;
-  execRoot(`mkdir -p ${secretsDir} && chown -R limbo:limbo ${secretsDir}`);
+  //    the calendar tools (see scripts/entrypoint.sh, Google Calendar block).
+  //    Post secrets-consolidation, the canonical path is
+  //    $AGENT_HOME/google/credentials.json.
+  const googleDir = `${AGENT_HOME}/google`;
+  const credsTarget = `${googleDir}/credentials.json`;
+  execRoot(`mkdir -p ${googleDir} && chown -R limbo:limbo ${googleDir}`);
   spawnSync('docker', [
     'cp',
     path.join(GWS_MOCK_DIR, 'credentials.json'),

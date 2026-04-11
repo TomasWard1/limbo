@@ -15,8 +15,13 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.LIMBO_DATA_DIR || '/data';
 const OPENCLAW_STATE = process.env.OPENCLAW_STATE_DIR || '/home/limbo/.openclaw';
 const CONFIG_DIR = path.join(DATA_DIR, 'config');
-const SECRETS_DIR = path.join(OPENCLAW_STATE, 'secrets');
+// Only Google Calendar still needs a file on disk: the gws CLI reads
+// `google_calendar_credentials.json` via GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE.
+// Everything else now lives in .env.
+const GCAL_CREDS_DIR = path.join(OPENCLAW_STATE, 'google');
+const GCAL_CREDS_FILE = path.join(GCAL_CREDS_DIR, 'credentials.json');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
+const ENV_BACKUP_FILE = path.join(CONFIG_DIR, '.env.bak');
 const SETUP_TOKEN_FILE = path.join(CONFIG_DIR, 'setup_token');
 const SWITCH_BRAIN_MODE = process.env.SWITCH_BRAIN_MODE === 'true';
 const CONNECT_CALENDAR_MODE = process.env.CONNECT_CALENDAR_MODE === 'true';
@@ -121,38 +126,70 @@ function sendError(res, statusCode, message) {
   sendJSON(res, statusCode, { error: message });
 }
 
-function writeSecretFile(name, value) {
-  fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
-  const filePath = path.join(SECRETS_DIR, name);
-  fs.writeFileSync(filePath, value || '', { mode: 0o600 });
-}
-
-function readSecretFile(name) {
+// Parse the current .env into a plain object. Missing file → empty object.
+function readEnvFile() {
   try {
-    return fs.readFileSync(path.join(SECRETS_DIR, name), 'utf8').trim();
+    const out = {};
+    const content = fs.readFileSync(ENV_FILE, 'utf8');
+    for (const line of content.split('\n')) {
+      const m = line.match(/^([A-Z_]+)="?([^"]*)"?$/);
+      if (m) out[m[1]] = m[2];
+    }
+    return out;
   } catch {
-    return '';
+    return {};
   }
 }
 
-function ensureGatewayToken() {
-  const existing = readSecretFile('gateway_token');
-  if (existing) return existing;
-  const token = crypto.randomBytes(24).toString('base64url');
-  writeSecretFile('gateway_token', token);
-  return token;
+// Write an env object to .env with single-slot backup rotation. Matches
+// cli.js safeWriteEnvFile exactly: raw KEY=value lines (no quotes), mode
+// 0o666 via explicit chmod to defeat the process umask, single-slot .bak
+// rotation. The two writers must produce byte-equivalent output for a given
+// input so round-tripping through either side is stable.
+function writeEnvFile(envVars) {
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
+  try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
+  if (fs.existsSync(ENV_FILE)) {
+    try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
+  }
+  const content = Object.entries(envVars)
+    .map(([key, value]) => `${key}=${value == null ? '' : value}`)
+    .join('\n') + '\n';
+  fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
+  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
+}
+
+function ensureGatewayToken(existingEnv) {
+  if (existingEnv && existingEnv.GATEWAY_TOKEN) return existingEnv.GATEWAY_TOKEN;
+  return crypto.randomBytes(24).toString('base64url');
 }
 
 // ─── Setup Token ──────────────────────────────────────────────────────────────
 
 function ensureSetupToken() {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o755 });
+  // 0o777 so both the container (uid 999) and the host CLI (owner) can write.
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
+  try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
+
+  // Supervisor path: when the wizard is spawned by the supervisor via the
+  // control plane, SETUP_TOKEN is injected into the child env. The
+  // supervisor also hands the same token back to the CLI caller, so the
+  // setup-server MUST honour it — otherwise the wizard would generate a
+  // fresh token and the CLI would end up with an authentication mismatch.
+  // We write it to the token file so the first-run path (which reads the
+  // file) stays consistent.
+  const injected = (process.env.SETUP_TOKEN || '').trim();
+  if (injected) {
+    try { fs.writeFileSync(SETUP_TOKEN_FILE, injected, { mode: 0o666 }); } catch { /* best effort */ }
+    return injected;
+  }
+
   try {
     const existing = fs.readFileSync(SETUP_TOKEN_FILE, 'utf8').trim();
     if (existing) return existing;
   } catch { /* file doesn't exist */ }
   const token = crypto.randomBytes(16).toString('base64url');
-  fs.writeFileSync(SETUP_TOKEN_FILE, token, { mode: 0o600 });
+  fs.writeFileSync(SETUP_TOKEN_FILE, token, { mode: 0o666 });
   return token;
 }
 
@@ -203,7 +240,8 @@ let pkceSession = null;
 // Track OAuth completion for polling
 let oauthResult = null;
 
-// Google Calendar OAuth — client credentials read from secrets at runtime
+// Google Calendar OAuth — client credentials read from .env at runtime
+// (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET via readEnvFile())
 const GOOGLE_OAUTH = {
   authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
   tokenUrl: 'https://oauth2.googleapis.com/token',
@@ -419,8 +457,10 @@ async function handleTelegramPair(req, res) {
 
     await telegramApiPost(token, 'sendMessage', { chat_id: chatId, text: greeting });
 
-    // Persist chat_id
-    writeSecretFile('telegram_chat_id', chatId);
+    // Persist chat_id into .env (merge without disturbing other keys).
+    const env = readEnvFile();
+    env.TELEGRAM_CHAT_ID = String(chatId);
+    writeEnvFile(env);
     log(`Telegram paired: chat_id=${chatId} name=${firstName}`);
 
     sendJSON(res, 200, { paired: true, chatId, firstName });
@@ -562,8 +602,10 @@ function processOAuthTokens(tokenRes) {
     email: jwt.email || '',
   });
   writeAuthProfiles(store);
-  // Also write access token as secret for entrypoint to export
-  writeSecretFile('llm_api_key', tokenRes.access_token);
+  // Also persist the access token into .env so the entrypoint can export it.
+  const env = readEnvFile();
+  env.LLM_API_KEY = tokenRes.access_token;
+  writeEnvFile(env);
   return { email: jwt.email || '' };
 }
 
@@ -663,11 +705,13 @@ async function handleOAuthExchange(req, res) {
 // ─── Google Calendar OAuth Handlers ──────────────────────────────────────────
 
 function handleGoogleOAuthStart(req, res) {
-  // Read client credentials from secrets
-  const clientId = readSecretFile('google_client_id');
-  const clientSecret = readSecretFile('google_client_secret');
+  // Read client credentials from the env file (they are configured at image
+  // build time or set manually by the operator before starting the wizard).
+  const env = readEnvFile();
+  const clientId = env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
+  const clientSecret = env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '';
   if (!clientId || !clientSecret) {
-    sendError(res, 500, 'Google Calendar client credentials not configured. Add google_client_id and google_client_secret to secrets.');
+    sendError(res, 500, 'Google Calendar client credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the .env before running the wizard.');
     return;
   }
 
@@ -746,15 +790,19 @@ async function handleGoogleOAuthCallback(req, res) {
       r.end();
     });
 
-    // Write authorized_user credentials for gws CLI
+    // Write authorized_user credentials for gws CLI. gws expects a real
+    // filesystem path (pointed at by GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE),
+    // so this one stays as a file. Lives under openclaw-state/google/ —
+    // structured JSON, not a token, so it cannot live inside .env.
     const credentials = JSON.stringify({
       type: 'authorized_user',
       client_id: clientId,
       client_secret: clientSecret,
       refresh_token: tokenRes.refresh_token,
     });
-    writeSecretFile('google_calendar_credentials.json', credentials);
-    log('Google Calendar credentials written to secrets');
+    fs.mkdirSync(GCAL_CREDS_DIR, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(GCAL_CREDS_FILE, credentials, { mode: 0o600 });
+    log(`Google Calendar credentials written to ${GCAL_CREDS_FILE}`);
 
     googleOauthResult = { success: true };
     googlePkceSession = null;
@@ -840,64 +888,29 @@ async function handleConfigure(req, res) {
   }
 
   try {
-    // Ensure directories exist
-    fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o755 });
-    fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
+    // Ensure config dir exists. Permissive mode so the host CLI (different uid)
+    // can still overwrite .env later.
+    fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
+    try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
 
-    // Write secrets (only for api-key mode)
-    if (data.apiKey) {
-      writeSecretFile('llm_api_key', data.apiKey);
-    }
-
-    // Handle telegram fields and optional features (only in full setup mode)
-    if (!SWITCH_BRAIN_MODE && !CONNECT_CALENDAR_MODE) {
-      const telegram = data.telegram || {};
-      if (telegram.botToken) {
-        writeSecretFile('telegram_bot_token', telegram.botToken);
-        // chat_id is already captured by /api/telegram/pair during wizard Step 6
-      }
-
-      const features = data.features || {};
-      if (features.voice && features.voice.enabled && features.voice.apiKey) {
-        writeSecretFile('groq_api_key', features.voice.apiKey);
-      }
-      if (features.webSearch && features.webSearch.enabled && features.webSearch.apiKey) {
-        writeSecretFile('brave_api_key', features.webSearch.apiKey);
-      }
-    }
-
-    const gatewayToken = ensureGatewayToken();
-
-    // Build env vars (excluding secrets)
+    // Build the env object (tokens and config in one place).
     const modelName = CONNECT_CALENDAR_MODE ? null : (data.model || data.modelName || MODEL_CATALOG[data.provider].defaultModel);
+    const existingEnv = readEnvFile();
+    const gatewayToken = ensureGatewayToken(existingEnv);
 
     let envVars;
     if (SWITCH_BRAIN_MODE) {
-      let existingEnv = {};
-      try {
-        const content = fs.readFileSync(ENV_FILE, 'utf8');
-        for (const line of content.split('\n')) {
-          const m = line.match(/^([A-Z_]+)="?([^"]*)"?$/);
-          if (m) existingEnv[m[1]] = m[2];
-        }
-      } catch {}
       envVars = {
         ...existingEnv,
         AUTH_MODE: data.authMode || 'api-key',
         MODEL_PROVIDER: data.provider,
         MODEL_NAME: modelName,
+        // Allow switching the brain key during this mode.
+        LLM_API_KEY: data.apiKey || existingEnv.LLM_API_KEY || '',
       };
       delete envVars.SWITCH_BRAIN_MODE;
     } else if (CONNECT_CALENDAR_MODE) {
       // Preserve existing config, just flip GOOGLE_CALENDAR_ENABLED
-      let existingEnv = {};
-      try {
-        const content = fs.readFileSync(ENV_FILE, 'utf8');
-        for (const line of content.split('\n')) {
-          const m = line.match(/^([A-Z_]+)="?([^"]*)"?$/);
-          if (m) existingEnv[m[1]] = m[2];
-        }
-      } catch {}
       envVars = {
         ...existingEnv,
         GOOGLE_CALENDAR_ENABLED: (googleOauthResult && googleOauthResult.success) ? 'true' : (existingEnv.GOOGLE_CALENDAR_ENABLED || 'false'),
@@ -906,24 +919,30 @@ async function handleConfigure(req, res) {
     } else {
       const telegram = data.telegram || {};
       const features = data.features || {};
+      // Spread existingEnv first so anything written by earlier wizard steps
+      // (e.g. TELEGRAM_CHAT_ID from handleTelegramPair in step 6) is preserved.
+      // The wizard-supplied keys below override existingEnv where they overlap.
       envVars = {
+        ...existingEnv,
         CLI_LANGUAGE: data.language || 'en',
         AUTH_MODE: data.authMode || 'api-key',
         MODEL_PROVIDER: data.provider,
         MODEL_NAME: modelName,
         LIMBO_PORT: String(PORT),
+        // Tokens live directly in the env file now.
+        LLM_API_KEY: data.apiKey || '',
+        GATEWAY_TOKEN: gatewayToken,
         TELEGRAM_ENABLED: telegram.enabled ? 'true' : 'false',
+        TELEGRAM_BOT_TOKEN: telegram.botToken || '',
         VOICE_ENABLED: (features.voice && features.voice.enabled) ? 'true' : 'false',
+        GROQ_API_KEY: (features.voice && features.voice.apiKey) || '',
         WEB_SEARCH_ENABLED: (features.webSearch && features.webSearch.enabled) ? 'true' : 'false',
+        BRAVE_API_KEY: (features.webSearch && features.webSearch.apiKey) || '',
         GOOGLE_CALENDAR_ENABLED: (googleOauthResult && googleOauthResult.success) ? 'true' : 'false',
       };
     }
 
-    // Write .env file (quote values to handle special chars)
-    const envContent = Object.entries(envVars)
-      .map(([key, value]) => `${key}="${value}"`)
-      .join('\n') + '\n';
-    fs.writeFileSync(ENV_FILE, envContent, { mode: 0o600 });
+    writeEnvFile(envVars);
 
     // Remove setup token — wizard is done
     try { fs.unlinkSync(SETUP_TOKEN_FILE); } catch { /* ignore */ }
@@ -931,11 +950,36 @@ async function handleConfigure(req, res) {
     log(`Configuration written: provider=${data.provider} model=${modelName}`);
     sendJSON(res, 200, { success: true });
 
-    // Keep serving the success page for a bit, then exit for container restart
+    // Regenerate openclaw.json from the updated .env so OpenClaw's file
+    // watcher picks up the new config and hot-reloads WITHOUT a container
+    // restart. This runs inside the same container as the already-running
+    // OpenClaw gateway; the atomic rename inside the regen script lines up
+    // with chokidar's awaitWriteFinish, so the reload fires once.
+    // Only needed when the wizard was triggered on an existing container
+    // (wizard mode is CONNECT_CALENDAR_MODE / SWITCH_BRAIN_MODE / similar).
+    // Full first-run installs still exit and let the container restart.
+    const isIncrementalWizard = SWITCH_BRAIN_MODE || CONNECT_CALENDAR_MODE;
+    if (isIncrementalWizard) {
+      try {
+        const { execFileSync } = require('node:child_process');
+        execFileSync('sh', ['/app/scripts/regen-openclaw-config.sh'], {
+          stdio: 'inherit',
+          env: process.env,
+        });
+        log('OpenClaw config regenerated — hot reload will fire');
+      } catch (regenErr) {
+        log(`WARN regen-openclaw-config.sh failed: ${regenErr.message}`);
+      }
+    }
+
+    // Keep serving the success page for a bit, then exit. For first-run
+    // installs, this exits to trigger a container restart (compose restart
+    // policy). For incremental wizards (connect-calendar, switch-brain),
+    // the supervisor observes the exit and transitions the session to done.
     setTimeout(() => {
-      log('Configuration complete. Exiting for container restart...');
+      log('Configuration complete. Exiting.');
       process.exit(0);
-    }, 10000);
+    }, isIncrementalWizard ? 1000 : 10000);
 
   } catch (err) {
     log(`Configure error: ${err.message}`);
@@ -1049,8 +1093,8 @@ module.exports = {
     sendJSON,
     sendError,
     checkToken,
-    writeSecretFile,
-    readSecretFile,
+    readEnvFile,
+    writeEnvFile,
     ensureGatewayToken,
     ensureSetupToken,
     writeAuthProfiles,

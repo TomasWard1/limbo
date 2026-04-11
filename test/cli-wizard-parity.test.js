@@ -51,35 +51,15 @@ function wizardEnvKeys() {
   return new Set(keys);
 }
 
-// Extract secret file names written by each path.
-function cliSecretNames() {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'cli.js'), 'utf8');
-  // writeSecrets function writes these secret files
-  const match = src.match(/function writeSecrets[\s\S]*?^}/m);
-  assert.ok(match, 'could not find writeSecrets in cli.js');
-  const names = [];
-  for (const m of match[0].matchAll(/writeSecretFile\(['"]([^'"]+)['"]/g)) {
-    names.push(m[1]);
-  }
-  return new Set(names);
-}
-
-function wizardSecretNames() {
-  const src = fs.readFileSync(
-    path.join(__dirname, '..', 'setup-server', 'server.js'),
-    'utf8',
-  );
-  // handleConfigure writes secrets via writeSecretFile
-  const match = src.match(/async function handleConfigure[\s\S]*?^}/m);
-  assert.ok(match, 'could not find handleConfigure in setup-server/server.js');
-  const names = [];
-  for (const m of match[0].matchAll(/writeSecretFile\(['"]([^'"]+)['"]/g)) {
-    names.push(m[1]);
-  }
-  // gateway_token is written via ensureGatewayToken, not directly
-  names.push('gateway_token');
-  return new Set(names);
-}
+// Post-consolidation, both paths write secrets directly into .env as env vars.
+// The parity check is therefore over env keys, not separate secret files.
+const SECRET_ENV_KEYS = [
+  'LLM_API_KEY',
+  'TELEGRAM_BOT_TOKEN',
+  'GATEWAY_TOKEN',
+  'GROQ_API_KEY',
+  'BRAVE_API_KEY',
+];
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -87,22 +67,20 @@ describe('CLI ↔ Wizard parity', () => {
 
   // --- Env vars ---
 
-  it('wizard writes every env var that CLI normalizeConfig produces (minus secrets)', () => {
+  it('wizard writes every env var that CLI normalizeConfig produces', () => {
     const cliKeys = cliEnvKeys();
     const wizKeys = wizardEnvKeys();
 
-    // CLI normalizeConfig includes secret-adjacent keys (LLM_API_KEY, OPENAI_API_KEY, etc.)
-    // that the wizard writes to secret files instead of .env. Filter those out.
-    const secretAdjacentKeys = new Set([
-      'LLM_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY',
-      'TELEGRAM_BOT_TOKEN', 'GATEWAY_TOKEN',
-      // TELEGRAM_AUTO_PAIR_FIRST_DM is set by CLI but wizard handles auto-pair implicitly
+    // OPENAI_API_KEY / ANTHROPIC_API_KEY / TELEGRAM_AUTO_PAIR_FIRST_DM are
+    // CLI-only compat shims — the wizard never sets them directly.
+    const cliOnly = new Set([
+      'OPENAI_API_KEY',
+      'ANTHROPIC_API_KEY',
       'TELEGRAM_AUTO_PAIR_FIRST_DM',
     ]);
+    const required = new Set([...cliKeys].filter(k => !cliOnly.has(k)));
 
-    const cliNonSecret = new Set([...cliKeys].filter(k => !secretAdjacentKeys.has(k)));
-
-    for (const key of cliNonSecret) {
+    for (const key of required) {
       assert.ok(
         wizKeys.has(key),
         `CLI writes env var "${key}" but wizard does not. Add it to handleConfigure's envVars.`,
@@ -122,23 +100,14 @@ describe('CLI ↔ Wizard parity', () => {
     }
   });
 
-  // --- Secrets ---
+  // --- Secrets (live inside .env after consolidation) ---
 
-  it('both paths write the same secret files', () => {
-    const cliSec = cliSecretNames();
-    const wizSec = wizardSecretNames();
-
-    for (const name of cliSec) {
-      assert.ok(
-        wizSec.has(name),
-        `CLI writes secret "${name}" but wizard does not. Add writeSecretFile('${name}', ...) to handleConfigure.`,
-      );
-    }
-    for (const name of wizSec) {
-      assert.ok(
-        cliSec.has(name),
-        `Wizard writes secret "${name}" but CLI does not. Add writeSecretFile('${name}', ...) to writeSecrets.`,
-      );
+  it('both paths produce the same set of secret env vars', () => {
+    const cliKeys = cliEnvKeys();
+    const wizKeys = wizardEnvKeys();
+    for (const key of SECRET_ENV_KEYS) {
+      assert.ok(cliKeys.has(key), `CLI normalizeConfig must produce ${key}`);
+      assert.ok(wizKeys.has(key), `Wizard handleConfigure must produce ${key}`);
     }
   });
 

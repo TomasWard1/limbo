@@ -19,15 +19,10 @@ services:
       - limbo-data:/data
       - ./vault:/data/vault
       - ./openclaw-state:/home/limbo/.openclaw
+      - ./config:/data/config
       - ./flags:/flags
-    secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
-      - groq_api_key
-      - brave_api_key
     env_file:
-      - .env
+      - ./config/.env
     environment:
       NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
     logging:
@@ -41,18 +36,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-
-secrets:
-  llm_api_key:
-    file: ./secrets/llm_api_key
-  telegram_bot_token:
-    file: ./secrets/telegram_bot_token
-  gateway_token:
-    file: ./secrets/gateway_token
-  groq_api_key:
-    file: ./secrets/groq_api_key
-  brave_api_key:
-    file: ./secrets/brave_api_key
 
 volumes:
   limbo-data:

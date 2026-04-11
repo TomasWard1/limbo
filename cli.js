@@ -24,9 +24,14 @@ const LIMBO_DIR = (() => {
 const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
 const OPENCLAW_STATE_DIR = path.join(LIMBO_DIR, 'openclaw-state');
 const FLAGS_DIR = path.join(LIMBO_DIR, 'flags');
-const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const CONFIG_DIR = path.join(LIMBO_DIR, 'config');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
+const ENV_BACKUP_FILE = path.join(CONFIG_DIR, '.env.bak');
+// Control plane port offset — supervisor listens on LIMBO_PORT + 2 inside
+// the container, published to the host loopback via Docker port mapping.
+// The offset (not an absolute number) means multi-instance installs on
+// custom ports don't collide.
+const CONTROL_PORT_OFFSET = 2;
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const DEFAULT_REGISTRY = 'registry.gitlab.com/tomas209/limbo';
 const REGISTRY_IMAGE = process.env.LIMBO_REGISTRY || DEFAULT_REGISTRY;
@@ -69,11 +74,13 @@ function detectPortConflict() {
 }
 
 function findExistingApiKeys() {
+  // Probe for an existing OpenClaw standalone install whose credentials we
+  // can offer to reuse. These paths are for OpenClaw, not Limbo — Limbo
+  // itself writes to ~/.limbo/config/.env, which is handled elsewhere.
   const searchPaths = [
     path.join(os.homedir(), '.openclaw', '.env'),
     '/opt/openclaw/.env',
     '/opt/openclaw/secrets/llm_api_key',
-    path.join(os.homedir(), '.openclaw', '.env'),
   ];
 
   for (const envPath of searchPaths) {
@@ -182,18 +189,16 @@ function composeContent() {
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
+      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
+      - "127.0.0.1:${PORT + 1}:${PORT + 1}"
+      # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
+      - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
       - ${FLAGS_DIR}:/flags
-    secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
-      - groq_api_key
-      - brave_api_key
     env_file:
       - ${ENV_FILE}
     environment:
@@ -207,18 +212,6 @@ ${resolveExtraEnv()}    healthcheck:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-secrets:
-  llm_api_key:
-    file: ${SECRETS_DIR}/llm_api_key
-  telegram_bot_token:
-    file: ${SECRETS_DIR}/telegram_bot_token
-  gateway_token:
-    file: ${SECRETS_DIR}/gateway_token
-  groq_api_key:
-    file: ${SECRETS_DIR}/groq_api_key
-  brave_api_key:
-    file: ${SECRETS_DIR}/brave_api_key
 
 volumes:
   limbo-data:
@@ -246,18 +239,16 @@ function composeContentHardened() {
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
+      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
+      - "127.0.0.1:${PORT + 1}:${PORT + 1}"
+      # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
+      - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
       - ${FLAGS_DIR}:/flags
-    secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
-      - groq_api_key
-      - brave_api_key
     env_file:
       - ${ENV_FILE}
     environment:
@@ -302,18 +293,6 @@ networks:
   internal:
     internal: true
   external:
-
-secrets:
-  llm_api_key:
-    file: ${SECRETS_DIR}/llm_api_key
-  telegram_bot_token:
-    file: ${SECRETS_DIR}/telegram_bot_token
-  gateway_token:
-    file: ${SECRETS_DIR}/gateway_token
-  groq_api_key:
-    file: ${SECRETS_DIR}/groq_api_key
-  brave_api_key:
-    file: ${SECRETS_DIR}/brave_api_key
 
 volumes:
   limbo-data:
@@ -742,7 +721,13 @@ function parseEnvFile() {
     .filter((line) => line && !line.startsWith('#') && line.includes('='))
     .reduce((acc, line) => {
       const idx = line.indexOf('=');
-      acc[line.slice(0, idx)] = line.slice(idx + 1);
+      const key = line.slice(0, idx);
+      // Strip surrounding quotes defensively — older wizard writes and some
+      // manual edits use KEY="value" formatting. cli.js itself writes raw
+      // KEY=value, so we normalize on read.
+      const raw = line.slice(idx + 1);
+      const unquoted = raw.replace(/^["']|["']$/g, '');
+      acc[key] = unquoted;
       return acc;
     }, {});
 }
@@ -767,43 +752,45 @@ function normalizeConfig(cfg, existingEnv = {}) {
     TELEGRAM_AUTO_PAIR_FIRST_DM: cfg.telegramAutoPair || existingEnv.TELEGRAM_AUTO_PAIR_FIRST_DM || 'false',
     GATEWAY_TOKEN: gatewayToken,
     VOICE_ENABLED: cfg.voiceEnabled || existingEnv.VOICE_ENABLED || 'false',
+    GROQ_API_KEY: cfg.groqApiKey || existingEnv.GROQ_API_KEY || '',
     WEB_SEARCH_ENABLED: cfg.webSearchEnabled || existingEnv.WEB_SEARCH_ENABLED || 'false',
+    BRAVE_API_KEY: cfg.braveApiKey || existingEnv.BRAVE_API_KEY || '',
     GOOGLE_CALENDAR_ENABLED: cfg.googleCalendarEnabled || existingEnv.GOOGLE_CALENDAR_ENABLED || 'false',
   };
 
   return base;
 }
 
-function writeSecretFile(name, value) {
-  fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
-  const filePath = path.join(SECRETS_DIR, name);
-  // Use 0644 so any container user can read the mounted file.
-  // Docker Compose file-based secrets ignore uid/gid/mode settings,
-  // so the host file permissions are what the container sees.
-  fs.writeFileSync(filePath, value || '', { mode: 0o644 });
+// Write the .env atomically with a pre-write single-slot backup (.env.bak) so
+// that a crashed write or a bad wizard run can be manually rolled back. Mode
+// 0666 is chosen because the .env is also written from inside the container
+// (uid 999, non-owner of the host-mounted config dir); world-writable on a file
+// inside ~/.limbo does not widen exposure beyond what the home directory
+// already permits. Explicit chmod after write defeats the process umask.
+//
+// All callers in cli.js MUST go through this helper rather than calling
+// fs.writeFileSync(ENV_FILE, ...) directly — that's the only way to guarantee
+// the container (uid 999) can rewrite the .env after the host CLI touches it.
+function safeWriteEnvFile(content) {
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
+  try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
+  if (fs.existsSync(ENV_FILE)) {
+    try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
+  }
+  fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
+  try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
 }
-
-function writeSecrets(cfg, existingEnv = {}) {
-  const normalized = normalizeConfig(cfg, existingEnv);
-  writeSecretFile('llm_api_key', normalized.LLM_API_KEY);
-  writeSecretFile('telegram_bot_token', normalized.TELEGRAM_BOT_TOKEN);
-  writeSecretFile('gateway_token', normalized.GATEWAY_TOKEN);
-  writeSecretFile('groq_api_key', cfg.groqApiKey || readSecretFile('groq_api_key'));
-  writeSecretFile('brave_api_key', cfg.braveApiKey || readSecretFile('brave_api_key'));
-}
-
-const SECRET_KEYS = new Set([
-  'LLM_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY',
-  'TELEGRAM_BOT_TOKEN', 'GATEWAY_TOKEN',
-]);
 
 function writeEnv(cfg, existingEnv = {}) {
-  writeSecrets(cfg, existingEnv);
+  // Skip keys with empty string values to keep the .env clean. The
+  // provider-specific key aliases (OPENAI_API_KEY / ANTHROPIC_API_KEY) are
+  // legacy compat shims — when unused they just add noise. LLM_API_KEY is
+  // always populated in api-key mode, so the active key always lands.
   const content = Object.entries(normalizeConfig(cfg, existingEnv))
-    .filter(([key]) => !SECRET_KEYS.has(key))
+    .filter(([, value]) => value !== '' && value !== undefined && value !== null)
     .map(([key, value]) => `${key}=${value}`)
     .join('\n') + '\n';
-  fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
+  safeWriteEnvFile(content);
 }
 
 
@@ -1107,6 +1094,82 @@ function migrateLegacyState() {
   }
 }
 
+// Migrate tokens from legacy file-based secret stores into the .env.
+//
+// Pre-consolidation releases of Limbo stored tokens in three separate paths:
+//   1. ~/.limbo/secrets/              — written by the CLI (host), mounted as /run/secrets
+//   2. ~/.limbo/zeroclaw-state/secrets/ — pre-2026-03 ZeroClaw legacy path
+//   3. ~/.limbo/openclaw-state/secrets/ — written by the setup-server (container)
+//
+// After consolidation there is a single source of truth (the .env). This
+// function runs on every `limbo start` / `update` but short-circuits via a
+// marker file (~/.limbo/.secrets-migrated) after the first successful pass.
+// Per-file, per-key it:
+//   - looks up each secret in the legacy paths in priority order (1 > 3 > 2)
+//   - does NOT overwrite a value that already exists in .env
+//   - creates a backup .env.bak before writing, same as writeEnv
+//
+// TODO(2026-08-01): once production instances have all rolled through at
+// least one release with this helper, delete the helper entirely and remove
+// the marker file. Track in the release that drops this.
+const SECRETS_MIGRATED_MARKER = path.join(LIMBO_DIR, '.secrets-migrated');
+
+function migrateLegacySecretsToEnv() {
+  if (fs.existsSync(SECRETS_MIGRATED_MARKER)) return;
+
+  const SECRET_TO_ENV = {
+    llm_api_key: 'LLM_API_KEY',
+    telegram_bot_token: 'TELEGRAM_BOT_TOKEN',
+    telegram_chat_id: 'TELEGRAM_CHAT_ID',
+    gateway_token: 'GATEWAY_TOKEN',
+    groq_api_key: 'GROQ_API_KEY',
+    brave_api_key: 'BRAVE_API_KEY',
+    google_client_id: 'GOOGLE_CLIENT_ID',
+    google_client_secret: 'GOOGLE_CLIENT_SECRET',
+  };
+  // Priority order: newer paths win over older ones. The openclaw-state path
+  // was written by setup-server inside the container, the top-level secrets/
+  // by the host CLI — either can be present. zeroclaw-state is strictly
+  // older (pre-OpenClaw).
+  const legacyDirs = [
+    path.join(LIMBO_DIR, 'secrets'),
+    path.join(LIMBO_DIR, 'openclaw-state', 'secrets'),
+    path.join(LIMBO_DIR, 'zeroclaw-state', 'secrets'),
+  ];
+
+  const existingEnv = parseEnvFile();
+  let changed = false;
+
+  for (const [secretName, envKey] of Object.entries(SECRET_TO_ENV)) {
+    if (existingEnv[envKey]) continue; // don't overwrite
+    for (const dir of legacyDirs) {
+      const fp = path.join(dir, secretName);
+      try {
+        const value = fs.readFileSync(fp, 'utf8').trim();
+        if (value) {
+          existingEnv[envKey] = value;
+          changed = true;
+          break;
+        }
+      } catch { /* file doesn't exist or unreadable — try next */ }
+    }
+  }
+
+  if (!changed) {
+    // Nothing to migrate on this host — drop the marker anyway so the next
+    // start skips the whole scan.
+    try { fs.writeFileSync(SECRETS_MIGRATED_MARKER, new Date().toISOString()); } catch { /* best effort */ }
+    return;
+  }
+
+  const content = Object.entries(existingEnv)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n') + '\n';
+  safeWriteEnvFile(content);
+  try { fs.writeFileSync(SECRETS_MIGRATED_MARKER, new Date().toISOString()); } catch { /* best effort */ }
+  log('Migrated legacy secrets into .env');
+}
+
 function ensureComposeFile(hardened = false) {
   fs.mkdirSync(LIMBO_DIR, { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
@@ -1114,20 +1177,22 @@ function ensureComposeFile(hardened = false) {
   fs.mkdirSync(OPENCLAW_STATE_DIR, { recursive: true });
   fs.mkdirSync(FLAGS_DIR, { recursive: true });
   migrateLegacyState();
-  fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
-  // Ensure config dir and .env exist (bind-mounted into container as /data/config/)
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  // CONFIG_DIR is bind-mounted into the container (uid 999) as /data/config/.
+  // The container needs to write setup_token in here during first-run wizard,
+  // and host user owns the dir, so it must be world-writable (0777). ~/.limbo/
+  // lives under the user's home, so the permissive subdirectory does not expose
+  // anything beyond what the home root already permits.
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
+  try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort on existing dirs */ }
   // Migrate legacy .env from LIMBO_DIR root to config/ subdir
   const legacyEnv = path.join(LIMBO_DIR, '.env');
   if (legacyEnv !== ENV_FILE && fs.existsSync(legacyEnv) && !fs.existsSync(ENV_FILE)) {
     fs.renameSync(legacyEnv, ENV_FILE);
   }
-  if (!fs.existsSync(ENV_FILE)) fs.writeFileSync(ENV_FILE, '', { mode: 0o600 });
-  // Ensure secret files exist (Docker Compose secrets require the files to be present)
-  for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
-    const fp = path.join(SECRETS_DIR, name);
-    if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o644 });
-  }
+  if (!fs.existsSync(ENV_FILE)) safeWriteEnvFile('');
+  // Migrate tokens from legacy secret files (~/.limbo/secrets/ and
+  // ~/.limbo/zeroclaw-state/secrets/) into the .env — idempotent per-file.
+  migrateLegacySecretsToEnv();
   if (hardened) {
     // Copy squid config files for egress filtering
     const squidDir = path.join(LIMBO_DIR, 'squid');
@@ -1142,21 +1207,12 @@ function ensureComposeFile(hardened = false) {
   fs.writeFileSync(COMPOSE_FILE, hardened ? composeContentHardened() : composeContent());
 }
 
-function readSecretFile(name) {
-  const fp = path.join(SECRETS_DIR, name);
-  try { return fs.readFileSync(fp, 'utf8').trim(); } catch { return ''; }
-}
-
 function ensureGatewayToken(existingEnv) {
-  // Check secret file first, then legacy env
-  const fromFile = readSecretFile('gateway_token');
-  if (fromFile) return fromFile;
-  if (existingEnv.GATEWAY_TOKEN) {
-    writeSecretFile('gateway_token', existingEnv.GATEWAY_TOKEN);
-    return existingEnv.GATEWAY_TOKEN;
-  }
-  writeEnv({ keepExisting: true }, existingEnv);
-  return readSecretFile('gateway_token');
+  if (existingEnv.GATEWAY_TOKEN) return existingEnv.GATEWAY_TOKEN;
+  const token = generateGatewayToken();
+  existingEnv.GATEWAY_TOKEN = token;
+  writeEnv({ keepExisting: true, gatewayToken: token }, existingEnv);
+  return token;
 }
 
 function pullOrBuildImage(lang) {
@@ -1254,11 +1310,58 @@ async function ensureCloudflareLogin() {
 // Tunnel hostnames are always setup-<slug>.heylimbo.com
 const CF_TUNNEL_BASE_DOMAIN = 'heylimbo.com';
 
+// Pure helpers for tunnel setup (extracted for unit testing)
+const {
+  listStaleLimboTunnels,
+  waitForDnsResolution,
+  buildSetupInstructions,
+} = require('./lib/cf-tunnel');
+
+// Unified side-effectful sweep: find and delete any abandoned limbo-setup-*
+// tunnels on the user's Cloudflare account. Single source of truth for both
+// the pre-flight sweep inside createNamedCfTunnel (where we pass the current
+// tunnel name so we don't nuke the one we're about to use) and the startup
+// cleanup in cmdStart (where there is no "current" tunnel — pass null).
+//
+// Uses `cloudflared tunnel list -o json` as the source of truth rather than
+// the CF_TUNNEL_CONFIG metadata file, so we also catch tunnels that leaked
+// because a previous run crashed before writing metadata.
+//
+// Best-effort only. Never throws, never blocks the main flow. Silently no-ops
+// if cloudflared is missing, the user isn't logged in, or the list command
+// returns garbage.
+function sweepStaleLimboTunnels(currentTunnelName = null) {
+  try {
+    const listResult = spawnSync('cloudflared', ['tunnel', 'list', '-o', 'json'], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+    // listResult.error is set if spawnSync itself failed (PATH issue, etc).
+    // Non-zero exit is tolerated: listStaleLimboTunnels is tolerant of garbage
+    // stdout (returns []) so there's nothing to do either way.
+    if (listResult.error) return;
+    const stale = listStaleLimboTunnels(listResult.stdout, currentTunnelName);
+    for (const t of stale) {
+      // Per-tunnel try so one bad delete doesn't abort the rest of the sweep.
+      try {
+        spawnSync('cloudflared', ['tunnel', 'cleanup', t.name], { stdio: 'pipe' });
+        spawnSync('cloudflared', ['tunnel', 'delete', '-f', t.name], { stdio: 'pipe' });
+      } catch { /* advisory — move on */ }
+    }
+  } catch { /* best-effort; never block the main flow */ }
+}
+
 // Create a named CF tunnel using cloudflared CLI (requires cert.pem from login)
 async function createNamedCfTunnel(port) {
   const slug = crypto.randomBytes(4).toString('hex').slice(0, 7);
   const tunnelName = 'limbo-setup-' + slug;
   const hostname = 'setup-' + slug + '.' + CF_TUNNEL_BASE_DOMAIN;
+
+  // Pre-flight sweep: clean up any stale limbo-setup-* tunnels from prior
+  // failed runs so they don't pile up on the user's Cloudflare account.
+  // Exclude the tunnel we're about to create (tunnelName) just in case there
+  // was a name collision against a leftover record.
+  sweepStaleLimboTunnels(tunnelName);
 
   try {
     // 1. Create tunnel
@@ -1340,24 +1443,37 @@ async function createNamedCfTunnel(port) {
       return null;
     }
 
-    // Wait for DNS propagation (Chromium caches negative DNS lookups aggressively)
-    const https = require('https');
-    for (let i = 0; i < 15; i++) {
-      spinnerWrite('Waiting for DNS (' + (i + 1) + 's)...');
-      try {
-        await new Promise((resolve, reject) => {
-          const req = https.get('https://' + hostname + '/healthz', (res) => {
-            resolve(res.statusCode);
-          });
-          req.on('error', reject);
-          req.setTimeout(3000, () => { req.destroy(); reject(new Error('timeout')); });
-        });
-        break; // DNS resolved and tunnel responded
-      } catch {
-        sleep(1000);
-      }
-    }
+    // Wait for DNS propagation (Chromium caches negative DNS lookups aggressively).
+    // This is BLOCKING: if the hostname never resolves — most commonly because
+    // the user's cert.pem does not include the target zone so the DNS record
+    // landed in the wrong zone — we must cleanup and return null so the caller
+    // falls back to the quick tunnel. Otherwise the user would see a dead URL
+    // like "https://setup-xxx.heylimbo.com" that NXDOMAINs in the browser.
+    spinnerWrite('Waiting for DNS...');
+    const resolveFn = (host) => new Promise((resolve, reject) => {
+      const req = https.get('https://' + host + '/healthz', (res) => {
+        // Any HTTP status means DNS resolved and the tunnel is routing.
+        resolve(res.statusCode > 0);
+      });
+      req.on('error', reject);
+      req.setTimeout(3000, () => { req.destroy(); reject(new Error('timeout')); });
+    });
+    const dnsOk = await waitForDnsResolution({
+      hostname,
+      attempts: 15,
+      intervalMs: 1000,
+      resolveFn,
+    });
     spinnerClear();
+
+    if (!dnsOk) {
+      warn('Cloudflare tunnel came up but the hostname never resolved in DNS.');
+      warn('This usually means the cert.pem does not include the target zone. Falling back to quick tunnel.');
+      try { tunnelProc.kill(); } catch {}
+      spawnSync('cloudflared', ['tunnel', 'cleanup', tunnelName], { stdio: 'pipe' });
+      spawnSync('cloudflared', ['tunnel', 'delete', '-f', tunnelName], { stdio: 'pipe' });
+      return null;
+    }
 
     // Save metadata for cleanup
     const meta = { tunnelName, tunnelId, hostname, type: 'cloudflare-named' };
@@ -1444,18 +1560,66 @@ function teardownSetupTunnel(tunnel) {
   if (tunnel.logFile) try { fs.unlinkSync(tunnel.logFile); } catch {}
 }
 
-// Clean up leftover CF tunnels from previous runs
+// Install SIGINT / SIGTERM handlers that cancel an in-flight wizard session
+// on the container before this process exits. Without this, killing the
+// CLI (Ctrl+C, shell exit, etc.) leaves an orphan setup-server child
+// running inside the container — LIMBO_PORT+1 stays bound, and the next
+// wizard attempt collides on the port. Returns an `uninstall` function the
+// caller must run on graceful completion so we do not double-cancel.
+//
+// The handler is intentionally synchronous-ish: Node gives us a few
+// hundred ms between a signal and process death, so the best we can do is
+// fire the DELETE request and hope it reaches the container. The CLI exit
+// does not wait on it, but the supervisor's DELETE path is O(ms) on
+// localhost so the vast majority of signals land before process teardown.
+function installWizardCleanupHandlers(client, session) {
+  let cancelled = false;
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    // Fire-and-forget — we have at most ~100ms before Node kills us.
+    // The DELETE is idempotent on the supervisor side (already-terminal
+    // sessions just return 404, which we ignore).
+    try {
+      client.cancelWizard(session.id).catch(() => {});
+    } catch { /* ignore */ }
+  };
+
+  const onExit = (signal) => {
+    cancel();
+    // Re-raise the default action so the shell sees the usual exit code.
+    process.exit(signal === 'SIGINT' ? 130 : 143);
+  };
+  const sigintHandler = () => onExit('SIGINT');
+  const sigtermHandler = () => onExit('SIGTERM');
+  process.once('SIGINT', sigintHandler);
+  process.once('SIGTERM', sigtermHandler);
+
+  return {
+    uninstall() {
+      process.removeListener('SIGINT', sigintHandler);
+      process.removeListener('SIGTERM', sigtermHandler);
+    },
+    cancel,
+  };
+}
+
+// Clean up leftover CF tunnels from previous runs.
+//
+// Delegates to the unified sweepStaleLimboTunnels() helper — the list from
+// `cloudflared tunnel list -o json` is the source of truth, not the local
+// CF_TUNNEL_CONFIG metadata file (which may be missing if a previous run
+// crashed before writing it, or stale if multiple tunnels leaked).
+//
+// Called at the top of cmdStart(). Also clears local tunnel-config /
+// tunnel-cloudflared.yml files so stale metadata doesn't linger on disk.
 function cleanupCfTunnel() {
-  try {
-    const meta = JSON.parse(fs.readFileSync(CF_TUNNEL_CONFIG, 'utf8'));
-    if (meta.tunnelName) {
-      spawnSync('cloudflared', ['tunnel', 'cleanup', meta.tunnelName], { stdio: 'pipe' });
-      spawnSync('cloudflared', ['tunnel', 'delete', '-f', meta.tunnelName], { stdio: 'pipe' });
-    }
-    fs.unlinkSync(CF_TUNNEL_CONFIG);
-    const tunnelConfig = path.join(LIMBO_DIR, 'tunnel-cloudflared.yml');
-    try { fs.unlinkSync(tunnelConfig); } catch {}
-  } catch {}
+  sweepStaleLimboTunnels(null);
+  // Best-effort: remove local metadata/config files so they don't linger.
+  // The sweep above already deleted the remote tunnels — these files are
+  // only debugging artifacts at this point.
+  try { fs.unlinkSync(CF_TUNNEL_CONFIG); } catch {}
+  try { fs.unlinkSync(path.join(LIMBO_DIR, 'tunnel-cloudflared.yml')); } catch {}
 }
 
 // Read a single env var from ~/.limbo/.env
@@ -1480,7 +1644,7 @@ function persistEnvVars(vars) {
         content = content.trimEnd() + '\n' + key + '=' + value + '\n';
       }
     }
-    fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
+    safeWriteEnvFile(content);
   } catch {}
 }
 
@@ -1841,7 +2005,10 @@ ${c.green}${c.bold}║            Setup wizard is ready!                      �
 ${c.green}${c.bold}╚════════════════════════════════════════════════════════╝${c.reset}
 `);
 
-  if (tunnel) {
+  if (tunnel && !isSSH) {
+    // When isSSH is true, buildSetupInstructions() below already prints the
+    // public URL (with token) as part of the SSH forwarding block, so skip
+    // this line to avoid duplicating it.
     const tunnelUrl = token ? `${tunnel.url}/?token=${token}` : tunnel.url;
     console.log(`  ${c.green}Public URL (works from any browser):${c.reset}
   ${c.cyan}${c.bold}${tunnelUrl}${c.reset}
@@ -1853,11 +2020,17 @@ ${c.green}${c.bold}╚═══════════════════�
     const sshParts = (process.env.SSH_CONNECTION || '').split(' ');
     const serverHost = sshParts[2] || 'your-server';
     const sshUser = process.env.USER || 'user';
-    console.log(`  ${c.green}SSH port forwarding (recommended):${c.reset}
-  Run this in a ${c.bold}new terminal${c.reset} on your computer:
-  ${c.yellow}ssh -L ${PORT}:localhost:${PORT} ${sshUser}@${serverHost}${c.reset}
-  Then open: ${c.cyan}${c.bold}${localUrl}${c.reset}
-`);
+    // Render via the shared helper so the instructions include an alternate
+    // local port (port + 1000) when the default is already in use on the
+    // user's computer. The helper output is plain text; we still print it
+    // through console.log inside the wizard banner.
+    const instructions = buildSetupInstructions({
+      url: tunnel ? tunnel.url : `http://127.0.0.1:${PORT}`,
+      sshHost: `${sshUser}@${serverHost}`,
+      port: PORT,
+      token,
+    });
+    console.log(instructions + '\n');
   }
 
   if (!tunnel && !isSSH) {
@@ -1879,11 +2052,22 @@ ${c.green}${c.bold}╚═══════════════════�
 
 function writeMinimalEnv() {
   ensureComposeFile(false);
-  const gatewayToken = ensureGatewayToken({});
-  const content = `CLI_LANGUAGE=en\nLIMBO_PORT=${PORT}\n`;
-  fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
-  // Ensure gateway token secret exists for compose
-  writeSecretFile('gateway_token', gatewayToken);
+  // Merge into the existing .env rather than clobbering it. ensureComposeFile()
+  // above just ran migrateLegacySecretsToEnv(), which may have populated
+  // LLM_API_KEY, TELEGRAM_BOT_TOKEN, etc. Wiping those would force the user
+  // to re-enter every secret in the wizard.
+  const existingEnv = parseEnvFile();
+  const gatewayToken = existingEnv.GATEWAY_TOKEN || generateGatewayToken();
+  const merged = {
+    ...existingEnv,
+    CLI_LANGUAGE: existingEnv.CLI_LANGUAGE || 'en',
+    LIMBO_PORT: String(PORT),
+    GATEWAY_TOKEN: gatewayToken,
+  };
+  const content = Object.entries(merged)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n') + '\n';
+  safeWriteEnvFile(content);
   return gatewayToken;
 }
 
@@ -2006,7 +2190,7 @@ async function cmdStart() {
   if (reconfig) {
     log('Resetting configuration for setup wizard...');
     const minimalContent = `CLI_LANGUAGE=${existingEnv.CLI_LANGUAGE || 'en'}\nLIMBO_PORT=${PORT}\nFORCE_SETUP_MODE=true\n`;
-    fs.writeFileSync(ENV_FILE, minimalContent, { mode: 0o600 });
+    safeWriteEnvFile(minimalContent);
     ensureGatewayToken(existingEnv);
   }
 
@@ -2050,7 +2234,7 @@ async function cmdStart() {
   try {
     const envContent = fs.readFileSync(ENV_FILE, 'utf8');
     const cleaned = envContent.replace(/^FORCE_SETUP_MODE=.*\n?/m, '');
-    if (cleaned !== envContent) fs.writeFileSync(ENV_FILE, cleaned, { mode: 0o600 });
+    if (cleaned !== envContent) safeWriteEnvFile(cleaned);
   } catch {}
 }
 
@@ -2084,7 +2268,7 @@ async function startContainerWithConfig(cfg, existingEnv, alreadyHasEnv) {
   printSuccess({
     language: cfg.language,
     telegramEnabled: mergedEnv.TELEGRAM_ENABLED || cfg.telegramEnabled || 'false',
-  }, readSecretFile('gateway_token') || mergedEnv.GATEWAY_TOKEN);
+  }, mergedEnv.GATEWAY_TOKEN || parseEnvFile().GATEWAY_TOKEN);
 }
 
 function cmdStop() {
@@ -2221,7 +2405,7 @@ ${c.bold}Usage:${c.reset}
 
   const isVoice = feature === 'voice';
   const envKey = isVoice ? 'VOICE_ENABLED' : 'WEB_SEARCH_ENABLED';
-  const secretName = isVoice ? 'groq_api_key' : 'brave_api_key';
+  const apiKeyEnvKey = isVoice ? 'GROQ_API_KEY' : 'BRAVE_API_KEY';
   const featureLabel = isVoice ? 'Voice transcription' : 'Web search';
 
   const hasEnable = args.includes('--enable');
@@ -2232,7 +2416,7 @@ ${c.bold}Usage:${c.reset}
 
   if (hasStatus) {
     const enabled = existingEnv[envKey] === 'true';
-    const key = readSecretFile(secretName);
+    const key = existingEnv[apiKeyEnvKey] || '';
     console.log(`${featureLabel}: ${enabled ? `${c.green}enabled${c.reset}` : `${c.dim}disabled${c.reset}`}`);
     if (key) {
       const masked = key.length > 8 ? key.substring(0, 4) + '...' + key.slice(-4) : '***';
@@ -2253,11 +2437,10 @@ ${c.bold}Usage:${c.reset}
       if (!isVoice && !apiKey.startsWith('BSA')) {
         warn('Brave API keys typically start with BSA');
       }
-      writeSecretFile(secretName, apiKey);
+      existingEnv[apiKeyEnvKey] = apiKey;
       ok(`${featureLabel} API key saved.`);
     } else {
-      const existing = readSecretFile(secretName);
-      if (!existing) {
+      if (!existingEnv[apiKeyEnvKey]) {
         die(`No API key found. Use --api-key <key> to set one.`);
       }
     }
@@ -2269,7 +2452,7 @@ ${c.bold}Usage:${c.reset}
   const newContent = Object.entries(existingEnv)
     .map(([key, value]) => `${key}=${value}`)
     .join('\n') + '\n';
-  fs.writeFileSync(ENV_FILE, newContent, { mode: 0o600 });
+  safeWriteEnvFile(newContent);
   ok(`${featureLabel} ${hasEnable ? 'enabled' : 'disabled'}.`);
 
   if (fs.existsSync(COMPOSE_FILE)) {
@@ -2289,13 +2472,11 @@ async function cmdSwitchBrain() {
     die('No existing configuration found. Run `limbo start` first to set up.');
   }
 
-  // Resolve port from existing config before generating compose file
+  // Resolve port from existing config
   if (existingEnv.LIMBO_PORT) {
     const parsed = parseInt(existingEnv.LIMBO_PORT, 10);
     if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
   }
-
-  ensureComposeFile(false);
 
   const lang = existingEnv.CLI_LANGUAGE || 'en';
   const currentProvider = existingEnv.MODEL_PROVIDER || 'unknown';
@@ -2304,42 +2485,92 @@ async function cmdSwitchBrain() {
   header(lang === 'es' ? 'Cambiar Proveedor' : 'Switch Provider');
   console.log(`  ${c.dim}${lang === 'es' ? 'Proveedor actual' : 'Current provider'}: ${c.reset}${c.bold}${currentProvider}${c.reset} (${currentModel})\n`);
 
-  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
-  const cleaned = envContent
-    .replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '')
-    .replace(/^AUTH_MODE=.*\n?/gm, '')
-    .replace(/^MODEL_PROVIDER=.*\n?/gm, '')
-    .replace(/^MODEL_NAME=.*\n?/gm, '');
-  fs.writeFileSync(ENV_FILE, cleaned + 'SWITCH_BRAIN_MODE=true\n', { mode: 0o600 });
+  // ── New-world switch-brain flow ──────────────────────────────────────
+  // Talks to the container's wizard supervisor over the TCP control plane
+  // (127.0.0.1:${PORT+2}). No docker rebuild, no force-recreate, no
+  // OpenClaw restart — the setup-server runs as a sibling process to
+  // OpenClaw inside the container, and OpenClaw hot-reloads its config
+  // from disk when the wizard writes the new MODEL_PROVIDER /
+  // MODEL_NAME / LLM_API_KEY.
+  const { createControlClient } = require('./lib/control-client');
+  const controlPort = PORT + CONTROL_PORT_OFFSET;
+  const client = createControlClient({ port: controlPort });
 
-  pullOrBuildImage(lang);
-  ensureVolumePermissions();
-
-  log(lang === 'es' ? 'Iniciando wizard de cambio de proveedor...' : 'Starting provider switch wizard...');
-  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
-  if (upResult.status !== 0) {
-    process.stderr.write(upResult.stderr || '');
-    die('Container failed to start. Run `limbo logs` to investigate.');
+  try {
+    await client.health();
+  } catch (err) {
+    die(
+      `Supervisor not reachable at 127.0.0.1:${controlPort}.\n` +
+      `Is the container running? Run 'limbo start' first.\n` +
+      `(error: ${err.message})`
+    );
   }
 
-  const wizardUrl = extractWizardUrl();
+  log(lang === 'es' ? 'Solicitando wizard de cambio de proveedor...' : 'Requesting provider switch wizard session...');
+  let session;
+  try {
+    session = await client.requestWizard({
+      feature: 'switch-brain',
+      timeoutMs: 15 * 60 * 1000, // 15 minutes
+    });
+  } catch (err) {
+    if (err.status === 409 && err.body && err.body.activeSessionId) {
+      die(
+        `Another wizard is already active (session ${err.body.activeSessionId}, feature ${err.body.activeSessionFeature || '?'}).\n` +
+        `Complete it in the browser, or cancel it by restarting the container:\n` +
+        `  limbo stop && limbo start`
+      );
+    }
+    die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
+  }
+
+  // Install SIGINT/SIGTERM handlers so Ctrl+C during the wizard cancels
+  // the session on the supervisor and does not orphan the setup-server
+  // child inside the container.
+  const cleanup = installWizardCleanupHandlers(client, session);
+
+  // The wizard listens on session.port (PORT + 1) inside the container,
+  // exposed on the host via the compose port mapping.
+  const wizardUrl = `http://127.0.0.1:${session.port}/?token=${session.token}`;
 
   let tunnel = null;
   if (isServerEnvironment() || process.argv.includes('--tunnel')) {
-    tunnel = await createSetupTunnel(PORT);
+    tunnel = await createSetupTunnel(session.port);
   }
 
-  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
-  if (!wizardUrl) {
-    warn('Could not extract setup token from container logs.');
-  }
-  printWizardUrl(displayUrl, tunnel);
+  printWizardUrl(wizardUrl, tunnel);
 
+  // Poll the supervisor until the wizard session reaches a terminal state.
   try {
-    const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
-    const final = envAfter.replace(/^SWITCH_BRAIN_MODE=.*\n?/gm, '');
-    if (final !== envAfter) fs.writeFileSync(ENV_FILE, final, { mode: 0o600 });
-  } catch {}
+    while (true) {
+      await new Promise((r) => setTimeout(r, 2000));
+      let status;
+      try {
+        status = await client.getWizard(session.id);
+      } catch (err) {
+        // 404 after completion = session was reaped; treat as done.
+        if (err.status === 404) {
+          ok(lang === 'es' ? 'Proveedor actualizado.' : 'Provider updated.');
+          return;
+        }
+        throw err;
+      }
+      if (status.status === 'done') {
+        ok(lang === 'es' ? 'Proveedor actualizado.' : 'Provider updated.');
+        return;
+      }
+      if (status.status === 'error') {
+        die(`Wizard failed: ${status.error || 'unknown error'}`);
+      }
+      if (status.status === 'timeout') {
+        die(lang === 'es' ? 'El wizard expiró.' : 'Wizard timed out.');
+      }
+      // still pending/ready/active → keep polling
+    }
+  } finally {
+    cleanup.uninstall();
+    if (tunnel) teardownSetupTunnel(tunnel);
+  }
 }
 
 async function cmdConnectCalendar() {
@@ -2359,44 +2590,96 @@ async function cmdConnectCalendar() {
     if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535) PORT = parsed;
   }
 
-  ensureComposeFile(false);
-
   const lang = existingEnv.CLI_LANGUAGE || 'en';
   header(lang === 'es' ? 'Conectar Google Calendar' : 'Connect Google Calendar');
 
-  // Write CONNECT_CALENDAR_MODE to .env (preserve existing config)
-  const envContent = fs.readFileSync(ENV_FILE, 'utf8');
-  const cleaned = envContent.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-  fs.writeFileSync(ENV_FILE, cleaned + 'CONNECT_CALENDAR_MODE=true\n', { mode: 0o600 });
+  // ── New-world connect-calendar flow ──────────────────────────────────
+  // Talks to the container's wizard supervisor over the TCP control plane
+  // (127.0.0.1:${PORT+2}). No docker rebuild, no force-recreate, no
+  // OpenClaw restart — the setup-server runs as a sibling process to
+  // OpenClaw inside the container, and OpenClaw hot-reloads its config
+  // from disk when the wizard writes credentials.
+  const { createControlClient } = require('./lib/control-client');
+  const controlPort = PORT + CONTROL_PORT_OFFSET;
+  const client = createControlClient({ port: controlPort });
 
-  pullOrBuildImage(lang);
-  ensureVolumePermissions();
-
-  log(lang === 'es' ? 'Iniciando wizard de Google Calendar...' : 'Starting Google Calendar setup wizard...');
-  const upResult = runDockerCompose(['up', '-d', '--remove-orphans', '--force-recreate'], { stdio: 'pipe' });
-  if (upResult.status !== 0) {
-    process.stderr.write(upResult.stderr || '');
-    die('Container failed to start. Run `limbo logs` to investigate.');
+  try {
+    await client.health();
+  } catch (err) {
+    die(
+      `Supervisor not reachable at 127.0.0.1:${controlPort}.\n` +
+      `Is the container running? Run 'limbo start' first.\n` +
+      `(error: ${err.message})`
+    );
   }
 
-  const wizardUrl = extractWizardUrl();
+  log(lang === 'es' ? 'Solicitando wizard de Google Calendar...' : 'Requesting Google Calendar wizard session...');
+  let session;
+  try {
+    session = await client.requestWizard({
+      feature: 'calendar',
+      timeoutMs: 15 * 60 * 1000, // 15 minutes
+    });
+  } catch (err) {
+    if (err.status === 409 && err.body && err.body.activeSessionId) {
+      die(
+        `Another wizard is already active (session ${err.body.activeSessionId}, feature ${err.body.activeSessionFeature || '?'}).\n` +
+        `Complete it in the browser, or cancel it by restarting the container:\n` +
+        `  limbo stop && limbo start`
+      );
+    }
+    die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
+  }
+
+  // Install SIGINT/SIGTERM handlers so Ctrl+C during the wizard cancels
+  // the session on the supervisor and does not orphan the setup-server
+  // child inside the container.
+  const cleanup = installWizardCleanupHandlers(client, session);
+
+  // The wizard listens on session.port (PORT + 1) inside the container,
+  // exposed on the host via the compose port mapping.
+  const wizardUrl = `http://127.0.0.1:${session.port}/?token=${session.token}`;
 
   let tunnel = null;
   if (isServerEnvironment() || process.argv.includes('--tunnel')) {
-    tunnel = await createSetupTunnel(PORT);
+    tunnel = await createSetupTunnel(session.port);
   }
 
-  const displayUrl = wizardUrl || `http://127.0.0.1:${PORT}`;
-  if (!wizardUrl) {
-    warn('Could not extract setup token from container logs.');
-  }
-  printWizardUrl(displayUrl, tunnel);
+  printWizardUrl(wizardUrl, tunnel);
 
+  // Poll the supervisor until the wizard session reaches a terminal state.
   try {
-    const envAfter = fs.readFileSync(ENV_FILE, 'utf8');
-    const final = envAfter.replace(/^CONNECT_CALENDAR_MODE=.*\n?/gm, '');
-    if (final !== envAfter) fs.writeFileSync(ENV_FILE, final, { mode: 0o600 });
-  } catch {}
+    while (true) {
+      await new Promise((r) => setTimeout(r, 2000));
+      let status;
+      try {
+        status = await client.getWizard(session.id);
+      } catch (err) {
+        // 404 after completion = session was reaped; treat as done.
+        if (err.status === 404) {
+          ok(lang === 'es' ? 'Google Calendar conectado.' : 'Google Calendar connected.');
+          return;
+        }
+        throw err;
+      }
+      if (status.status === 'done') {
+        ok(lang === 'es' ? 'Google Calendar conectado.' : 'Google Calendar connected.');
+        return;
+      }
+      if (status.status === 'error') {
+        die(`Wizard failed: ${status.error || 'unknown error'}`);
+      }
+      if (status.status === 'timeout') {
+        die(lang === 'es' ? 'El wizard expiró.' : 'Wizard timed out.');
+      }
+      // still pending/ready/active → keep polling
+    }
+  } finally {
+    // Remove signal handlers so a normal completion does not cancel the
+    // session on the way out (it is already terminal by this point).
+    cleanup.uninstall();
+    if (tunnel) teardownSetupTunnel(tunnel);
+  }
 }
 
 function cmdHelp() {
@@ -2521,6 +2804,12 @@ module.exports = {
   buildAnthropicAuthProfile,
   generatePKCE,
   buildOAuthUrl,
+  // Exported for tests — the real commands still run through the CLI entrypoint.
+  writeEnv,
+  safeWriteEnvFile,
+  ensureComposeFile,
+  migrateLegacySecretsToEnv,
+  writeMinimalEnv,
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────
