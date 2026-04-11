@@ -170,6 +170,8 @@ docker compose -f docker-compose.test.yml down                            # stop
 
 The e2e state lives in `/tmp/limbo-e2e-test/` (bind mounts for vault, openclaw-state, secrets, flags). Data volume is `limbo-e2e-test_limbo-data`.
 
+After the secrets-consolidation work, the e2e `.env` lives at `/tmp/limbo-e2e-test/config/.env` (new path), not `/tmp/limbo-e2e-test/.env`. If you have an older e2e state, move it: `mkdir -p /tmp/limbo-e2e-test/config && mv /tmp/limbo-e2e-test/.env /tmp/limbo-e2e-test/config/.env`. Legacy secret files are migrated into `.env` automatically by the container on boot.
+
 ## Evals
 
 `limbo-eval` tests Limbo end-to-end by sending real messages and checking tool calls + vault state.

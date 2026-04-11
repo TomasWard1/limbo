@@ -24,7 +24,9 @@ function runNodeInject(script, cfgPath, envOverrides = {}) {
 }
 
 // The entrypoint.sh Google Calendar injection script (extracted for testing).
-// This is the exact node -e script that entrypoint.sh will use.
+// Mirrors the structure used by the real entrypoint: the credentials path
+// now lives under $OPENCLAW_STATE_DIR/google/credentials.json (post
+// secrets-consolidation), not under the old secrets/ directory.
 const GOOGLE_CALENDAR_SCRIPT = `
   const fs = require('fs');
   const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
@@ -36,7 +38,7 @@ const GOOGLE_CALENDAR_SCRIPT = `
     args: ["/app/mcp-server/index.js"],
     env: {
       GOOGLE_CALENDAR_ENABLED: "true",
-      GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: stateDir + "/secrets/google_calendar_credentials.json",
+      GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: stateDir + "/google/credentials.json",
       GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND: "file"
     }
   };
@@ -100,7 +102,7 @@ describe('Google Calendar config injection', () => {
     const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
     assert.equal(
       cfg.mcp.servers['google-calendar'].env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE,
-      `${customDir}/secrets/google_calendar_credentials.json`,
+      `${customDir}/google/credentials.json`,
     );
   });
 });

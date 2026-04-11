@@ -479,13 +479,30 @@ function stripAnsi(str) {
   return str.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
 }
 
-let _cachedSecret = null;
+// Secrets live in /data/config/.env as KEY="value" lines after the
+// secrets-consolidation refactor. Cache the parsed env on first read so
+// every eval case only pays the docker-exec round trip once.
+let _cachedContainerEnv = null;
+function readContainerEnv(container) {
+  if (_cachedContainerEnv) return _cachedContainerEnv;
+  const raw = execFileSync('docker', [
+    'exec', container, 'cat', '/data/config/.env',
+  ], { encoding: 'utf8' });
+  const out = {};
+  for (const line of raw.split('\n')) {
+    const m = line.match(/^([A-Z_]+)="?([^"]*)"?$/);
+    if (m) out[m[1]] = m[2];
+  }
+  _cachedContainerEnv = out;
+  return out;
+}
+
 function readContainerSecret(container, name) {
-  if (_cachedSecret) return _cachedSecret;
-  _cachedSecret = execFileSync('docker', [
-    'exec', container, 'cat', `/run/secrets/${name}`,
-  ], { encoding: 'utf8' }).trim();
-  return _cachedSecret;
+  // Map lower-snake secret names (used by the old /run/secrets/ layout) to
+  // the uppercase env-var names inside .env.
+  const envKey = name.toUpperCase();
+  const env = readContainerEnv(container);
+  return env[envKey] || '';
 }
 
 // ── Vault reset ─────────────────────────────────────────────────────────────

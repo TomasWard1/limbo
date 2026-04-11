@@ -29,17 +29,10 @@ services:
       - limbo-e2e-data:/data
       - /tmp/limbo-e2e-test/vault:/data/vault
       - /tmp/limbo-e2e-test/openclaw-state:/home/limbo/.openclaw
+      - /tmp/limbo-e2e-test/config:/data/config
       - /tmp/limbo-e2e-test/flags:/flags
-    secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
-      - groq_api_key
-      - brave_api_key
-      - google_client_id
-      - google_client_secret
     env_file:
-      - /tmp/limbo-e2e-test/.env
+      - /tmp/limbo-e2e-test/config/.env
     environment:
       LIMBO_PORT: "18900"
       NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
@@ -58,22 +51,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-secrets:
-  llm_api_key:
-    file: /tmp/limbo-e2e-test/secrets/llm_api_key
-  telegram_bot_token:
-    file: /tmp/limbo-e2e-test/secrets/telegram_bot_token
-  gateway_token:
-    file: /tmp/limbo-e2e-test/secrets/gateway_token
-  groq_api_key:
-    file: /tmp/limbo-e2e-test/secrets/groq_api_key
-  brave_api_key:
-    file: /tmp/limbo-e2e-test/secrets/brave_api_key
-  google_client_id:
-    file: /tmp/limbo-e2e-test/secrets/google_client_id
-  google_client_secret:
-    file: /tmp/limbo-e2e-test/secrets/google_client_secret
 
 volumes:
   limbo-e2e-data:
