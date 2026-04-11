@@ -19,29 +19,12 @@
 
 'use strict';
 
-const { test, before, after } = require('node:test');
+const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 const { EventEmitter } = require('node:events');
 
 const { createSupervisor } = require('../lib/supervisor');
 const { createControlClient } = require('../lib/control-client');
-
-let tmpRoot;
-before(() => {
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'limbo-supervisor-test-'));
-});
-after(() => {
-  try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
-});
-
-let counter = 0;
-function uniqueSocketPath() {
-  counter++;
-  return path.join(tmpRoot, `sup-${process.pid}-${counter}.sock`);
-}
 
 // Fake child whose kill() behaves like a real POSIX process: pushing a
 // SIGTERM schedules an 'exit' event on the next tick, so the supervisor's
@@ -89,11 +72,9 @@ function makeHarness(opts = {}) {
     return child;
   });
 
-  const socketPath = uniqueSocketPath();
-
   let idSeed = 0;
   const supervisor = createSupervisor({
-    socketPath,
+    controlPort: 0, // ephemeral, parallel-safe
     spawnSetupServerFn,
     launchOpenclawFn,
     nodePath: '/fake/bin/node',
@@ -104,9 +85,14 @@ function makeHarness(opts = {}) {
     wizardPortBase: 18901,
   });
 
-  const client = createControlClient({ socketPath });
+  // The client has to wait until supervisor.start() has bound the listener
+  // before it can read the ephemeral port. Callers that need `client`
+  // should call `bindClient()` AFTER `supervisor.start()`.
+  function bindClient() {
+    return createControlClient({ port: supervisor.controlPort });
+  }
 
-  return { supervisor, client, socketPath, setupChildren, openclawChildren };
+  return { supervisor, bindClient, setupChildren, openclawChildren };
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -114,20 +100,23 @@ function makeHarness(opts = {}) {
 // ──────────────────────────────────────────────────────────────────────────
 
 test('start: starts control server and launches openclaw', async () => {
-  const { supervisor, client, openclawChildren } = makeHarness();
+  const { supervisor, bindClient, openclawChildren } = makeHarness();
   await supervisor.start();
+  const client = bindClient();
   try {
     assert.equal(openclawChildren.length, 1);
     const h = await client.health();
     assert.equal(h.ok, true);
+    assert.ok(supervisor.controlPort > 0, 'supervisor.controlPort should be a positive number after start');
   } finally {
     await supervisor.stop();
   }
 });
 
 test('wizard lifecycle: request -> ready -> setup exits 0 -> done', async () => {
-  const { supervisor, client, setupChildren } = makeHarness();
+  const { supervisor, bindClient, setupChildren } = makeHarness();
   await supervisor.start();
+  const client = bindClient();
   try {
     const session = await client.requestWizard({ feature: 'calendar', timeoutMs: 900_000 });
     assert.equal(session.status, 'ready');
@@ -150,8 +139,9 @@ test('wizard lifecycle: request -> ready -> setup exits 0 -> done', async () => 
 });
 
 test('wizard lifecycle: setup exits non-zero -> session error', async () => {
-  const { supervisor, client, setupChildren } = makeHarness();
+  const { supervisor, bindClient, setupChildren } = makeHarness();
   await supervisor.start();
+  const client = bindClient();
   try {
     const session = await client.requestWizard({ feature: 'calendar', timeoutMs: 900_000 });
     setupChildren[0]._simulateExit(42, null);
@@ -172,15 +162,20 @@ test('wizard lifecycle: setup exits non-zero -> session error', async () => {
 // OpenClaw-driven shutdown
 // ──────────────────────────────────────────────────────────────────────────
 
-test('openclaw exits: waitForShutdown resolves with that exit code', async () => {
-  const { supervisor, openclawChildren, socketPath } = makeHarness();
+test('openclaw exits: waitForShutdown resolves with that exit code and closes the listener', async () => {
+  const { supervisor, bindClient, openclawChildren } = makeHarness();
   await supervisor.start();
+  const client = bindClient();
   const shutdownPromise = supervisor.waitForShutdown();
   openclawChildren[0]._simulateExit(3, null);
   const result = await shutdownPromise;
   assert.equal(result.reason, 'openclaw_exit');
   assert.equal(result.code, 3);
-  assert.equal(fs.existsSync(socketPath), false);
+  // TCP listener must be closed after shutdown — client requests fail fast.
+  await assert.rejects(
+    async () => client.health(),
+    (err) => err.code === 'ECONNREFUSED'
+  );
 });
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -198,8 +193,9 @@ test('stop: forwards SIGTERM to openclaw and resolves waitForShutdown', async ()
 });
 
 test('stop while wizard active: kills the wizard child before shutdown', async () => {
-  const { supervisor, client, setupChildren, openclawChildren } = makeHarness();
+  const { supervisor, bindClient, setupChildren, openclawChildren } = makeHarness();
   await supervisor.start();
+  const client = bindClient();
   await client.requestWizard({ feature: 'calendar', timeoutMs: 900_000 });
   assert.equal(setupChildren.length, 1);
   await supervisor.stop();

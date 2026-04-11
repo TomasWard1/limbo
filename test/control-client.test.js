@@ -2,7 +2,7 @@
  * Integration tests for the control-plane HTTP client.
  *
  * The client is the host-side counterpart to control-server: it speaks HTTP
- * over a Unix Domain Socket. Tests spin up a real control-server backed by
+ * over a TCP loopback port. Tests spin up a real control-server backed by
  * the real session-store + router so the client exercises the full request
  * path (parse → route → response → parse on client side).
  *
@@ -15,11 +15,8 @@
 
 'use strict';
 
-const { test, before, after } = require('node:test');
+const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 
 const { createSessionStore } = require('../lib/session-store');
 const { createControlRouter } = require('../lib/control-router');
@@ -29,20 +26,6 @@ const { createControlClient } = require('../lib/control-client');
 // ──────────────────────────────────────────────────────────────────────────
 // Test harness
 // ──────────────────────────────────────────────────────────────────────────
-
-let tmpRoot;
-before(() => {
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'limbo-control-client-test-'));
-});
-after(() => {
-  try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
-});
-
-let counter = 0;
-function uniqueSocketPath() {
-  counter++;
-  return path.join(tmpRoot, `client-sock-${process.pid}-${counter}.sock`);
-}
 
 async function makeBackend(opts = {}) {
   let idSeed = 0;
@@ -55,11 +38,11 @@ async function makeBackend(opts = {}) {
     onWizardCancelled: opts.onWizardCancelled || (async () => {}),
   };
   const router = createControlRouter({ store, handlers });
-  const socketPath = opts.socketPath || uniqueSocketPath();
-  const server = createControlServer({ router, socketPath });
+  // Ephemeral port. Parallel-safe.
+  const server = createControlServer({ router, port: 0 });
   await server.start();
-  const client = createControlClient({ socketPath });
-  return { server, store, client, socketPath };
+  const client = createControlClient({ port: server.port });
+  return { server, store, client, port: server.port };
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -180,19 +163,20 @@ test('health: returns {ok, activeSessions}', async () => {
 // Connection-level errors
 // ──────────────────────────────────────────────────────────────────────────
 
-test('requestWizard: rejects when the socket does not exist', async () => {
-  const client = createControlClient({ socketPath: '/does/not/exist.sock' });
+test('requestWizard: rejects when no server is listening on the port', async () => {
+  // Pick a port that is (almost certainly) not in use. We cannot guarantee
+  // this without binding and immediately releasing, but 1 is root-only on
+  // macOS/Linux so user-space tests get ECONNREFUSED deterministically.
+  const client = createControlClient({ port: 1 });
   await assert.rejects(
     async () => client.requestWizard({ feature: 'calendar', timeoutMs: 900_000 }),
-    // Could be ENOENT (socket file missing) or ECONNREFUSED (stale socket).
-    // Both mean "no server". Accept either in the error code.
-    (err) => /ENOENT|ECONNREFUSED/.test(err.code || err.message || ''),
+    (err) => /ECONNREFUSED|EACCES|EPERM/.test(err.code || err.message || ''),
   );
 });
 
 test('requestWizard: rejects when the server is down mid-request', async () => {
-  const { server, socketPath } = await makeBackend();
-  const client = createControlClient({ socketPath });
+  const { server, port } = await makeBackend();
+  const client = createControlClient({ port });
   await server.stop();
   await assert.rejects(
     async () => client.requestWizard({ feature: 'calendar', timeoutMs: 900_000 }),

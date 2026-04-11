@@ -12,34 +12,31 @@
  * Responsibilities:
  *   - Launches OpenClaw as a child (taking the place of the old
  *     `exec openclaw gateway` at the end of entrypoint.sh).
- *   - Exposes the wizard control plane on a Unix Domain Socket at
- *     /data/control/supervisor.sock (bind-mounted from the host as
- *     ~/.limbo/control/supervisor.sock).
+ *   - Exposes the wizard control plane on a TCP port bound to 127.0.0.1
+ *     (default LIMBO_PORT + 2 = 18902). The compose file publishes this
+ *     port as 127.0.0.1:${LIMBO_CONTROL_PORT}:${LIMBO_CONTROL_PORT} so the
+ *     host CLI can reach the supervisor without any Unix-socket gymnastics.
  *   - Forwards container signals (SIGTERM / SIGINT) into a graceful
  *     supervisor.stop() so OpenClaw + any active wizard get clean teardown.
  *   - Exits with OpenClaw's exit code when OpenClaw dies, so Docker's
  *     restart policy observes the real OpenClaw health.
  */
 
-const path = require('node:path');
 const { spawn } = require('node:child_process');
-const fs = require('node:fs');
 const { createSupervisor } = require('../lib/supervisor');
 
-const SOCKET_PATH = process.env.LIMBO_CONTROL_SOCKET || '/data/control/supervisor.sock';
 const SETUP_SERVER_PATH = process.env.LIMBO_SETUP_SERVER_PATH || '/app/setup-server/server.js';
 const OPENCLAW_BIN = process.env.LIMBO_OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_VERBOSE = process.env.LIMBO_VERBOSE === 'true';
 
 // Wizards listen on LIMBO_PORT + 1 so they don't collide with OpenClaw on
-// LIMBO_PORT. The compose file exposes both ports; the user reaches the
-// wizard via an SSH forward or cloudflare tunnel pointed at wizard port.
+// LIMBO_PORT. The control plane listens on LIMBO_PORT + 2. The compose
+// file publishes both extra ports; the host CLI reaches the control plane
+// via 127.0.0.1:${LIMBO_CONTROL_PORT} and the wizard via
+// 127.0.0.1:${LIMBO_PORT + 1}.
 const LIMBO_PORT = parseInt(process.env.LIMBO_PORT || '18900', 10);
 const WIZARD_PORT_BASE = LIMBO_PORT + 1;
-
-// Ensure the control socket directory exists before the server tries to
-// bind. In production this is a bind-mounted dir from the host.
-try { fs.mkdirSync(path.dirname(SOCKET_PATH), { recursive: true }); } catch {}
+const CONTROL_PORT = parseInt(process.env.LIMBO_CONTROL_PORT || String(LIMBO_PORT + 2), 10);
 
 function log(level, msg) {
   const ts = new Date().toISOString();
@@ -48,7 +45,8 @@ function log(level, msg) {
 
 async function main() {
   const supervisor = createSupervisor({
-    socketPath: SOCKET_PATH,
+    controlPort: CONTROL_PORT,
+    controlHost: '127.0.0.1',
     nodePath: process.execPath,
     setupServerPath: SETUP_SERVER_PATH,
     wizardPortBase: WIZARD_PORT_BASE,
@@ -72,7 +70,7 @@ async function main() {
   process.on('SIGTERM', () => onSignal('SIGTERM'));
   process.on('SIGINT', () => onSignal('SIGINT'));
 
-  log('INFO ', `control socket: ${SOCKET_PATH}`);
+  log('INFO ', `control plane: 127.0.0.1:${CONTROL_PORT}`);
   await supervisor.start();
   log('INFO ', 'started — awaiting shutdown signal or OpenClaw exit');
 

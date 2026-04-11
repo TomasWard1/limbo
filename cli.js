@@ -27,8 +27,11 @@ const FLAGS_DIR = path.join(LIMBO_DIR, 'flags');
 const CONFIG_DIR = path.join(LIMBO_DIR, 'config');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
 const ENV_BACKUP_FILE = path.join(CONFIG_DIR, '.env.bak');
-const CONTROL_DIR = path.join(LIMBO_DIR, 'control');
-const CONTROL_SOCKET = path.join(CONTROL_DIR, 'supervisor.sock');
+// Control plane port offset — supervisor listens on LIMBO_PORT + 2 inside
+// the container, published to the host loopback via Docker port mapping.
+// The offset (not an absolute number) means multi-instance installs on
+// custom ports don't collide.
+const CONTROL_PORT_OFFSET = 2;
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const DEFAULT_REGISTRY = 'registry.gitlab.com/tomas209/limbo';
 const REGISTRY_IMAGE = process.env.LIMBO_REGISTRY || DEFAULT_REGISTRY;
@@ -186,13 +189,15 @@ function composeContent() {
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
+      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
       - "127.0.0.1:${PORT + 1}:${PORT + 1}"
+      # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
+      - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
-      - ${CONTROL_DIR}:/data/control
       - ${FLAGS_DIR}:/flags
     env_file:
       - ${ENV_FILE}
@@ -234,13 +239,15 @@ function composeContentHardened() {
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
+      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
       - "127.0.0.1:${PORT + 1}:${PORT + 1}"
+      # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
+      - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
-      - ${CONTROL_DIR}:/data/control
       - ${FLAGS_DIR}:/flags
     env_file:
       - ${ENV_FILE}
@@ -1177,10 +1184,6 @@ function ensureComposeFile(hardened = false) {
   // anything beyond what the home root already permits.
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
   try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort on existing dirs */ }
-  // Control plane socket dir (bind-mounted as /data/control/). Host side needs
-  // to exist before docker compose up, otherwise Docker creates it owned by
-  // root and the supervisor running as uid 999 cannot bind a socket inside.
-  fs.mkdirSync(CONTROL_DIR, { recursive: true, mode: 0o700 });
   // Migrate legacy .env from LIMBO_DIR root to config/ subdir
   const legacyEnv = path.join(LIMBO_DIR, '.env');
   if (legacyEnv !== ENV_FILE && fs.existsSync(legacyEnv) && !fs.existsSync(ENV_FILE)) {
@@ -2366,19 +2369,21 @@ async function cmdSwitchBrain() {
   console.log(`  ${c.dim}${lang === 'es' ? 'Proveedor actual' : 'Current provider'}: ${c.reset}${c.bold}${currentProvider}${c.reset} (${currentModel})\n`);
 
   // ── New-world switch-brain flow ──────────────────────────────────────
-  // Talks to the container's wizard supervisor over the bind-mounted Unix
-  // socket. No docker rebuild, no force-recreate, no OpenClaw restart —
-  // the setup-server runs as a sibling process to OpenClaw inside the
-  // container, and OpenClaw hot-reloads its config from disk when the
-  // wizard writes the new MODEL_PROVIDER / MODEL_NAME / LLM_API_KEY.
+  // Talks to the container's wizard supervisor over the TCP control plane
+  // (127.0.0.1:${PORT+2}). No docker rebuild, no force-recreate, no
+  // OpenClaw restart — the setup-server runs as a sibling process to
+  // OpenClaw inside the container, and OpenClaw hot-reloads its config
+  // from disk when the wizard writes the new MODEL_PROVIDER /
+  // MODEL_NAME / LLM_API_KEY.
   const { createControlClient } = require('./lib/control-client');
-  const client = createControlClient({ socketPath: CONTROL_SOCKET });
+  const controlPort = PORT + CONTROL_PORT_OFFSET;
+  const client = createControlClient({ port: controlPort });
 
   try {
     await client.health();
   } catch (err) {
     die(
-      `Supervisor not reachable at ${CONTROL_SOCKET}.\n` +
+      `Supervisor not reachable at 127.0.0.1:${controlPort}.\n` +
       `Is the container running? Run 'limbo start' first.\n` +
       `(error: ${err.message})`
     );
@@ -2459,19 +2464,20 @@ async function cmdConnectCalendar() {
   header(lang === 'es' ? 'Conectar Google Calendar' : 'Connect Google Calendar');
 
   // ── New-world connect-calendar flow ──────────────────────────────────
-  // Talks to the container's wizard supervisor over the bind-mounted Unix
-  // socket. No docker rebuild, no force-recreate, no OpenClaw restart —
-  // the setup-server runs as a sibling process to OpenClaw inside the
-  // container, and OpenClaw hot-reloads its config from disk when the
-  // wizard writes credentials.
+  // Talks to the container's wizard supervisor over the TCP control plane
+  // (127.0.0.1:${PORT+2}). No docker rebuild, no force-recreate, no
+  // OpenClaw restart — the setup-server runs as a sibling process to
+  // OpenClaw inside the container, and OpenClaw hot-reloads its config
+  // from disk when the wizard writes credentials.
   const { createControlClient } = require('./lib/control-client');
-  const client = createControlClient({ socketPath: CONTROL_SOCKET });
+  const controlPort = PORT + CONTROL_PORT_OFFSET;
+  const client = createControlClient({ port: controlPort });
 
   try {
     await client.health();
   } catch (err) {
     die(
-      `Supervisor not reachable at ${CONTROL_SOCKET}.\n` +
+      `Supervisor not reachable at 127.0.0.1:${controlPort}.\n` +
       `Is the container running? Run 'limbo start' first.\n` +
       `(error: ${err.message})`
     );
