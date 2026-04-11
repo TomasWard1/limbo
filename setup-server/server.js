@@ -141,10 +141,11 @@ function readEnvFile() {
   }
 }
 
-// Write an env object to .env with single-slot backup rotation. Mirrors the
-// behavior of cli.js writeEnv so host and container converge on the same file
-// shape. An explicit chmod after the write defeats the process umask, which
-// would otherwise mask the mode bits we actually want.
+// Write an env object to .env with single-slot backup rotation. Matches
+// cli.js safeWriteEnvFile exactly: raw KEY=value lines (no quotes), mode
+// 0o666 via explicit chmod to defeat the process umask, single-slot .bak
+// rotation. The two writers must produce byte-equivalent output for a given
+// input so round-tripping through either side is stable.
 function writeEnvFile(envVars) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
   try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
@@ -152,7 +153,7 @@ function writeEnvFile(envVars) {
     try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
   }
   const content = Object.entries(envVars)
-    .map(([key, value]) => `${key}="${value == null ? '' : value}"`)
+    .map(([key, value]) => `${key}=${value == null ? '' : value}`)
     .join('\n') + '\n';
   fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
   try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }

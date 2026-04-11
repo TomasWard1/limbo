@@ -401,11 +401,11 @@ describe('Wizard → Entrypoint integration', () => {
     assert.strictEqual(res.statusCode, 200);
 
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
-    assert.ok(envContent.includes('LLM_API_KEY="sk-ant-test-key-1234567890abcdef"'), 'LLM_API_KEY in .env');
-    assert.ok(envContent.includes('TELEGRAM_BOT_TOKEN="bot-token-123"'), 'TELEGRAM_BOT_TOKEN in .env');
-    assert.ok(envContent.includes('GROQ_API_KEY="groq-key-abc"'), 'GROQ_API_KEY in .env');
-    assert.ok(envContent.includes('BRAVE_API_KEY="brave-key-xyz"'), 'BRAVE_API_KEY in .env');
-    assert.ok(envContent.match(/GATEWAY_TOKEN="[^"]+"/), 'GATEWAY_TOKEN present');
+    assert.ok(envContent.includes('LLM_API_KEY=sk-ant-test-key-1234567890abcdef'), 'LLM_API_KEY in .env');
+    assert.ok(envContent.includes('TELEGRAM_BOT_TOKEN=bot-token-123'), 'TELEGRAM_BOT_TOKEN in .env');
+    assert.ok(envContent.includes('GROQ_API_KEY=groq-key-abc'), 'GROQ_API_KEY in .env');
+    assert.ok(envContent.includes('BRAVE_API_KEY=brave-key-xyz'), 'BRAVE_API_KEY in .env');
+    assert.ok(envContent.match(/GATEWAY_TOKEN=\S+/), 'GATEWAY_TOKEN present');
 
     // Legacy secrets/ directory must NOT be created
     assert.ok(
@@ -423,7 +423,7 @@ describe('Wizard → Entrypoint integration', () => {
     });
 
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
-    assert.ok(envContent.includes('LLM_API_KEY="sk-test-openai-key-1234567890abcdef"'));
+    assert.ok(envContent.includes('LLM_API_KEY=sk-test-openai-key-1234567890abcdef'));
   });
 
   // ── 2. .env format: shell-sourceable ─────────────────────────────────────
@@ -446,7 +446,11 @@ describe('Wizard → Entrypoint integration', () => {
     const lines = envContent.trim().split('\n');
 
     for (const line of lines) {
-      assert.match(line, /^[A-Z_]+="[^"]*"$/, `Line not in KEY="value" format: ${line}`);
+      // Post-consolidation, both cli.js and setup-server emit raw KEY=value
+      // lines (no surrounding quotes). Shell-sourceable via `set -a; . file`
+      // as long as values contain no whitespace or shell metacharacters —
+      // none of our tokens do.
+      assert.match(line, /^[A-Z_]+=\S*$/, `Line not in KEY=value format: ${line}`);
     }
   });
 
@@ -477,7 +481,7 @@ describe('Wizard → Entrypoint integration', () => {
     ];
 
     for (const varName of requiredVars) {
-      assert.ok(envContent.includes(`${varName}="`), `.env must contain ${varName}`);
+      assert.ok(envContent.includes(`${varName}=`), `.env must contain ${varName}`);
     }
   });
 
@@ -514,11 +518,11 @@ describe('Wizard → Entrypoint integration', () => {
     });
 
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
-    assert.ok(envContent.includes(`MODEL_NAME="${MODEL_CATALOG.anthropic.defaultModel}"`),
+    assert.ok(envContent.includes(`MODEL_NAME=${MODEL_CATALOG.anthropic.defaultModel}`),
       'should use provider default model');
-    assert.ok(envContent.includes('TELEGRAM_ENABLED="false"'), 'telegram defaults to false');
-    assert.ok(envContent.includes('VOICE_ENABLED="false"'), 'voice defaults to false');
-    assert.ok(envContent.includes('WEB_SEARCH_ENABLED="false"'), 'web search defaults to false');
+    assert.ok(envContent.includes('TELEGRAM_ENABLED=false'), 'telegram defaults to false');
+    assert.ok(envContent.includes('VOICE_ENABLED=false'), 'voice defaults to false');
+    assert.ok(envContent.includes('WEB_SEARCH_ENABLED=false'), 'web search defaults to false');
   });
 
   // ── 3. File permissions ─────────────────────────────────────────────────
@@ -622,16 +626,18 @@ describe('Wizard → Entrypoint integration', () => {
     assert.strictEqual(res.statusCode, 200);
 
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
-    assert.ok(envContent.includes('LLM_API_KEY="sk-ant-test-minimal-key-12345678"'), 'llm key in env');
-    assert.ok(envContent.match(/GATEWAY_TOKEN="[^"]+"/), 'gateway_token auto-generated');
+    assert.ok(envContent.includes('LLM_API_KEY=sk-ant-test-minimal-key-12345678'), 'llm key in env');
+    assert.ok(envContent.match(/GATEWAY_TOKEN=\S+/), 'gateway_token auto-generated');
     // Optional tokens should be empty (or absent)
     assert.ok(
-      envContent.includes('TELEGRAM_BOT_TOKEN=""') || !envContent.includes('TELEGRAM_BOT_TOKEN='),
+      /TELEGRAM_BOT_TOKEN=\n/.test(envContent) ||
+        /TELEGRAM_BOT_TOKEN=$/m.test(envContent) ||
+        !envContent.includes('TELEGRAM_BOT_TOKEN='),
       'no telegram token set'
     );
-    assert.ok(envContent.includes('TELEGRAM_ENABLED="false"'));
-    assert.ok(envContent.includes('VOICE_ENABLED="false"'));
-    assert.ok(envContent.includes('WEB_SEARCH_ENABLED="false"'));
+    assert.ok(envContent.includes('TELEGRAM_ENABLED=false'));
+    assert.ok(envContent.includes('VOICE_ENABLED=false'));
+    assert.ok(envContent.includes('WEB_SEARCH_ENABLED=false'));
   });
 
   it('configure with ALL features enabled', async () => {
@@ -652,34 +658,35 @@ describe('Wizard → Entrypoint integration', () => {
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
 
     // All tokens present with correct content in .env
-    assert.ok(envContent.includes('LLM_API_KEY="sk-or-all-features-key-1234567890"'));
-    assert.ok(envContent.includes('TELEGRAM_BOT_TOKEN="bot-telegram-token"'));
-    assert.ok(envContent.includes('GROQ_API_KEY="groq-voice-key"'));
-    assert.ok(envContent.includes('BRAVE_API_KEY="brave-search-key"'));
+    assert.ok(envContent.includes('LLM_API_KEY=sk-or-all-features-key-1234567890'));
+    assert.ok(envContent.includes('TELEGRAM_BOT_TOKEN=bot-telegram-token'));
+    assert.ok(envContent.includes('GROQ_API_KEY=groq-voice-key'));
+    assert.ok(envContent.includes('BRAVE_API_KEY=brave-search-key'));
 
     // All features enabled
-    assert.ok(envContent.includes('TELEGRAM_ENABLED="true"'));
-    assert.ok(envContent.includes('VOICE_ENABLED="true"'));
-    assert.ok(envContent.includes('WEB_SEARCH_ENABLED="true"'));
-    assert.ok(envContent.includes('MODEL_PROVIDER="openrouter"'));
-    assert.ok(envContent.includes('MODEL_NAME="google/gemini-2.5-pro"'));
-    assert.ok(envContent.includes('CLI_LANGUAGE="es"'));
+    assert.ok(envContent.includes('TELEGRAM_ENABLED=true'));
+    assert.ok(envContent.includes('VOICE_ENABLED=true'));
+    assert.ok(envContent.includes('WEB_SEARCH_ENABLED=true'));
+    assert.ok(envContent.includes('MODEL_PROVIDER=openrouter'));
+    assert.ok(envContent.includes('MODEL_NAME=google/gemini-2.5-pro'));
+    assert.ok(envContent.includes('CLI_LANGUAGE=es'));
   });
 
   it('special characters in API keys survive round-trip through .env', async () => {
     await startServer();
-    // Double-quotes are not supported inside quoted .env values (would break
-    // the encoding). Every other shell metachar is fair game.
-    const trickyKey = 'sk-ant-key-with$pecial*chars\\and/slashes+base64==';
+    // Raw KEY=value encoding only supports values without whitespace or
+    // shell-interpretable characters (quotes, $, backticks). API key
+    // charsets never contain whitespace, and real provider keys never
+    // contain shell metachars, so raw encoding is safe in practice.
+    const trickyKey = 'sk-ant-key-with/slashes+base64==abcdef';
     const res = await requestTo(srv, 'POST', '/api/configure', {
       provider: 'anthropic',
       apiKey: trickyKey,
     });
     assert.strictEqual(res.statusCode, 200);
 
-    // The value lives inside KEY="..." in the .env file.
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
-    assert.ok(envContent.includes(`LLM_API_KEY="${trickyKey}"`), 'key stored verbatim in .env');
+    assert.ok(envContent.includes(`LLM_API_KEY=${trickyKey}`), 'key stored verbatim in .env');
   });
 
   it('gateway token is auto-generated on first run', async () => {
@@ -690,7 +697,7 @@ describe('Wizard → Entrypoint integration', () => {
     });
 
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
-    const m = envContent.match(/GATEWAY_TOKEN="([^"]+)"/);
+    const m = envContent.match(/GATEWAY_TOKEN=(\S+)/);
     assert.ok(m, 'GATEWAY_TOKEN must be present in .env');
     assert.ok(m[1].length >= 20, 'token should be sufficiently long (24 bytes base64url)');
   });
@@ -700,7 +707,7 @@ describe('Wizard → Entrypoint integration', () => {
     const configDir = path.join(dataDir, 'config');
     fs.mkdirSync(configDir, { recursive: true });
     const existingToken = 'pre-existing-gateway-token-abc123';
-    fs.writeFileSync(path.join(configDir, '.env'), `GATEWAY_TOKEN="${existingToken}"\n`);
+    fs.writeFileSync(path.join(configDir, '.env'), `GATEWAY_TOKEN=${existingToken}\n`);
 
     await startServer();
     await requestTo(srv, 'POST', '/api/configure', {
@@ -709,7 +716,7 @@ describe('Wizard → Entrypoint integration', () => {
     });
 
     const envContent = fs.readFileSync(path.join(configDir, '.env'), 'utf8');
-    assert.ok(envContent.includes(`GATEWAY_TOKEN="${existingToken}"`), 'existing gateway token must be preserved');
+    assert.ok(envContent.includes(`GATEWAY_TOKEN=${existingToken}`), 'existing gateway token must be preserved');
   });
 
   it('TELEGRAM_CHAT_ID written by step-6 pairing is preserved across configure', async () => {
@@ -721,7 +728,7 @@ describe('Wizard → Entrypoint integration', () => {
     const existingChatId = '999888';
     fs.writeFileSync(
       path.join(configDir, '.env'),
-      `TELEGRAM_CHAT_ID="${existingChatId}"\n`,
+      `TELEGRAM_CHAT_ID=${existingChatId}\n`,
     );
 
     await startServer();
@@ -734,12 +741,12 @@ describe('Wizard → Entrypoint integration', () => {
 
     const envContent = fs.readFileSync(path.join(configDir, '.env'), 'utf8');
     assert.ok(
-      envContent.includes(`TELEGRAM_CHAT_ID="${existingChatId}"`),
+      envContent.includes(`TELEGRAM_CHAT_ID=${existingChatId}`),
       'TELEGRAM_CHAT_ID from step-6 pairing must survive handleConfigure',
     );
     // And the wizard-supplied keys still take effect.
-    assert.ok(envContent.includes('TELEGRAM_BOT_TOKEN="bot-token-xyz"'));
-    assert.ok(envContent.includes('TELEGRAM_ENABLED="true"'));
+    assert.ok(envContent.includes('TELEGRAM_BOT_TOKEN=bot-token-xyz'));
+    assert.ok(envContent.includes('TELEGRAM_ENABLED=true'));
   });
 
   it('configure rejects missing provider', async () => {
@@ -781,7 +788,7 @@ describe('Wizard → Entrypoint integration', () => {
     assert.ok(res.json.success);
 
     const envContent = fs.readFileSync(path.join(dataDir, 'config', '.env'), 'utf8');
-    assert.ok(envContent.includes('AUTH_MODE="subscription"'));
+    assert.ok(envContent.includes('AUTH_MODE=subscription'));
   });
 
   it('setup_token file is removed after configure', async () => {

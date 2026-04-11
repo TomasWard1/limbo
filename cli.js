@@ -69,11 +69,13 @@ function detectPortConflict() {
 }
 
 function findExistingApiKeys() {
+  // Probe for an existing OpenClaw standalone install whose credentials we
+  // can offer to reuse. These paths are for OpenClaw, not Limbo — Limbo
+  // itself writes to ~/.limbo/config/.env, which is handled elsewhere.
   const searchPaths = [
     path.join(os.homedir(), '.openclaw', '.env'),
     '/opt/openclaw/.env',
     '/opt/openclaw/secrets/llm_api_key',
-    path.join(os.homedir(), '.openclaw', '.env'),
   ];
 
   for (const envPath of searchPaths) {
@@ -706,7 +708,13 @@ function parseEnvFile() {
     .filter((line) => line && !line.startsWith('#') && line.includes('='))
     .reduce((acc, line) => {
       const idx = line.indexOf('=');
-      acc[line.slice(0, idx)] = line.slice(idx + 1);
+      const key = line.slice(0, idx);
+      // Strip surrounding quotes defensively — older wizard writes and some
+      // manual edits use KEY="value" formatting. cli.js itself writes raw
+      // KEY=value, so we normalize on read.
+      const raw = line.slice(idx + 1);
+      const unquoted = raw.replace(/^["']|["']$/g, '');
+      acc[key] = unquoted;
       return acc;
     }, {});
 }
@@ -761,7 +769,12 @@ function safeWriteEnvFile(content) {
 }
 
 function writeEnv(cfg, existingEnv = {}) {
+  // Skip keys with empty string values to keep the .env clean. The
+  // provider-specific key aliases (OPENAI_API_KEY / ANTHROPIC_API_KEY) are
+  // legacy compat shims — when unused they just add noise. LLM_API_KEY is
+  // always populated in api-key mode, so the active key always lands.
   const content = Object.entries(normalizeConfig(cfg, existingEnv))
+    .filter(([, value]) => value !== '' && value !== undefined && value !== null)
     .map(([key, value]) => `${key}=${value}`)
     .join('\n') + '\n';
   safeWriteEnvFile(content);
@@ -1076,14 +1089,21 @@ function migrateLegacyState() {
 //   3. ~/.limbo/openclaw-state/secrets/ — written by the setup-server (container)
 //
 // After consolidation there is a single source of truth (the .env). This
-// function runs on every `limbo start` / `update`. Per-file, per-key it:
+// function runs on every `limbo start` / `update` but short-circuits via a
+// marker file (~/.limbo/.secrets-migrated) after the first successful pass.
+// Per-file, per-key it:
 //   - looks up each secret in the legacy paths in priority order (1 > 3 > 2)
 //   - does NOT overwrite a value that already exists in .env
 //   - creates a backup .env.bak before writing, same as writeEnv
 //
-// Removable once all production instances have migrated (tracked via a later
-// release — no hard deadline for a one-shot op).
+// TODO(2026-08-01): once production instances have all rolled through at
+// least one release with this helper, delete the helper entirely and remove
+// the marker file. Track in the release that drops this.
+const SECRETS_MIGRATED_MARKER = path.join(LIMBO_DIR, '.secrets-migrated');
+
 function migrateLegacySecretsToEnv() {
+  if (fs.existsSync(SECRETS_MIGRATED_MARKER)) return;
+
   const SECRET_TO_ENV = {
     llm_api_key: 'LLM_API_KEY',
     telegram_bot_token: 'TELEGRAM_BOT_TOKEN',
@@ -1122,12 +1142,18 @@ function migrateLegacySecretsToEnv() {
     }
   }
 
-  if (!changed) return;
+  if (!changed) {
+    // Nothing to migrate on this host — drop the marker anyway so the next
+    // start skips the whole scan.
+    try { fs.writeFileSync(SECRETS_MIGRATED_MARKER, new Date().toISOString()); } catch { /* best effort */ }
+    return;
+  }
 
   const content = Object.entries(existingEnv)
     .map(([k, v]) => `${k}=${v}`)
     .join('\n') + '\n';
   safeWriteEnvFile(content);
+  try { fs.writeFileSync(SECRETS_MIGRATED_MARKER, new Date().toISOString()); } catch { /* best effort */ }
   log('Migrated legacy secrets into .env');
 }
 
