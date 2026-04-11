@@ -24,9 +24,9 @@ const LIMBO_DIR = (() => {
 const VAULT_DIR = path.join(LIMBO_DIR, 'vault');
 const OPENCLAW_STATE_DIR = path.join(LIMBO_DIR, 'openclaw-state');
 const FLAGS_DIR = path.join(LIMBO_DIR, 'flags');
-const SECRETS_DIR = path.join(LIMBO_DIR, 'secrets');
 const CONFIG_DIR = path.join(LIMBO_DIR, 'config');
 const ENV_FILE = path.join(CONFIG_DIR, '.env');
+const ENV_BACKUP_FILE = path.join(CONFIG_DIR, '.env.bak');
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const DEFAULT_REGISTRY = 'registry.gitlab.com/tomas209/limbo';
 const REGISTRY_IMAGE = process.env.LIMBO_REGISTRY || DEFAULT_REGISTRY;
@@ -188,12 +188,6 @@ function composeContent() {
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
       - ${FLAGS_DIR}:/flags
-    secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
-      - groq_api_key
-      - brave_api_key
     env_file:
       - ${ENV_FILE}
     environment:
@@ -207,18 +201,6 @@ ${resolveExtraEnv()}    healthcheck:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-secrets:
-  llm_api_key:
-    file: ${SECRETS_DIR}/llm_api_key
-  telegram_bot_token:
-    file: ${SECRETS_DIR}/telegram_bot_token
-  gateway_token:
-    file: ${SECRETS_DIR}/gateway_token
-  groq_api_key:
-    file: ${SECRETS_DIR}/groq_api_key
-  brave_api_key:
-    file: ${SECRETS_DIR}/brave_api_key
 
 volumes:
   limbo-data:
@@ -252,12 +234,6 @@ function composeContentHardened() {
       - ${OPENCLAW_STATE_DIR}:/home/limbo/.openclaw
       - ${CONFIG_DIR}:/data/config
       - ${FLAGS_DIR}:/flags
-    secrets:
-      - llm_api_key
-      - telegram_bot_token
-      - gateway_token
-      - groq_api_key
-      - brave_api_key
     env_file:
       - ${ENV_FILE}
     environment:
@@ -302,18 +278,6 @@ networks:
   internal:
     internal: true
   external:
-
-secrets:
-  llm_api_key:
-    file: ${SECRETS_DIR}/llm_api_key
-  telegram_bot_token:
-    file: ${SECRETS_DIR}/telegram_bot_token
-  gateway_token:
-    file: ${SECRETS_DIR}/gateway_token
-  groq_api_key:
-    file: ${SECRETS_DIR}/groq_api_key
-  brave_api_key:
-    file: ${SECRETS_DIR}/brave_api_key
 
 volumes:
   limbo-data:
@@ -767,43 +731,29 @@ function normalizeConfig(cfg, existingEnv = {}) {
     TELEGRAM_AUTO_PAIR_FIRST_DM: cfg.telegramAutoPair || existingEnv.TELEGRAM_AUTO_PAIR_FIRST_DM || 'false',
     GATEWAY_TOKEN: gatewayToken,
     VOICE_ENABLED: cfg.voiceEnabled || existingEnv.VOICE_ENABLED || 'false',
+    GROQ_API_KEY: cfg.groqApiKey || existingEnv.GROQ_API_KEY || '',
     WEB_SEARCH_ENABLED: cfg.webSearchEnabled || existingEnv.WEB_SEARCH_ENABLED || 'false',
+    BRAVE_API_KEY: cfg.braveApiKey || existingEnv.BRAVE_API_KEY || '',
     GOOGLE_CALENDAR_ENABLED: cfg.googleCalendarEnabled || existingEnv.GOOGLE_CALENDAR_ENABLED || 'false',
   };
 
   return base;
 }
 
-function writeSecretFile(name, value) {
-  fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
-  const filePath = path.join(SECRETS_DIR, name);
-  // Use 0644 so any container user can read the mounted file.
-  // Docker Compose file-based secrets ignore uid/gid/mode settings,
-  // so the host file permissions are what the container sees.
-  fs.writeFileSync(filePath, value || '', { mode: 0o644 });
-}
-
-function writeSecrets(cfg, existingEnv = {}) {
-  const normalized = normalizeConfig(cfg, existingEnv);
-  writeSecretFile('llm_api_key', normalized.LLM_API_KEY);
-  writeSecretFile('telegram_bot_token', normalized.TELEGRAM_BOT_TOKEN);
-  writeSecretFile('gateway_token', normalized.GATEWAY_TOKEN);
-  writeSecretFile('groq_api_key', cfg.groqApiKey || readSecretFile('groq_api_key'));
-  writeSecretFile('brave_api_key', cfg.braveApiKey || readSecretFile('brave_api_key'));
-}
-
-const SECRET_KEYS = new Set([
-  'LLM_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY',
-  'TELEGRAM_BOT_TOKEN', 'GATEWAY_TOKEN',
-]);
-
+// Write .env with a pre-write single-slot backup (.env.bak) so that a crashed
+// write or a bad wizard run can be manually rolled back. Mode 0666 is chosen
+// because the .env is also written from inside the container (uid 999, non-owner
+// of the host-mounted config dir); world-writable on a file inside ~/.limbo
+// does not widen exposure beyond what the home directory already permits.
 function writeEnv(cfg, existingEnv = {}) {
-  writeSecrets(cfg, existingEnv);
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
+  if (fs.existsSync(ENV_FILE)) {
+    try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
+  }
   const content = Object.entries(normalizeConfig(cfg, existingEnv))
-    .filter(([key]) => !SECRET_KEYS.has(key))
     .map(([key, value]) => `${key}=${value}`)
     .join('\n') + '\n';
-  fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
+  fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
 }
 
 
@@ -1107,6 +1057,71 @@ function migrateLegacyState() {
   }
 }
 
+// Migrate tokens from legacy file-based secret stores into the .env.
+//
+// Pre-consolidation releases of Limbo stored tokens in three separate paths:
+//   1. ~/.limbo/secrets/              — written by the CLI (host), mounted as /run/secrets
+//   2. ~/.limbo/zeroclaw-state/secrets/ — pre-2026-03 ZeroClaw legacy path
+//   3. ~/.limbo/openclaw-state/secrets/ — written by the setup-server (container)
+//
+// After consolidation there is a single source of truth (the .env). This
+// function runs on every `limbo start` / `update`. Per-file, per-key it:
+//   - looks up each secret in the legacy paths in priority order (1 > 3 > 2)
+//   - does NOT overwrite a value that already exists in .env
+//   - creates a backup .env.bak before writing, same as writeEnv
+//
+// Removable once all production instances have migrated (tracked via a later
+// release — no hard deadline for a one-shot op).
+function migrateLegacySecretsToEnv() {
+  const SECRET_TO_ENV = {
+    llm_api_key: 'LLM_API_KEY',
+    telegram_bot_token: 'TELEGRAM_BOT_TOKEN',
+    gateway_token: 'GATEWAY_TOKEN',
+    groq_api_key: 'GROQ_API_KEY',
+    brave_api_key: 'BRAVE_API_KEY',
+  };
+  // Priority order: newer paths win over older ones. The openclaw-state path
+  // was written by setup-server inside the container, the top-level secrets/
+  // by the host CLI — either can be present. zeroclaw-state is strictly
+  // older (pre-OpenClaw).
+  const legacyDirs = [
+    path.join(LIMBO_DIR, 'secrets'),
+    path.join(LIMBO_DIR, 'openclaw-state', 'secrets'),
+    path.join(LIMBO_DIR, 'zeroclaw-state', 'secrets'),
+  ];
+
+  const existingEnv = parseEnvFile();
+  let changed = false;
+
+  for (const [secretName, envKey] of Object.entries(SECRET_TO_ENV)) {
+    if (existingEnv[envKey]) continue; // don't overwrite
+    for (const dir of legacyDirs) {
+      const fp = path.join(dir, secretName);
+      try {
+        const value = fs.readFileSync(fp, 'utf8').trim();
+        if (value) {
+          existingEnv[envKey] = value;
+          changed = true;
+          break;
+        }
+      } catch { /* file doesn't exist or unreadable — try next */ }
+    }
+  }
+
+  if (!changed) return;
+
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
+  try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
+  if (fs.existsSync(ENV_FILE)) {
+    try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
+  }
+  const content = Object.entries(existingEnv)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n') + '\n';
+  fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
+  log('Migrated legacy secrets into .env');
+}
+
 function ensureComposeFile(hardened = false) {
   fs.mkdirSync(LIMBO_DIR, { recursive: true });
   fs.mkdirSync(path.join(VAULT_DIR, 'notes'), { recursive: true });
@@ -1114,20 +1129,22 @@ function ensureComposeFile(hardened = false) {
   fs.mkdirSync(OPENCLAW_STATE_DIR, { recursive: true });
   fs.mkdirSync(FLAGS_DIR, { recursive: true });
   migrateLegacyState();
-  fs.mkdirSync(SECRETS_DIR, { recursive: true, mode: 0o700 });
-  // Ensure config dir and .env exist (bind-mounted into container as /data/config/)
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  // CONFIG_DIR is bind-mounted into the container (uid 999) as /data/config/.
+  // The container needs to write setup_token in here during first-run wizard,
+  // and host user owns the dir, so it must be world-writable (0777). ~/.limbo/
+  // lives under the user's home, so the permissive subdirectory does not expose
+  // anything beyond what the home root already permits.
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
+  try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort on existing dirs */ }
   // Migrate legacy .env from LIMBO_DIR root to config/ subdir
   const legacyEnv = path.join(LIMBO_DIR, '.env');
   if (legacyEnv !== ENV_FILE && fs.existsSync(legacyEnv) && !fs.existsSync(ENV_FILE)) {
     fs.renameSync(legacyEnv, ENV_FILE);
   }
-  if (!fs.existsSync(ENV_FILE)) fs.writeFileSync(ENV_FILE, '', { mode: 0o600 });
-  // Ensure secret files exist (Docker Compose secrets require the files to be present)
-  for (const name of ['llm_api_key', 'telegram_bot_token', 'gateway_token', 'groq_api_key', 'brave_api_key']) {
-    const fp = path.join(SECRETS_DIR, name);
-    if (!fs.existsSync(fp)) fs.writeFileSync(fp, '', { mode: 0o644 });
-  }
+  if (!fs.existsSync(ENV_FILE)) fs.writeFileSync(ENV_FILE, '', { mode: 0o666 });
+  // Migrate tokens from legacy secret files (~/.limbo/secrets/ and
+  // ~/.limbo/zeroclaw-state/secrets/) into the .env — idempotent per-file.
+  migrateLegacySecretsToEnv();
   if (hardened) {
     // Copy squid config files for egress filtering
     const squidDir = path.join(LIMBO_DIR, 'squid');
@@ -1142,21 +1159,12 @@ function ensureComposeFile(hardened = false) {
   fs.writeFileSync(COMPOSE_FILE, hardened ? composeContentHardened() : composeContent());
 }
 
-function readSecretFile(name) {
-  const fp = path.join(SECRETS_DIR, name);
-  try { return fs.readFileSync(fp, 'utf8').trim(); } catch { return ''; }
-}
-
 function ensureGatewayToken(existingEnv) {
-  // Check secret file first, then legacy env
-  const fromFile = readSecretFile('gateway_token');
-  if (fromFile) return fromFile;
-  if (existingEnv.GATEWAY_TOKEN) {
-    writeSecretFile('gateway_token', existingEnv.GATEWAY_TOKEN);
-    return existingEnv.GATEWAY_TOKEN;
-  }
-  writeEnv({ keepExisting: true }, existingEnv);
-  return readSecretFile('gateway_token');
+  if (existingEnv.GATEWAY_TOKEN) return existingEnv.GATEWAY_TOKEN;
+  const token = generateGatewayToken();
+  existingEnv.GATEWAY_TOKEN = token;
+  writeEnv({ keepExisting: true, gatewayToken: token }, existingEnv);
+  return token;
 }
 
 function pullOrBuildImage(lang) {
@@ -1879,11 +1887,13 @@ ${c.green}${c.bold}╚═══════════════════�
 
 function writeMinimalEnv() {
   ensureComposeFile(false);
-  const gatewayToken = ensureGatewayToken({});
-  const content = `CLI_LANGUAGE=en\nLIMBO_PORT=${PORT}\n`;
-  fs.writeFileSync(ENV_FILE, content, { mode: 0o600 });
-  // Ensure gateway token secret exists for compose
-  writeSecretFile('gateway_token', gatewayToken);
+  const existingEnv = parseEnvFile();
+  const gatewayToken = existingEnv.GATEWAY_TOKEN || generateGatewayToken();
+  const content = `CLI_LANGUAGE=en\nLIMBO_PORT=${PORT}\nGATEWAY_TOKEN=${gatewayToken}\n`;
+  if (fs.existsSync(ENV_FILE)) {
+    try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
+  }
+  fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
   return gatewayToken;
 }
 
@@ -2084,7 +2094,7 @@ async function startContainerWithConfig(cfg, existingEnv, alreadyHasEnv) {
   printSuccess({
     language: cfg.language,
     telegramEnabled: mergedEnv.TELEGRAM_ENABLED || cfg.telegramEnabled || 'false',
-  }, readSecretFile('gateway_token') || mergedEnv.GATEWAY_TOKEN);
+  }, mergedEnv.GATEWAY_TOKEN || parseEnvFile().GATEWAY_TOKEN);
 }
 
 function cmdStop() {
@@ -2221,7 +2231,7 @@ ${c.bold}Usage:${c.reset}
 
   const isVoice = feature === 'voice';
   const envKey = isVoice ? 'VOICE_ENABLED' : 'WEB_SEARCH_ENABLED';
-  const secretName = isVoice ? 'groq_api_key' : 'brave_api_key';
+  const apiKeyEnvKey = isVoice ? 'GROQ_API_KEY' : 'BRAVE_API_KEY';
   const featureLabel = isVoice ? 'Voice transcription' : 'Web search';
 
   const hasEnable = args.includes('--enable');
@@ -2232,7 +2242,7 @@ ${c.bold}Usage:${c.reset}
 
   if (hasStatus) {
     const enabled = existingEnv[envKey] === 'true';
-    const key = readSecretFile(secretName);
+    const key = existingEnv[apiKeyEnvKey] || '';
     console.log(`${featureLabel}: ${enabled ? `${c.green}enabled${c.reset}` : `${c.dim}disabled${c.reset}`}`);
     if (key) {
       const masked = key.length > 8 ? key.substring(0, 4) + '...' + key.slice(-4) : '***';
@@ -2253,11 +2263,10 @@ ${c.bold}Usage:${c.reset}
       if (!isVoice && !apiKey.startsWith('BSA')) {
         warn('Brave API keys typically start with BSA');
       }
-      writeSecretFile(secretName, apiKey);
+      existingEnv[apiKeyEnvKey] = apiKey;
       ok(`${featureLabel} API key saved.`);
     } else {
-      const existing = readSecretFile(secretName);
-      if (!existing) {
+      if (!existingEnv[apiKeyEnvKey]) {
         die(`No API key found. Use --api-key <key> to set one.`);
       }
     }
@@ -2269,7 +2278,10 @@ ${c.bold}Usage:${c.reset}
   const newContent = Object.entries(existingEnv)
     .map(([key, value]) => `${key}=${value}`)
     .join('\n') + '\n';
-  fs.writeFileSync(ENV_FILE, newContent, { mode: 0o600 });
+  if (fs.existsSync(ENV_FILE)) {
+    try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
+  }
+  fs.writeFileSync(ENV_FILE, newContent, { mode: 0o666 });
   ok(`${featureLabel} ${hasEnable ? 'enabled' : 'disabled'}.`);
 
   if (fs.existsSync(COMPOSE_FILE)) {
@@ -2521,6 +2533,10 @@ module.exports = {
   buildAnthropicAuthProfile,
   generatePKCE,
   buildOAuthUrl,
+  // Exported for tests — the real commands still run through the CLI entrypoint.
+  writeEnv,
+  ensureComposeFile,
+  migrateLegacySecretsToEnv,
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────
