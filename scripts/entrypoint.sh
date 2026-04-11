@@ -16,40 +16,37 @@ log() {
 
 log "INFO  Limbo container starting"
 
-# ── Read secrets ──────────────────────────────────────────────────────────────
-# Priority: /run/secrets/ (Docker secrets) > OpenClaw secrets (wizard-written) > env vars
-read_secret() {
-  local docker_secret="/run/secrets/$1"
-  local oc_secret="${OPENCLAW_STATE_DIR:-/home/limbo/.openclaw}/secrets/$1"
-  if [ -f "$docker_secret" ] && [ -s "$docker_secret" ] && [ -r "$docker_secret" ]; then
-    cat "$docker_secret"
-  elif [ -f "$oc_secret" ] && [ -s "$oc_secret" ] && [ -r "$oc_secret" ]; then
-    cat "$oc_secret"
-  else
-    echo ""
-  fi
-}
+# ── Load config from .env ────────────────────────────────────────────────────
+# After the secrets-consolidation refactor, all tokens live inside
+# /data/config/.env — there are no separate secret files or Docker
+# secrets to read. Source it now so the rest of the script sees
+# LLM_API_KEY / TELEGRAM_BOT_TOKEN / GROQ_API_KEY / BRAVE_API_KEY /
+# GATEWAY_TOKEN as regular environment variables.
+OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/home/limbo/.openclaw}"
+OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-$OPENCLAW_STATE_DIR/openclaw.json}"
 
-# API key auth is optional now because OpenClaw can also use persisted auth profiles.
-# Prefer Docker secrets, fall back to env vars for backwards compatibility.
-_secret_llm="$(read_secret llm_api_key)"
-_secret_telegram="$(read_secret telegram_bot_token)"
-
-LLM_API_KEY="${_secret_llm:-${LLM_API_KEY:-}}"
+if [ -f /data/config/.env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . /data/config/.env
+  set +a
+fi
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 MODEL_PROVIDER="${MODEL_PROVIDER:-anthropic}"
 MODEL_NAME="${MODEL_NAME:-claude-opus-4-6}"
 RUNTIME_REASONING_EFFORT="${RUNTIME_REASONING_EFFORT:-medium}"
 TELEGRAM_ENABLED="${TELEGRAM_ENABLED:-false}"
-TELEGRAM_BOT_TOKEN="${_secret_telegram:-${TELEGRAM_BOT_TOKEN:-}}"
+TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 VOICE_ENABLED="${VOICE_ENABLED:-false}"
+GROQ_API_KEY="${GROQ_API_KEY:-}"
 WEB_SEARCH_ENABLED="${WEB_SEARCH_ENABLED:-false}"
+BRAVE_API_KEY="${BRAVE_API_KEY:-}"
 GOOGLE_CALENDAR_ENABLED="${GOOGLE_CALENDAR_ENABLED:-false}"
+GATEWAY_TOKEN="${GATEWAY_TOKEN:-}"
+LLM_API_KEY="${LLM_API_KEY:-}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
-OPENCLAW_STATE_DIR="${OPENCLAW_STATE_DIR:-/home/limbo/.openclaw}"
-OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-$OPENCLAW_STATE_DIR/openclaw.json}"
 
 if [ "$MODEL_PROVIDER" = "openai" ] && [ -n "$LLM_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
   OPENAI_API_KEY="$LLM_API_KEY"
@@ -105,20 +102,16 @@ if [ "${CONNECT_CALENDAR_MODE:-}" = "true" ] && [ ! -f "$CONNECT_CALENDAR_MARKER
 fi
 
 # ── Detect setup mode (no config yet → wizard will handle everything) ────────
+# The .env was already sourced at the top of the script. Two states are
+# treated as "setup mode": (a) no .env at all, and (b) .env present but
+# without MODEL_PROVIDER (half-configured — preserve features, ask brain).
 SETUP_MODE=false
 if [ ! -f /data/config/.env ]; then
   SETUP_MODE=true
-elif ! grep -q '^MODEL_PROVIDER=' /data/config/.env 2>/dev/null; then
+elif [ -z "${MODEL_PROVIDER:-}" ]; then
   SETUP_MODE=true
-  set -a
-  . /data/config/.env
-  set +a
   log "INFO  Brain config missing — entering setup mode (preserving features config)"
 else
-  # Source wizard-generated config (written by setup-server on first run)
-  set -a
-  . /data/config/.env
-  set +a
   log "INFO  Loaded config from /data/config/.env"
 fi
 
@@ -129,10 +122,9 @@ AUTH_MODE="${AUTH_MODE:-api-key}"
 if [ "$SETUP_MODE" = "true" ]; then
   log "INFO  Setup mode — skipping API key validation"
 elif [ "$AUTH_MODE" = "subscription" ]; then
-  log "INFO  Subscription mode — credentials resolved from secrets"
-  # Subscription tokens are stored as secrets (same path as api-key mode).
-  # The wizard writes the token to secrets/llm_api_key during setup.
-  # read_secret already loaded it into LLM_API_KEY above.
+  log "INFO  Subscription mode — credentials resolved from .env"
+  # Subscription tokens live in .env as LLM_API_KEY; remap to the provider
+  # env var name OpenClaw / the underlying SDK expects.
   case "$MODEL_PROVIDER" in
     openai|openai-codex)
       [ -n "$LLM_API_KEY" ] && export OPENAI_API_KEY="${OPENAI_API_KEY:-$LLM_API_KEY}"
@@ -169,22 +161,8 @@ else
 fi
 
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
-OC_SECRETS="$OPENCLAW_STATE_DIR/secrets"
 OC_CRON="$OPENCLAW_STATE_DIR/cron"
-mkdir -p /data/vault/notes /data/vault/maps /data/vault/assets /data/config "$OPENCLAW_STATE_DIR" "$OC_SECRETS" "$OC_CRON"
-
-# Sync Docker secrets into OpenClaw state dir.
-# Docker mounts secrets as read-only in /run/secrets/; we copy to a writable path.
-# Note: Docker Compose file-based secrets ignore uid/gid/mode settings,
-# so files may be owned by a different user. Use cp || true to tolerate
-# permission errors (e.g. during setup mode when secrets are placeholder files).
-for secret_name in gateway_token llm_api_key telegram_bot_token groq_api_key brave_api_key google_client_id google_client_secret; do
-  src="/run/secrets/$secret_name"
-  dst="$OC_SECRETS/$secret_name"
-  if [ -f "$src" ] && [ -s "$src" ] && [ -r "$src" ]; then
-    cp "$src" "$dst"
-  fi
-done
+mkdir -p /data/vault/notes /data/vault/maps /data/vault/assets /data/config "$OPENCLAW_STATE_DIR" "$OC_CRON"
 
 # ── Bootstrap workspace (OpenClaw native) ─────────────────────────────────────
 # All workspace files live directly in $OPENCLAW_STATE_DIR/workspace/.
@@ -300,9 +278,7 @@ fi
 # Always regenerate from template so openclaw.json reflects the latest .env values.
 LIMBO_PORT="${LIMBO_PORT:-18789}"
 
-# Read gateway token from secrets
-_secret_gateway="$(read_secret gateway_token)"
-GATEWAY_TOKEN="${_secret_gateway:-${GATEWAY_TOKEN:-}}"
+# GATEWAY_TOKEN was already sourced from .env at the top of the script.
 
 if [ "$SETUP_MODE" = "true" ]; then
   log "INFO  Setup mode — skipping config generation"
@@ -356,9 +332,7 @@ else
   # Whisper — which costs API credits separate from the Codex subscription and
   # returns HTTP 429 once the OpenAI quota is exhausted. Pinning to Groq
   # guarantees voice notes go to the free/fast Groq Whisper endpoint.
-  _secret_groq="$(read_secret groq_api_key)"
-  GROQ_API_KEY="${_secret_groq:-${GROQ_API_KEY:-}}"
-
+  # GROQ_API_KEY was already sourced from .env at the top of the script.
   if [ "$VOICE_ENABLED" = "true" ] && [ -n "$GROQ_API_KEY" ]; then
     export GROQ_API_KEY
     node -e "
@@ -377,9 +351,7 @@ else
 
   # Web search (Brave)
   # OpenClaw schema: tools.web.search with provider and env-based API key.
-  _secret_brave="$(read_secret brave_api_key)"
-  BRAVE_API_KEY="${_secret_brave:-${BRAVE_API_KEY:-}}"
-
+  # BRAVE_API_KEY was already sourced from .env at the top of the script.
   if [ "$WEB_SEARCH_ENABLED" = "true" ] && [ -n "$BRAVE_API_KEY" ]; then
     export BRAVE_API_KEY
     node -e "
@@ -402,7 +374,12 @@ else
   # GOOGLE_CALENDAR_ENABLED into the MCP server env so tools can check it.
   # gws writes a discovery cache to its config dir — point to /tmp so it works
   # on read-only root filesystems (docker-compose.test.yml has read_only: true).
-  GCAL_CREDS="$OPENCLAW_STATE_DIR/secrets/google_calendar_credentials.json"
+  # Check the new consolidated location first, fall back to legacy path for
+  # instances that went through the old secrets/ layout.
+  GCAL_CREDS="$OPENCLAW_STATE_DIR/google/credentials.json"
+  if [ ! -f "$GCAL_CREDS" ] && [ -f "$OPENCLAW_STATE_DIR/secrets/google_calendar_credentials.json" ]; then
+    GCAL_CREDS="$OPENCLAW_STATE_DIR/secrets/google_calendar_credentials.json"
+  fi
   if [ "$GOOGLE_CALENDAR_ENABLED" = "true" ] && [ -f "$GCAL_CREDS" ]; then
     export GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE="$GCAL_CREDS"
     export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND="file"

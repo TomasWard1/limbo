@@ -37,25 +37,21 @@ function envsubst(template, env, allowedVars) {
 }
 
 /**
- * Replicate the entrypoint.sh `read_secret` logic in JS.
- * Priority: dockerSecretsDir > ocSecretsDir > envValue
+ * Source /data/config/.env the way entrypoint.sh does (via `set -a; . file;`)
+ * and return the resulting environment as a plain object. We run a tiny
+ * shell snippet so we exercise the actual `sh` parsing rules (quoting,
+ * escapes), which is what the entrypoint relies on.
  */
-function readSecret(name, dockerSecretsDir, ocSecretsDir, envValue) {
-  const dockerPath = path.join(dockerSecretsDir, name);
-  if (fs.existsSync(dockerPath)) {
-    const stat = fs.statSync(dockerPath);
-    if (stat.size > 0) {
-      try { return fs.readFileSync(dockerPath, 'utf8'); } catch { /* not readable */ }
-    }
+function sourceEnvFile(envPath) {
+  const out = execFileSync('sh', ['-c',
+    `set -a; . "${envPath}"; set +a; env`,
+  ], { encoding: 'utf8' });
+  const result = {};
+  for (const line of out.split('\n')) {
+    const eq = line.indexOf('=');
+    if (eq > 0) result[line.slice(0, eq)] = line.slice(eq + 1);
   }
-  const ocPath = path.join(ocSecretsDir, name);
-  if (fs.existsSync(ocPath)) {
-    const stat = fs.statSync(ocPath);
-    if (stat.size > 0) {
-      try { return fs.readFileSync(ocPath, 'utf8'); } catch { /* not readable */ }
-    }
-  }
-  return envValue || '';
+  return result;
 }
 
 /**
@@ -271,90 +267,82 @@ describe('Config injection (node -e scripts)', () => {
   });
 });
 
-// ── 2. Secret resolution priority ──────────────────────────────────────────
+// ── 2. Token resolution via .env sourcing ─────────────────────────────────
+// After the secrets-consolidation refactor the entrypoint sources all tokens
+// from /data/config/.env — there is no more priority chain between
+// /run/secrets, openclaw-state/secrets, and env vars.
 
-describe('Secret resolution priority (read_secret)', () => {
+describe('Token resolution via .env sourcing', () => {
   let tmp;
 
   before(() => { tmp = makeTmpDir(); });
   after(() => { tmp.cleanup(); });
 
-  test('Docker secret takes priority over OpenClaw secret', () => {
-    const dockerDir = path.join(tmp.dir, 'run-secrets');
-    const ocDir = path.join(tmp.dir, 'oc-secrets');
-    fs.mkdirSync(dockerDir, { recursive: true });
-    fs.mkdirSync(ocDir, { recursive: true });
-    fs.writeFileSync(path.join(dockerDir, 'llm_api_key'), 'docker-key');
-    fs.writeFileSync(path.join(ocDir, 'llm_api_key'), 'oc-key');
+  function writeEnv(filename, lines) {
+    const fp = path.join(tmp.dir, filename);
+    fs.writeFileSync(fp, lines.join('\n') + '\n');
+    return fp;
+  }
 
-    assert.equal(readSecret('llm_api_key', dockerDir, ocDir, 'env-key'), 'docker-key');
+  test('sourcing .env exposes every token as a shell variable', () => {
+    const envFile = writeEnv('tokens.env', [
+      'LLM_API_KEY="sk-ant-example"',
+      'TELEGRAM_BOT_TOKEN="bot-tok"',
+      'GROQ_API_KEY="gsk-tok"',
+      'BRAVE_API_KEY="BSA-tok"',
+      'GATEWAY_TOKEN="gw-tok"',
+    ]);
+    const sourced = sourceEnvFile(envFile);
+    assert.equal(sourced.LLM_API_KEY, 'sk-ant-example');
+    assert.equal(sourced.TELEGRAM_BOT_TOKEN, 'bot-tok');
+    assert.equal(sourced.GROQ_API_KEY, 'gsk-tok');
+    assert.equal(sourced.BRAVE_API_KEY, 'BSA-tok');
+    assert.equal(sourced.GATEWAY_TOKEN, 'gw-tok');
   });
 
-  test('OpenClaw secret used when Docker secret missing', () => {
-    const dockerDir = path.join(tmp.dir, 'empty-docker');
-    const ocDir = path.join(tmp.dir, 'oc-secrets-2');
-    fs.mkdirSync(dockerDir, { recursive: true });
-    fs.mkdirSync(ocDir, { recursive: true });
-    fs.writeFileSync(path.join(ocDir, 'llm_api_key'), 'oc-key');
-
-    assert.equal(readSecret('llm_api_key', dockerDir, ocDir, 'env-key'), 'oc-key');
+  test('sourcing a missing key leaves the variable unset', () => {
+    const envFile = writeEnv('partial.env', [
+      'LLM_API_KEY="only-llm"',
+    ]);
+    const sourced = sourceEnvFile(envFile);
+    assert.equal(sourced.LLM_API_KEY, 'only-llm');
+    assert.ok(!('TELEGRAM_BOT_TOKEN' in sourced));
   });
 
-  test('env value used when no secret files exist', () => {
-    const dockerDir = path.join(tmp.dir, 'no-docker');
-    const ocDir = path.join(tmp.dir, 'no-oc');
-    fs.mkdirSync(dockerDir, { recursive: true });
-    fs.mkdirSync(ocDir, { recursive: true });
-
-    assert.equal(readSecret('llm_api_key', dockerDir, ocDir, 'env-key'), 'env-key');
+  test('entrypoint.sh sources tokens before running anything else', () => {
+    // The refactor moved `. /data/config/.env` to the top of the script,
+    // right after the logging helpers. This guards against future drift.
+    const entrypoint = fs.readFileSync(
+      path.join(__dirname, '..', 'scripts', 'entrypoint.sh'),
+      'utf8'
+    );
+    const sourceLine = entrypoint.indexOf('. /data/config/.env');
+    assert.ok(sourceLine !== -1, 'entrypoint must source /data/config/.env');
+    // The source line must come before any reference to LLM_API_KEY / GROQ_API_KEY
+    const firstUsage = Math.min(
+      entrypoint.indexOf('LLM_API_KEY='),
+      entrypoint.indexOf('GROQ_API_KEY='),
+      entrypoint.indexOf('BRAVE_API_KEY=')
+    );
+    assert.ok(
+      sourceLine < firstUsage,
+      '.env must be sourced before tokens are consumed'
+    );
   });
 
-  test('empty Docker secret file is skipped (falls through to OC)', () => {
-    const dockerDir = path.join(tmp.dir, 'empty-file-docker');
-    const ocDir = path.join(tmp.dir, 'oc-secrets-3');
-    fs.mkdirSync(dockerDir, { recursive: true });
-    fs.mkdirSync(ocDir, { recursive: true });
-    fs.writeFileSync(path.join(dockerDir, 'llm_api_key'), '');  // empty
-    fs.writeFileSync(path.join(ocDir, 'llm_api_key'), 'oc-key');
-
-    assert.equal(readSecret('llm_api_key', dockerDir, ocDir, ''), 'oc-key');
-  });
-
-  test('empty OC secret file is skipped (falls through to env)', () => {
-    const dockerDir = path.join(tmp.dir, 'no-docker-2');
-    const ocDir = path.join(tmp.dir, 'empty-oc');
-    fs.mkdirSync(dockerDir, { recursive: true });
-    fs.mkdirSync(ocDir, { recursive: true });
-    fs.writeFileSync(path.join(ocDir, 'gateway_token'), '');
-
-    assert.equal(readSecret('gateway_token', dockerDir, ocDir, 'env-gw'), 'env-gw');
-  });
-
-  test('returns empty string when nothing available', () => {
-    const dockerDir = path.join(tmp.dir, 'none1');
-    const ocDir = path.join(tmp.dir, 'none2');
-    fs.mkdirSync(dockerDir, { recursive: true });
-    fs.mkdirSync(ocDir, { recursive: true });
-
-    assert.equal(readSecret('missing_secret', dockerDir, ocDir, ''), '');
-  });
-
-  test('works for all known secret names', () => {
-    const secrets = ['gateway_token', 'llm_api_key', 'telegram_bot_token', 'groq_api_key', 'brave_api_key'];
-    const dockerDir = path.join(tmp.dir, 'all-secrets');
-    const ocDir = path.join(tmp.dir, 'all-oc');
-    fs.mkdirSync(dockerDir, { recursive: true });
-    fs.mkdirSync(ocDir, { recursive: true });
-
-    for (const name of secrets) {
-      fs.writeFileSync(path.join(dockerDir, name), `docker-${name}`);
-      fs.writeFileSync(path.join(ocDir, name), `oc-${name}`);
-    }
-
-    for (const name of secrets) {
-      assert.equal(readSecret(name, dockerDir, ocDir, `env-${name}`), `docker-${name}`,
-        `Docker secret should win for ${name}`);
-    }
+  test('entrypoint.sh no longer defines read_secret', () => {
+    const entrypoint = fs.readFileSync(
+      path.join(__dirname, '..', 'scripts', 'entrypoint.sh'),
+      'utf8'
+    );
+    assert.ok(
+      !/read_secret\s*\(\s*\)/.test(entrypoint),
+      'read_secret function must be removed from entrypoint'
+    );
+    assert.ok(
+      !/\/run\/secrets\//.test(entrypoint),
+      'entrypoint must not reference /run/secrets/'
+    );
   });
 });
 
