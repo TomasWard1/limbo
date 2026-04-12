@@ -32,6 +32,10 @@ const ENV_BACKUP_FILE = path.join(CONFIG_DIR, '.env.bak');
 // The offset (not an absolute number) means multi-instance installs on
 // custom ports don't collide.
 const CONTROL_PORT_OFFSET = 2;
+// Fixed wizard port for Google OAuth callback — every Limbo install uses the
+// same port so a single redirect URI can be registered in Google Console.
+// Override via LIMBO_WIZARD_PORT env var for edge cases (multi-instance).
+const DEFAULT_WIZARD_PORT = 15789;
 const COMPOSE_FILE = path.join(LIMBO_DIR, 'docker-compose.yml');
 const DEFAULT_REGISTRY = 'registry.gitlab.com/tomas209/limbo';
 const REGISTRY_IMAGE = process.env.LIMBO_REGISTRY || DEFAULT_REGISTRY;
@@ -170,27 +174,28 @@ function resolveExtraEnv() {
 
 // docker-compose.yml written to ~/.limbo on install
 function composeContent() {
+  const wizardPort = parseInt(process.env.LIMBO_WIZARD_PORT, 10) || DEFAULT_WIZARD_PORT;
   return `services:
   limbo:
     image: ${resolveImage()}
     init: true
     restart: unless-stopped
     read_only: true
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - CHOWN
       - FOWNER
+      - SETUID
+      - SETGID
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
-      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
-      - "127.0.0.1:${PORT + 1}:${PORT + 1}"
+      # Wizard port (fixed for Google OAuth callback URI).
+      - "127.0.0.1:${wizardPort}:${wizardPort}"
       # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
       - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
     volumes:
@@ -203,6 +208,7 @@ function composeContent() {
       - ${ENV_FILE}
     environment:
       LIMBO_PORT: "${PORT}"
+      LIMBO_WIZARD_PORT: "${wizardPort}"
       NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
 ${resolveExtraEnv()}    healthcheck:
       test:
@@ -220,27 +226,28 @@ volumes:
 
 // Hardened variant: adds Squid egress proxy sidecar with domain allowlist
 function composeContentHardened() {
+  const wizardPort = parseInt(process.env.LIMBO_WIZARD_PORT, 10) || DEFAULT_WIZARD_PORT;
   return `services:
   limbo:
     image: ${resolveImage()}
     init: true
     restart: unless-stopped
     read_only: true
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - CHOWN
       - FOWNER
+      - SETUID
+      - SETGID
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
-      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
-      - "127.0.0.1:${PORT + 1}:${PORT + 1}"
+      # Wizard port (fixed for Google OAuth callback URI).
+      - "127.0.0.1:${wizardPort}:${wizardPort}"
       # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
       - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
     volumes:
@@ -253,6 +260,7 @@ function composeContentHardened() {
       - ${ENV_FILE}
     environment:
       LIMBO_PORT: "${PORT}"
+      LIMBO_WIZARD_PORT: "${wizardPort}"
       NODE_OPTIONS: "\${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
       HTTP_PROXY: http://squid:3128
       HTTPS_PROXY: http://squid:3128
@@ -2299,7 +2307,7 @@ function selfUpdateCli() {
 
     if (isGlobal) {
       log(`Updating CLI: ${pkg.version} → ${latest}...`);
-      execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 60000 });
+      execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 300000 });
       ok(`CLI updated to ${latest}.`);
       try { fs.unlinkSync(UPDATE_CHECK_FILE); } catch {}
       return true;

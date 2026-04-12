@@ -718,6 +718,9 @@ function handleGoogleOAuthStart(req, res) {
   const pkce = generatePKCE();
   const state = crypto.randomBytes(16).toString('hex');
   const redirectUri = `http://localhost:${PORT}/auth/google/callback`;
+  // PORT is already the fixed wizard port (default 15789) passed by the
+  // supervisor via LIMBO_PORT env var. The redirect URI is deterministic
+  // so a single URI can be registered in Google Console for all installs.
 
   googlePkceSession = { verifier: pkce.verifier, state, redirectUri, clientId, clientSecret, ts: Date.now() };
   googleOauthResult = null;
