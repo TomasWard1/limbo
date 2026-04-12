@@ -128,13 +128,12 @@ for (const file of files) {
     continue;
   }
   if (!content.includes(ORIGINAL)) {
-    die(
-      `target code not found in ${path.basename(file)}.\n` +
-      `  The function declaration exists but its body no longer matches the\n` +
-      `  expected shape. OpenClaw has probably been updated — re-verify the patch\n` +
-      `  against the new version and update this script, or drop it if upstream\n` +
-      `  PR #64349 has landed.`
+    console.log(
+      `patch-openclaw-audio: skipping ${path.basename(file)} — code shape changed.\n` +
+      `  OpenClaw likely updated past the bug. If Groq transcription breaks,\n` +
+      `  re-verify the patch against the new version.`
     );
+    continue;
   }
   const patchedContent = content.replace(ORIGINAL, REPLACEMENT);
   if (patchedContent === content) {

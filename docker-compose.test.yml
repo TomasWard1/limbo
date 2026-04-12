@@ -12,21 +12,21 @@ services:
     init: true
     restart: "no"
     read_only: true
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     cap_add:
       - CHOWN
       - FOWNER
+      - SETUID
+      - SETGID
     pids_limit: 200
     tmpfs:
       - /tmp:size=100M,noexec,nosuid,nodev
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
       - "127.0.0.1:18900:18900"
-      # Wizard port (LIMBO_PORT + 1) — supervisor spawns on-demand wizards here.
-      - "127.0.0.1:18901:18901"
+      # Wizard port (fixed for Google OAuth callback).
+      - "127.0.0.1:15789:15789"
       # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
       - "127.0.0.1:18902:18902"
     volumes:
@@ -39,6 +39,7 @@ services:
       - /tmp/limbo-e2e-test/config/.env
     environment:
       LIMBO_PORT: "18900"
+      LIMBO_WIZARD_PORT: "15789"
       NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
     logging:
       driver: json-file
