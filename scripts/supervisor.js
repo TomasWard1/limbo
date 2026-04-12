@@ -29,13 +29,11 @@ const SETUP_SERVER_PATH = process.env.LIMBO_SETUP_SERVER_PATH || '/app/setup-ser
 const OPENCLAW_BIN = process.env.LIMBO_OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_VERBOSE = process.env.LIMBO_VERBOSE === 'true';
 
-// Wizards listen on LIMBO_PORT + 1 so they don't collide with OpenClaw on
-// LIMBO_PORT. The control plane listens on LIMBO_PORT + 2. The compose
-// file publishes both extra ports; the host CLI reaches the control plane
-// via 127.0.0.1:${LIMBO_CONTROL_PORT} and the wizard via
-// 127.0.0.1:${LIMBO_PORT + 1}.
+// Wizard port is fixed (default 15789) so a single Google OAuth redirect
+// URI can be registered for all Limbo installs. Override via LIMBO_WIZARD_PORT.
+// Control plane listens on LIMBO_PORT + 2 (still derived from LIMBO_PORT).
 const LIMBO_PORT = parseInt(process.env.LIMBO_PORT || '18900', 10);
-const WIZARD_PORT_BASE = LIMBO_PORT + 1;
+const WIZARD_PORT = parseInt(process.env.LIMBO_WIZARD_PORT || '15789', 10);
 const CONTROL_PORT = parseInt(process.env.LIMBO_CONTROL_PORT || String(LIMBO_PORT + 2), 10);
 
 function log(level, msg) {
@@ -56,7 +54,7 @@ async function main() {
     controlHost: '0.0.0.0',
     nodePath: process.execPath,
     setupServerPath: SETUP_SERVER_PATH,
-    wizardPortBase: WIZARD_PORT_BASE,
+    wizardPortBase: WIZARD_PORT,
     spawnSetupServerFn: (cmd, args, opts) => spawn(cmd, args, opts),
     launchOpenclawFn: () => {
       const args = OPENCLAW_VERBOSE ? ['gateway', '--verbose'] : ['gateway'];

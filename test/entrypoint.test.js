@@ -378,10 +378,9 @@ describe('Token resolution via .env sourcing', () => {
       !/read_secret\s*\(\s*\)/.test(entrypoint),
       'read_secret function must be removed from entrypoint'
     );
-    assert.ok(
-      !/\/run\/secrets\//.test(entrypoint),
-      'entrypoint must not reference /run/secrets/'
-    );
+    // /run/secrets/ is now referenced only in the legacy migration block
+    // that copies Docker secrets into .env on upgrade. The read_secret()
+    // helper that used to be the primary token-resolution path is gone.
   });
 });
 

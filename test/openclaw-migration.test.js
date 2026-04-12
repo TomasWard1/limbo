@@ -138,8 +138,8 @@ test('entrypoint.sh hands off to the wizard supervisor (which launches OpenClaw)
   // Old: exec openclaw gateway. New: exec node /app/scripts/supervisor.js,
   // which in turn spawns openclaw as a child so that the control plane can
   // keep running alongside.
-  assert.ok(ep.includes('exec node /app/scripts/supervisor.js'),
-    'entrypoint must hand off to the supervisor');
+  assert.ok(ep.includes('exec gosu limbo node /app/scripts/supervisor.js'),
+    'entrypoint must drop to limbo user via gosu and hand off to the supervisor');
   const supervisor = read('scripts/supervisor.js');
   assert.ok(supervisor.includes("OPENCLAW_BIN") && supervisor.includes("'gateway'"),
     'supervisor script must launch the openclaw gateway as its managed child');

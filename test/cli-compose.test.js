@@ -102,8 +102,11 @@ test('compose: has read_only security hardening', () => {
   assert.ok(normalTemplate.includes('read_only: true'), 'Container should be read-only');
 });
 
-test('compose: has no-new-privileges', () => {
-  assert.ok(normalTemplate.includes('no-new-privileges'), 'Must have no-new-privileges security opt');
+test('compose: gosu caps (SETUID/SETGID) present, no-new-privileges removed', () => {
+  assert.ok(!normalTemplate.includes('no-new-privileges'),
+    'no-new-privileges blocks gosu — must be removed');
+  assert.ok(normalTemplate.includes('SETUID'), 'Must have SETUID cap for gosu');
+  assert.ok(normalTemplate.includes('SETGID'), 'Must have SETGID cap for gosu');
 });
 
 test('compose: drops all capabilities', () => {
