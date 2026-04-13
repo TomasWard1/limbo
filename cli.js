@@ -2307,7 +2307,7 @@ function selfUpdateCli() {
 
     if (isGlobal) {
       log(`Updating CLI: ${pkg.version} → ${latest}...`);
-      execSync('npm install -g limbo-ai@latest', { stdio: 'inherit', timeout: 300000 });
+      execSync('npm install -g limbo-ai@latest', { stdio: 'inherit' });
       ok(`CLI updated to ${latest}.`);
       try { fs.unlinkSync(UPDATE_CHECK_FILE); } catch {}
       return true;
@@ -2366,6 +2366,34 @@ function cmdUpdate() {
 
   log('Pulling latest image...');
   run(`docker compose -f "${COMPOSE_FILE}" pull -q`);
+
+  // ── Version parity check ──────────────────────────────────────────────
+  // The CLI and Docker image MUST be the same version. If selfUpdateCli
+  // failed (network, timeout killed by an older CLI, npm error) but the
+  // image was updated, the compose template from the old CLI is wrong for
+  // the new image. Detect the mismatch and force a CLI update + re-exec.
+  const cliVersion = require('./package.json').version;
+  try {
+    const imageVersion = execSync(
+      `docker compose -f "${COMPOSE_FILE}" run --rm --no-deps --entrypoint node limbo -e "process.stdout.write(require('/app/package.json').version)"`,
+      { encoding: 'utf8', timeout: 30000, stdio: ['pipe', 'pipe', 'pipe'] }
+    ).trim();
+    if (imageVersion && imageVersion !== cliVersion) {
+      warn(`CLI (${cliVersion}) ≠ image (${imageVersion}) — updating CLI to match...`);
+      try {
+        execSync('npm install -g limbo-ai@latest', { stdio: 'inherit' });
+        log('Re-executing with matched CLI...');
+        const { execFileSync } = require('child_process');
+        execFileSync(process.execPath, process.argv.slice(1), { stdio: 'inherit' });
+        return;
+      } catch {
+        warn('Could not update CLI. Continuing with current version.');
+      }
+    }
+  } catch {
+    // Can't check image version (image not pulled yet, etc.) — continue.
+  }
+
   log('Restarting...');
   run(`docker compose -f "${COMPOSE_FILE}" up -d --remove-orphans`);
 
