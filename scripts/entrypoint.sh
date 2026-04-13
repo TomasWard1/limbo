@@ -70,8 +70,10 @@ OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-$OPENCLAW_STATE_DIR/openclaw.json}
 
 if [ -f /data/config/.env ]; then
   set -a
+  # Only source valid KEY=VALUE lines. Malformed .env files (comments without #,
+  # free text, non-ASCII) must not crash the container under set -e.
   # shellcheck disable=SC1091
-  . /data/config/.env
+  eval "$(grep -E '^[A-Za-z_][A-Za-z_0-9]*=' /data/config/.env)"
   set +a
 fi
 

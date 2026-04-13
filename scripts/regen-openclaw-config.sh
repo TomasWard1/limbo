@@ -32,8 +32,9 @@ OPENCLAW_CONFIG_TEMPLATE="${OPENCLAW_CONFIG_TEMPLATE:-/app/openclaw.json.templat
 # for tokens after the secrets consolidation.
 if [ -f /data/config/.env ]; then
   set -a
+  # Only source valid KEY=VALUE lines (same guard as entrypoint.sh).
   # shellcheck disable=SC1091
-  . /data/config/.env
+  eval "$(grep -E '^[A-Za-z_][A-Za-z_0-9]*=' /data/config/.env)"
   set +a
 fi
 

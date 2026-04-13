@@ -791,6 +791,15 @@ function safeWriteEnvFile(content) {
   try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
 }
 
+// Quote a .env value if it contains shell metacharacters. Simple values
+// (alphanumeric, dots, slashes, dashes, colons, underscores) stay unquoted.
+// Everything else gets double-quoted with escaping.
+function quoteEnvValue(v) {
+  const s = String(v);
+  if (/^[A-Za-z0-9._:\/\-+=]*$/.test(s)) return s;
+  return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+}
+
 function writeEnv(cfg, existingEnv = {}) {
   // Skip keys with empty string values to keep the .env clean. The
   // provider-specific key aliases (OPENAI_API_KEY / ANTHROPIC_API_KEY) are
@@ -798,7 +807,7 @@ function writeEnv(cfg, existingEnv = {}) {
   // always populated in api-key mode, so the active key always lands.
   const content = Object.entries(normalizeConfig(cfg, existingEnv))
     .filter(([, value]) => value !== '' && value !== undefined && value !== null)
-    .map(([key, value]) => `${key}=${value}`)
+    .map(([key, value]) => `${key}=${quoteEnvValue(value)}`)
     .join('\n') + '\n';
   safeWriteEnvFile(content);
 }
