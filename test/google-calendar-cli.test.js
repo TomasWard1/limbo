@@ -122,16 +122,17 @@ describe('connect-calendar CLI lifecycle management', () => {
     );
   });
 
-  test('cmdConnectCalendar handles 409 with a helpful error message', () => {
+  test('cmdConnectCalendar uses requestWizardWithAutoCancel for stale session handling', () => {
     const cliSrc = fs.readFileSync(path.join(__dirname, '..', 'cli.js'), 'utf8');
     const body = extractCmdBody(cliSrc);
     assert.ok(
-      /err\.status\s*===\s*409/.test(body),
-      'cmdConnectCalendar must branch on 409 Conflict from the control plane'
+      body.includes('requestWizardWithAutoCancel'),
+      'cmdConnectCalendar must use requestWizardWithAutoCancel to auto-cancel stale sessions'
     );
+    // The helper itself handles 409 → cancel → retry
     assert.ok(
-      body.includes('already active'),
-      'cmdConnectCalendar must surface "already active" to the user'
+      cliSrc.includes('cancelWizard(err.body.activeSessionId)'),
+      'requestWizardWithAutoCancel must cancel the stale session on 409'
     );
   });
 });

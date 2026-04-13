@@ -704,16 +704,18 @@ async function handleOAuthExchange(req, res) {
 
 // ─── Google Calendar OAuth Handlers ──────────────────────────────────────────
 
+// Built-in Google OAuth credentials for the Limbo project.
+// These are "public client" credentials — the client_secret is not truly
+// secret for distributed desktop/CLI apps (same pattern as gcloud CLI,
+// VS Code, Electron apps). Security comes from localhost redirect URI +
+// user consent, not from the secret itself. Users can override via .env.
+const DEFAULT_GOOGLE_CLIENT_ID = '795781970420-3dlc99d40607ffvr0o34puuavbvlur11.apps.googleusercontent.com';
+const DEFAULT_GOOGLE_CLIENT_SECRET = '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';
+
 function handleGoogleOAuthStart(req, res) {
-  // Read client credentials from the env file (they are configured at image
-  // build time or set manually by the operator before starting the wizard).
   const env = readEnvFile();
-  const clientId = env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '';
-  const clientSecret = env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '';
-  if (!clientId || !clientSecret) {
-    sendError(res, 500, 'Google Calendar client credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the .env before running the wizard.');
-    return;
-  }
+  const clientId = env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+  const clientSecret = env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET;
 
   const pkce = generatePKCE();
   const state = crypto.randomBytes(16).toString('hex');
