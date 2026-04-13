@@ -126,6 +126,15 @@ function sendError(res, statusCode, message) {
   sendJSON(res, statusCode, { error: message });
 }
 
+// Quote a .env value if it contains shell metacharacters. Simple values
+// (alphanumeric, dots, slashes, dashes, colons, underscores) stay unquoted
+// for readability. Everything else gets double-quoted with internal quotes
+// and backslashes escaped.
+function quoteEnvValue(v) {
+  if (/^[A-Za-z0-9._:\/\-+=]*$/.test(v)) return v;
+  return '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+}
+
 // Parse the current .env into a plain object. Missing file → empty object.
 function readEnvFile() {
   try {
@@ -142,10 +151,9 @@ function readEnvFile() {
 }
 
 // Write an env object to .env with single-slot backup rotation. Matches
-// cli.js safeWriteEnvFile exactly: raw KEY=value lines (no quotes), mode
-// 0o666 via explicit chmod to defeat the process umask, single-slot .bak
-// rotation. The two writers must produce byte-equivalent output for a given
-// input so round-tripping through either side is stable.
+// cli.js safeWriteEnvFile. Values containing shell metacharacters (spaces,
+// quotes, $, etc.) are double-quoted so `source .env` works safely.
+// Mode 0o666 via explicit chmod defeats the process umask. Single-slot .bak.
 function writeEnvFile(envVars) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o777 });
   try { fs.chmodSync(CONFIG_DIR, 0o777); } catch { /* best effort */ }
@@ -153,7 +161,7 @@ function writeEnvFile(envVars) {
     try { fs.copyFileSync(ENV_FILE, ENV_BACKUP_FILE); } catch { /* best effort */ }
   }
   const content = Object.entries(envVars)
-    .map(([key, value]) => `${key}=${value == null ? '' : value}`)
+    .map(([key, value]) => `${key}=${quoteEnvValue(value == null ? '' : String(value))}`)
     .join('\n') + '\n';
   fs.writeFileSync(ENV_FILE, content, { mode: 0o666 });
   try { fs.chmodSync(ENV_FILE, 0o666); } catch { /* best effort */ }
