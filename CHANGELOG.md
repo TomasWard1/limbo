@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026.4.6](https://gitlab.com/tomas209/limbo/-/compare/v2026.4.5...v2026.4.6) (2026-04-13)
+
+### Bug Fixes
+
+* wizard UX — auto-cancel stale sessions + embed Google OAuth ([c20f971](https://gitlab.com/tomas209/limbo/-/commit/c20f971035c4b0ab8f6d9aa91c83ac0b778001d1))
+
 ## [2026.5.0](https://gitlab.com/tomas209/limbo/-/compare/v1.32.0...v2026.5.0) (2026-04-13)
 
 ### Features
