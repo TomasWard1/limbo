@@ -316,8 +316,9 @@ describe('Token resolution via .env sourcing', () => {
       path.join(__dirname, '..', 'scripts', 'entrypoint.sh'),
       'utf8'
     );
-    const sourceLine = entrypoint.indexOf('. /data/config/.env');
-    assert.ok(sourceLine !== -1, 'entrypoint must source /data/config/.env');
+    // The entrypoint uses eval+grep to safely source only valid KEY=VALUE lines.
+    const sourceLine = entrypoint.indexOf("eval \"$(grep");
+    assert.ok(sourceLine !== -1, 'entrypoint must source /data/config/.env (via eval+grep)');
     // The source line must come before any reference to LLM_API_KEY / GROQ_API_KEY
     const firstUsage = Math.min(
       entrypoint.indexOf('LLM_API_KEY='),
@@ -359,9 +360,9 @@ describe('Token resolution via .env sourcing', () => {
       path.join(__dirname, '..', 'scripts', 'entrypoint.sh'),
       'utf8'
     );
-    const sourceLine = entrypoint.indexOf('. /data/config/.env');
+    const sourceLine = entrypoint.indexOf("eval \"$(grep");
     const switchBrainStrip = entrypoint.indexOf("'/^MODEL_PROVIDER=/d'");
-    assert.ok(sourceLine !== -1, 'entrypoint must source /data/config/.env');
+    assert.ok(sourceLine !== -1, 'entrypoint must source /data/config/.env (via eval+grep)');
     assert.ok(switchBrainStrip !== -1, 'SWITCH_BRAIN must strip MODEL_PROVIDER from .env');
     assert.ok(
       sourceLine < switchBrainStrip,
