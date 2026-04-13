@@ -2314,6 +2314,20 @@ function cmdLogs() {
   run('docker compose logs -f');
 }
 
+// Build the npm install -g command, prefixing with sudo when the global
+// node_modules directory is not writable by the current user (common when
+// the original install was done with sudo on Linux).
+function npmGlobalInstallCmd(pkg) {
+  try {
+    const globalDir = execSync('npm prefix -g', { encoding: 'utf8', timeout: 5000 }).trim();
+    const modulesDir = path.join(globalDir, 'lib', 'node_modules');
+    fs.accessSync(modulesDir, fs.constants.W_OK);
+    return `npm install -g ${pkg}`;
+  } catch {
+    return `sudo npm install -g ${pkg}`;
+  }
+}
+
 // Returns true if the CLI was updated on disk (caller should re-exec).
 function selfUpdateCli() {
   const pkg = require('./package.json');
@@ -2330,7 +2344,7 @@ function selfUpdateCli() {
 
     if (isGlobal) {
       log(`Updating CLI: ${pkg.version} → ${latest}...`);
-      execSync('npm install -g limbo-ai@latest', { stdio: 'inherit' });
+      execSync(npmGlobalInstallCmd('limbo-ai@latest'), { stdio: 'inherit' });
       ok(`CLI updated to ${latest}.`);
       try { fs.unlinkSync(UPDATE_CHECK_FILE); } catch {}
       return true;
@@ -2404,7 +2418,7 @@ function cmdUpdate() {
     if (imageVersion && imageVersion !== cliVersion) {
       warn(`CLI (${cliVersion}) ≠ image (${imageVersion}) — updating CLI to match...`);
       try {
-        execSync('npm install -g limbo-ai@latest', { stdio: 'inherit' });
+        execSync(npmGlobalInstallCmd('limbo-ai@latest'), { stdio: 'inherit' });
         log('Re-executing with matched CLI...');
         const { execFileSync } = require('child_process');
         execFileSync(process.execPath, process.argv.slice(1), { stdio: 'inherit' });
