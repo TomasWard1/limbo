@@ -4,6 +4,12 @@
 # via gosu (same pattern as PostgreSQL, Redis, and other Docker official images).
 set -e
 
+# ── Fix data-dir ownership (MUST be first) ───────────────────────────────────
+# Bind-mounted dirs may be owned by the host user (uid ≠ 999). Named volumes
+# may be root-owned. chown everything to limbo:limbo so the app can read/write.
+# This runs before mkdir, before logging, before anything that touches /data.
+chown -R limbo:limbo /data /home/limbo/.openclaw /home/limbo/.npm 2>/dev/null || true
+
 LOG_DIR="/data/logs"
 LOG_FILE="$LOG_DIR/startup.log"
 
@@ -17,43 +23,44 @@ log() {
 }
 
 log "INFO  Limbo container starting"
-
-# ── Fix data-dir ownership ───────────────────────────────────────────────────
-# Bind-mounted dirs may be owned by the host user (uid ≠ 999). Named volumes
-# may be root-owned. chown everything to limbo:limbo so the app can read/write.
-chown -R limbo:limbo /data /home/limbo/.openclaw /home/limbo/.npm 2>/dev/null || true
 log "INFO  Data directory ownership fixed"
 
-# ── Migrate legacy Docker secrets to .env ────────────────────────────────────
-# Pre-v2026.4.3 composes mounted tokens as Docker secrets at /run/secrets/.
-# The host CLI tried to migrate them but often failed because the secret files
-# are root-owned and the CLI runs as a non-root host user. The container CAN
-# read /run/secrets (root access before gosu), so we do it here — idempotent.
-if [ -d /run/secrets ]; then
-  _env_file="/data/config/.env"
-  [ -f "$_env_file" ] || touch "$_env_file"
-  _migrated=0
-  for _pair in \
-    "telegram_bot_token:TELEGRAM_BOT_TOKEN" \
-    "groq_api_key:GROQ_API_KEY" \
-    "brave_api_key:BRAVE_API_KEY" \
-    "gateway_token:GATEWAY_TOKEN" \
-    "llm_api_key:LLM_API_KEY" \
-    "google_client_id:GOOGLE_CLIENT_ID" \
-    "google_client_secret:GOOGLE_CLIENT_SECRET"; do
-    _file="${_pair%%:*}"
-    _var="${_pair##*:}"
-    _path="/run/secrets/$_file"
+# ── Migrate legacy tokens to .env ────────────────────────────────────────────
+# Pre-v2026.4.3 installs stored tokens in separate files:
+#   - /run/secrets/*               (Docker secrets, old compose)
+#   - /home/limbo/.openclaw/secrets/* (written by setup-server inside container)
+# The host CLI migration often failed because these files are root-owned.
+# The container runs as root here (before gosu), so we can read everything.
+_env_file="/data/config/.env"
+[ -f "$_env_file" ] || touch "$_env_file"
+_migrated=0
+for _pair in \
+  "telegram_bot_token:TELEGRAM_BOT_TOKEN" \
+  "telegram_chat_id:TELEGRAM_CHAT_ID" \
+  "groq_api_key:GROQ_API_KEY" \
+  "brave_api_key:BRAVE_API_KEY" \
+  "gateway_token:GATEWAY_TOKEN" \
+  "llm_api_key:LLM_API_KEY" \
+  "google_client_id:GOOGLE_CLIENT_ID" \
+  "google_client_secret:GOOGLE_CLIENT_SECRET"; do
+  _file="${_pair%%:*}"
+  _var="${_pair##*:}"
+  # Skip if already in .env
+  grep -q "^${_var}=" "$_env_file" 2>/dev/null && continue
+  # Search all legacy paths (first non-empty wins)
+  for _dir in /run/secrets /home/limbo/.openclaw/secrets; do
+    _path="$_dir/$_file"
     if [ -f "$_path" ]; then
       _val="$(cat "$_path" 2>/dev/null | tr -d '\n')"
-      if [ -n "$_val" ] && ! grep -q "^${_var}=" "$_env_file" 2>/dev/null; then
+      if [ -n "$_val" ]; then
         echo "${_var}=${_val}" >> "$_env_file"
         _migrated=$((_migrated + 1))
+        break
       fi
     fi
   done
-  [ "$_migrated" -gt 0 ] && log "INFO  Migrated $_migrated token(s) from /run/secrets to .env"
-fi
+done
+[ "$_migrated" -gt 0 ] && log "INFO  Migrated $_migrated token(s) from legacy secret files to .env"
 
 # ── Load config from .env ────────────────────────────────────────────────────
 # All tokens live inside /data/config/.env. Source it now so the rest of the
