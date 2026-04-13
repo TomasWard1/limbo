@@ -185,6 +185,7 @@ function composeContent() {
       - ALL
     cap_add:
       - CHOWN
+      - DAC_OVERRIDE
       - FOWNER
       - SETUID
       - SETGID
@@ -237,6 +238,7 @@ function composeContentHardened() {
       - ALL
     cap_add:
       - CHOWN
+      - DAC_OVERRIDE
       - FOWNER
       - SETUID
       - SETGID
