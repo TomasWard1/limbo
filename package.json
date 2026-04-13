@@ -1,6 +1,6 @@
 {
   "name": "limbo-ai",
-  "version": "2026.4.7",
+  "version": "2026.4.8",
   "description": "Your personal AI memory agent — install and manage Limbo via npx",
   "type": "commonjs",
   "bin": {
