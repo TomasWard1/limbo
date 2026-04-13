@@ -1580,6 +1580,27 @@ function teardownSetupTunnel(tunnel) {
 // The handler is intentionally synchronous-ish: Node gives us a few
 // hundred ms between a signal and process death, so the best we can do is
 // fire the DELETE request and hope it reaches the container. The CLI exit
+// Request a wizard session, auto-cancelling any stale/active session first.
+// Returns the new session object on success, or calls die() on failure.
+async function requestWizardWithAutoCancel(client, feature, timeoutMs) {
+  try {
+    return await client.requestWizard({ feature, timeoutMs });
+  } catch (err) {
+    if (err.status === 409 && err.body && err.body.activeSessionId) {
+      // Cancel the stale session and retry once.
+      try {
+        await client.cancelWizard(err.body.activeSessionId);
+      } catch { /* already gone — fine */ }
+      try {
+        return await client.requestWizard({ feature, timeoutMs });
+      } catch (retryErr) {
+        die(`Wizard request failed after cancelling stale session: ${retryErr.message}`);
+      }
+    }
+    die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
+  }
+}
+
 // does not wait on it, but the supervisor's DELETE path is O(ms) on
 // localhost so the vast majority of signals land before process teardown.
 function installWizardCleanupHandlers(client, session) {
@@ -2545,22 +2566,7 @@ async function cmdSwitchBrain() {
   }
 
   log(lang === 'es' ? 'Solicitando wizard de cambio de proveedor...' : 'Requesting provider switch wizard session...');
-  let session;
-  try {
-    session = await client.requestWizard({
-      feature: 'switch-brain',
-      timeoutMs: 15 * 60 * 1000, // 15 minutes
-    });
-  } catch (err) {
-    if (err.status === 409 && err.body && err.body.activeSessionId) {
-      die(
-        `Another wizard is already active (session ${err.body.activeSessionId}, feature ${err.body.activeSessionFeature || '?'}).\n` +
-        `Complete it in the browser, or cancel it by restarting the container:\n` +
-        `  limbo stop && limbo start`
-      );
-    }
-    die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
-  }
+  const session = await requestWizardWithAutoCancel(client, 'switch-brain', 15 * 60 * 1000);
 
   // Install SIGINT/SIGTERM handlers so Ctrl+C during the wizard cancels
   // the session on the supervisor and does not orphan the setup-server
@@ -2652,22 +2658,7 @@ async function cmdConnectCalendar() {
   }
 
   log(lang === 'es' ? 'Solicitando wizard de Google Calendar...' : 'Requesting Google Calendar wizard session...');
-  let session;
-  try {
-    session = await client.requestWizard({
-      feature: 'calendar',
-      timeoutMs: 15 * 60 * 1000, // 15 minutes
-    });
-  } catch (err) {
-    if (err.status === 409 && err.body && err.body.activeSessionId) {
-      die(
-        `Another wizard is already active (session ${err.body.activeSessionId}, feature ${err.body.activeSessionFeature || '?'}).\n` +
-        `Complete it in the browser, or cancel it by restarting the container:\n` +
-        `  limbo stop && limbo start`
-      );
-    }
-    die(`Wizard request failed (status ${err.status || '?'}): ${err.message}`);
-  }
+  const session = await requestWizardWithAutoCancel(client, 'calendar', 15 * 60 * 1000);
 
   // Install SIGINT/SIGTERM handlers so Ctrl+C during the wizard cancels
   // the session on the supervisor and does not orphan the setup-server

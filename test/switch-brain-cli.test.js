@@ -86,8 +86,8 @@ describe('switch-brain CLI uses the control plane, not container restart', () =>
       'cmdSwitchBrain must use the control client'
     );
     assert.ok(
-      /feature:\s*['"]switch-brain['"]/.test(body),
-      'cmdSwitchBrain must request a wizard with feature: "switch-brain"'
+      body.includes("'switch-brain'") || body.includes('"switch-brain"'),
+      'cmdSwitchBrain must request a wizard with feature "switch-brain"'
     );
     assert.ok(
       body.includes('getWizard'),
@@ -108,16 +108,17 @@ describe('switch-brain CLI uses the control plane, not container restart', () =>
     );
   });
 
-  test('cmdSwitchBrain handles 409 with a helpful error message', () => {
+  test('cmdSwitchBrain uses requestWizardWithAutoCancel for stale session handling', () => {
     const cliSrc = fs.readFileSync(path.join(__dirname, '..', 'cli.js'), 'utf8');
     const body = extractCmdSwitchBrain(cliSrc);
     assert.ok(
-      /err\.status\s*===\s*409/.test(body),
-      'cmdSwitchBrain must branch on 409 Conflict from the control plane'
+      body.includes('requestWizardWithAutoCancel'),
+      'cmdSwitchBrain must use requestWizardWithAutoCancel to auto-cancel stale sessions'
     );
+    // The helper itself handles 409 → cancel → retry
     assert.ok(
-      body.includes('already active'),
-      'cmdSwitchBrain must surface "already active" to the user'
+      cliSrc.includes('cancelWizard(err.body.activeSessionId)'),
+      'requestWizardWithAutoCancel must cancel the stale session on 409'
     );
   });
 });
