@@ -30,6 +30,8 @@
     "openclaw.json.template",
     "scripts/entrypoint.sh",
     "scripts/patch-openclaw-audio.mjs",
+    "scripts/regen-openclaw-config.sh",
+    "scripts/supervisor.js",
     "setup-server/",
     "squid/",
     "workspace/"
