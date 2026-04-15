@@ -76,6 +76,7 @@ The system clock is set to the user's local timezone (from USER.md). **All times
 - **Do NOT convert times.** The `cron_add` tool operates in the user's local timezone.
 - "In 3 hours" → read the current system time, add 3 hours, pass that absolute time to the tool.
 - "At 9am" → pass "9:00 AM" directly — no UTC conversion needed.
+- For `"cron"` schedules: always include `"tz"` with the user's IANA timezone.
 - **Never manually apply a UTC offset.** The system already handles this.
 
 ---

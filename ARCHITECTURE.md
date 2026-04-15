@@ -239,10 +239,11 @@ These are documented in the vault but rarely change:
 
 ## Eval System
 
-- 20+ JSON test cases in `evals/cases/`
-- Each case: sends message via WebSocket, asserts on tool_called + response_matches + vault_state
-- Current baseline: 94.0% (FTS5 + OpenClaw)
-- `node evals/cli.js run` → `compare --strict` → `promote`
+- **promptfoo**-based E2E evals in `evals/promptfoo/`
+- Test config: `promptfooconfig.yaml` — inline test definitions with custom assertions
+- Custom provider sends messages to Docker container, parses MCP logs from `/data/logs/mcp.log`
+- Custom assertions: `toolCalled`, `paramMatch`, `responseMatches`, `cronCountIncreased`, etc.
+- `./evals/promptfoo/run.sh` or `npx promptfoo eval -c evals/promptfoo/promptfooconfig.yaml`
 - Uses real LLM calls (costs tokens)
 
 ## Environment Variables
