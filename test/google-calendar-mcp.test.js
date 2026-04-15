@@ -222,8 +222,8 @@ describe('MCP tool registration', () => {
     );
     assert.match(
       dockerfile,
-      /@googleworkspace\/cli@0\.22\.4/,
-      'Dockerfile should pin @googleworkspace/cli to 0.22.4',
+      /@googleworkspace\/cli@0\.22\.3/,
+      'Dockerfile should pin @googleworkspace/cli to 0.22.3',
     );
   });
 

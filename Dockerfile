@@ -49,9 +49,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends gettext-base tz
 # Install OpenClaw globally — replaces the ZeroClaw Rust binary.
 # Pinned via OPENCLAW_VERSION build arg (default: latest).
 # @googleworkspace/cli (gws) — Google Calendar integration (optional feature).
-# Pin 0.22.4 because 0.22.5 requires GLIBC_2.39, but node:22-slim currently ships
-# Debian 12 / glibc 2.36 in production.
-RUN npm install -g "openclaw@${OPENCLAW_VERSION}" "@googleworkspace/cli@0.22.4"
+# Pin 0.22.3 because 0.22.4+ requires GLIBC_2.39 on linux/amd64, but node:22-slim
+# currently ships Debian 12 / glibc 2.36 in production.
+RUN npm install -g "openclaw@${OPENCLAW_VERSION}" "@googleworkspace/cli@0.22.3"
 
 # Apply local patch for openclaw#63851 — the guarded fetch drops FormData fields,
 # breaking Groq audio transcription. Remove this once upstream PR #64349 ships in
