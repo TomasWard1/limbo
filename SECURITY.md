@@ -69,6 +69,18 @@ The `limbo connect-calendar` / `limbo switch-brain` commands talk to the running
 - **No token auth**: the loopback bind IS the boundary. Adding a token would only differentiate same-host users from each other — not a threat vector in Limbo's single-operator model (personal laptop / dedicated VPS). Wizard sessions themselves still use per-session tokens for the actual UI.
 - **Concurrency**: only one wizard session can be live at a time (second POST returns 409). This prevents the class of port-collision bugs where two wizards fight for `LIMBO_PORT+1`.
 
+## Public Server (Limbo Cloud)
+
+When `LIMBO_PUBLIC_URL` is set, port 80 is exposed to the internet via Cloudflare proxy:
+
+- **TLS**: terminated by Cloudflare (free tier). Origin receives plain HTTP.
+- **DDoS**: Cloudflare's automatic protection applies.
+- **Wizard auth**: SETUP_TOKEN (128-bit random hex) required in query param or Bearer header. The public server itself has no auth — it proxies to the wizard, which enforces the token.
+- **When wizard is inactive**: the public server returns a static HTML page with no sensitive content.
+- **OpenClaw gateway remains loopback**: port 80 NEVER proxies to the OpenClaw gateway. Only the wizard child process is reachable.
+- **OAuth relay**: Google OAuth callbacks go to `auth.heylimbo.com` (Cloudflare Worker), which 302-redirects to the instance. The Worker never sees the client secret or tokens — only the one-time authorization code.
+- **DNS provisioning**: managed by a Worker at `api.heylimbo.com` with a shared secret (`Authorization: Bearer`). The secret is embedded in the CLI npm package.
+
 ## OpenClaw Security
 
 Limbo uses OpenClaw in a **personal assistant trust model** (one trusted operator per gateway). Key settings in `openclaw.json`:

@@ -26,18 +26,21 @@
 | Docker build | `Dockerfile` (2-stage: deps → runtime) |
 | Unit tests | `test/*.test.js` (node --test) — see `package.json` for authoritative list |
 | Setup wizard | `setup-server/server.js` (zero deps) |
+| Public server | `lib/public-server.js` (HTTP proxy to wizard when active, static page when idle) |
+| Cloud Workers | `workers/provisioning/worker.js` + `workers/auth-relay/worker.js` |
 
 ## Port Layout
 
-Every Limbo instance publishes three ports on the host's loopback interface:
+Every Limbo instance publishes ports on the host:
 
-| Port | What | Lifetime |
-|------|------|----------|
-| `LIMBO_PORT` (default 18789) | OpenClaw gateway — the agent API, Telegram/Discord/etc. channels, healthz | Always on |
-| `LIMBO_PORT+1` | On-demand wizard — setup-server child for connect-calendar / switch-brain / etc. | Only during a wizard |
-| `LIMBO_PORT+2` | Supervisor control plane — host CLI ↔ supervisor HTTP API | Always on |
+| Port | What | Lifetime | Binding |
+|------|------|----------|---------|
+| `LIMBO_PORT` (default 18789) | OpenClaw gateway | Always on | `127.0.0.1` (loopback) |
+| `LIMBO_PORT+1` | On-demand wizard | Only during a wizard | `127.0.0.1` (loopback) |
+| `LIMBO_PORT+2` | Supervisor control plane | Always on | `127.0.0.1` (loopback) |
+| `80` | Public server (Limbo Cloud) | Always on when `LIMBO_PUBLIC_URL` set | `0.0.0.0` (internet-facing) |
 
-The supervisor binds to `0.0.0.0` inside the container (Docker port-forwarding requires this; otherwise NAT'd packets never reach the listener). Security boundary is the `127.0.0.1:PORT:PORT` compose port mapping, which only exposes the port on the HOST's loopback. A `Host:` header allowlist in the control-server blocks DNS rebinding attacks.
+Port 80 is only added when `LIMBO_PUBLIC_URL` is in the `.env` (cloud mode). Cloudflare proxy terminates TLS. The public server proxies to the wizard when active, serves a static page when idle. See ARCHITECTURE.md for full details.
 
 ## Common Tasks
 
