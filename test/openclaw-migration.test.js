@@ -206,6 +206,18 @@ test('regen script injects provider API key into cfg.env for api-key mode', () =
   assert.ok(regen.includes('AUTH_MODE'), 'Must check AUTH_MODE before injecting');
 });
 
+// Regression: regen script creates /tmp/gws as root (runs before gosu on boot).
+// gws CLI then fails with "Permission denied (os error 13)" when it tries to
+// write to that directory as user limbo. The mkdir must be followed by a chown.
+test('regen script chowns /tmp/gws after mkdir so gws CLI can write as limbo', () => {
+  const regen = read('scripts/regen-openclaw-config.sh');
+  const mkdirIdx = regen.indexOf('mkdir -p /tmp/gws');
+  const chownIdx = regen.indexOf('chown limbo:limbo /tmp/gws');
+  assert.ok(mkdirIdx !== -1, 'Must mkdir /tmp/gws');
+  assert.ok(chownIdx !== -1, 'Must chown /tmp/gws to limbo');
+  assert.ok(chownIdx > mkdirIdx, 'chown must come after mkdir');
+});
+
 // ─── 4. Dockerfile references OpenClaw, not ZeroClaw ────────────────────────
 
 test('Dockerfile installs openclaw via npm', () => {

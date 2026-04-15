@@ -158,6 +158,9 @@ if [ "$GOOGLE_CALENDAR_ENABLED" = "true" ] && [ -f "$GCAL_CREDS" ]; then
   export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND="file"
   export GOOGLE_WORKSPACE_CLI_CONFIG_DIR="/tmp/gws"
   mkdir -p /tmp/gws
+  # Regen runs as root (before gosu) on boot but gws runs as limbo later.
+  # Without this chown, gws gets "Permission denied (os error 13)".
+  chown limbo:limbo /tmp/gws 2>/dev/null || true
   export GOOGLE_CALENDAR_ENABLED
 
   node -e "
