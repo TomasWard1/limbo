@@ -32,12 +32,36 @@ User (Telegram) → OpenClaw Gateway (:LIMBO_PORT) → LLM (configurable provide
     Config regen → atomic rename → OpenClaw in-process reload
 ```
 
-Three ports are published per instance:
-- `127.0.0.1:LIMBO_PORT:LIMBO_PORT`             — OpenClaw gateway (agent + HTTP API)
+Four ports are published per instance:
+- `127.0.0.1:LIMBO_PORT:LIMBO_PORT`             — OpenClaw gateway (agent + HTTP API, loopback only)
 - `127.0.0.1:LIMBO_PORT+1:LIMBO_PORT+1`         — On-demand wizard (only live during connect-calendar / switch-brain)
 - `127.0.0.1:LIMBO_PORT+2:LIMBO_PORT+2`         — Supervisor control plane (host CLI ↔ supervisor)
+- `0.0.0.0:80:80`                                — Public server (only when `LIMBO_PUBLIC_URL` is set — Limbo Cloud mode)
 
-All three are bound to host loopback — never LAN-accessible.
+The first three are bound to host loopback — never LAN-accessible. The fourth (port 80) is only added when the instance has a public URL, and is the only internet-facing port. It serves the wizard UI (when active) or a static "use Telegram" page (when idle). Cloudflare proxy terminates TLS.
+
+## Limbo Cloud
+
+When `LIMBO_PUBLIC_URL` is set (e.g. `https://abc123.heylimbo.com`), the instance is in **cloud mode**:
+- The supervisor starts a public HTTP server on port 80 (`lib/public-server.js`)
+- Cloudflare proxies `https://{id}.heylimbo.com` → VPS port 80
+- The wizard is accessible at the public URL — no SSH, no tunnels
+- Google OAuth uses a relay Worker at `auth.heylimbo.com` (one registered redirect URI for all instances)
+- DNS provisioning happens via a Worker at `api.heylimbo.com`
+
+CLI commands for cloud mode:
+- `limbo cloud activate` — provisions a `{id}.heylimbo.com` subdomain and enables the public server
+- `limbo cloud deactivate` — removes the subdomain and disables the public server
+- `limbo cloud status` — shows current cloud activation status
+
+### Cloudflare Workers (centralized, $0/month)
+
+| Worker | Domain | Function |
+|--------|--------|----------|
+| Provisioning | `api.heylimbo.com` | Creates/deletes DNS A records for instance subdomains |
+| OAuth Relay | `auth.heylimbo.com` | Receives Google OAuth callback, 302 redirects to the instance |
+
+Source: `workers/provisioning/worker.js` and `workers/auth-relay/worker.js`.
 
 ## Directory Structure
 
@@ -215,10 +239,11 @@ These are documented in the vault but rarely change:
 
 ## Eval System
 
-- 20+ JSON test cases in `evals/cases/`
-- Each case: sends message via WebSocket, asserts on tool_called + response_matches + vault_state
-- Current baseline: 94.0% (FTS5 + OpenClaw)
-- `node evals/cli.js run` → `compare --strict` → `promote`
+- **promptfoo**-based E2E evals in `evals/promptfoo/`
+- Test config: `promptfooconfig.yaml` — inline test definitions with custom assertions
+- Custom provider sends messages to Docker container, parses MCP logs from `/data/logs/mcp.log`
+- Custom assertions: `toolCalled`, `paramMatch`, `responseMatches`, `cronCountIncreased`, etc.
+- `./evals/promptfoo/run.sh` or `npx promptfoo eval -c evals/promptfoo/promptfooconfig.yaml`
 - Uses real LLM calls (costs tokens)
 
 ## Environment Variables

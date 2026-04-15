@@ -46,7 +46,8 @@
           "VAULT_PATH": "/data/vault",
           "DB_PATH": "/data/db",
           "OPENCLAW_STATE_DIR": "${OPENCLAW_STATE_DIR}",
-          "OPENCLAW_WORKSPACE_DIR": "${OPENCLAW_STATE_DIR}/workspace"
+          "OPENCLAW_WORKSPACE_DIR": "${OPENCLAW_STATE_DIR}/workspace",
+          "CRON_STORE_PATH": "${OPENCLAW_STATE_DIR}/cron/cron.json"
         }
       }
     }

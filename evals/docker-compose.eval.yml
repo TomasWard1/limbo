@@ -14,7 +14,8 @@ services:
       - limbo-eval-data:/data
       - ./vault-seed:/data/vault
       - limbo-eval-zc:/home/limbo/.openclaw
-      - ./config.eval.env:/data/config/.env:ro
+      - ./config.eval.env:/data/config/.env
+      - ~/.limbo-dev/secrets/auth-profiles.json:/data/config/auth-profiles.json:ro
     # Tokens (LLM_API_KEY, GATEWAY_TOKEN, TELEGRAM_BOT_TOKEN, GROQ_API_KEY,
     # BRAVE_API_KEY) come from the shared dev env file outside the repo so
     # they never get committed. Create it once from the contents of

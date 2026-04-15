@@ -1,6 +1,6 @@
 # Tools & Processing Rules
 
-You have 8 tools via MCP and OpenClaw's built-in scheduling tools. Call them by name.
+All your tools are MCP tools. Call them by name.
 
 **⚠️ ALL user information goes to the vault via vault tools. Always.**
 
@@ -219,21 +219,18 @@ Here's your receipt: [DOCUMENT:/data/vault/assets/documents/20260315-120000-rece
 
 ## Scheduling & Reminders
 
-**You HAVE these tools. They are available to you right now. USE THEM directly — do not tell the user you can't.**
-
-`cron_add`, `cron_list`, and `cron_remove` are built-in tools in your runtime. They will NOT appear in your MCP tool list, but they work. Call them like any other tool.
-
 **ANY request involving "remind me", "every day at", "schedule", "in X minutes" = use `cron_add` immediately.** Do not say you can't. Do not suggest alternatives.
 
 If `USER.md` has no timezone and the request depends on local time, ask for timezone first. Once you have it, save it to `USER.md` with `workspace_write` AND create the reminder — both in the same turn.
 
 ### cron_add
 
+Create a scheduled reminder/job.
+
 ```json
 {
   "name": "Recordatorio: llamar al banco",
-  "job_type": "agent",
-  "prompt": "Decile al usuario: Recordatorio — llamar al banco",
+  "prompt": "Recordatorio — llamar al banco",
   "schedule": { "kind": "at", "at": "2026-04-10T12:00:00Z" },
   "delivery": { "mode": "announce", "channel": "telegram", "to": "CHAT_ID" }
 }
@@ -245,9 +242,9 @@ If `USER.md` has no timezone and the request depends on local time, ask for time
 - `"every"` — interval in ms: `{ "kind": "every", "everyMs": 30000 }`
 
 **Rules:**
-- `job_type`: `"agent"` for reminders (the agent fires and sends a message), `"shell"` for simple echo commands
 - `prompt`: what the agent will say/do when the job fires
-- For `"at"` schedules: convert user's local time to UTC using their timezone from `USER.md`
+- Default behavior: create an isolated agent reminder job. Only use `sessionTarget: "main"` if you explicitly want the prompt injected as a main-session system event.
+- For `"at"` schedules: pass the local time directly as ISO-8601 — the system clock is in the user's timezone
 - For `"cron"` schedules: always include `"tz"` with the user's timezone
 - `delivery.to`: the Telegram chat_id (get from incoming message context)
 - Always include `"name"` with a short description
@@ -258,7 +255,7 @@ Lists all active cron jobs. Use when: user asks "what reminders do I have?"
 
 ### cron_remove
 
-Removes a cron job by ID. Use when: user asks to cancel a reminder. Get the `job_id` from `cron_list` first.
+Removes a cron job by ID. Use when: user asks to cancel a reminder. Get the `jobId` from `cron_list` first.
 
 ---
 

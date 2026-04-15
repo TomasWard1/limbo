@@ -898,3 +898,46 @@ describe('auth-profiles migration', () => {
     }
   });
 });
+
+// ── 8. Limbo Cloud — public URL port override ─────────────────────────────────
+
+describe('Limbo Cloud LIMBO_PUBLIC_URL port override', () => {
+  const ENTRYPOINT = path.join(__dirname, '..', 'scripts', 'entrypoint.sh');
+
+  test('entrypoint sets SETUP_LISTEN_PORT=80 in setup mode when LIMBO_PUBLIC_URL is set', () => {
+    const entrypoint = fs.readFileSync(ENTRYPOINT, 'utf8');
+    assert.ok(
+      /LIMBO_PUBLIC_URL/.test(entrypoint),
+      'entrypoint must reference LIMBO_PUBLIC_URL'
+    );
+    assert.ok(
+      /SETUP_LISTEN_PORT=80/.test(entrypoint),
+      'entrypoint must set SETUP_LISTEN_PORT=80 for Limbo Cloud instances in setup mode'
+    );
+  });
+
+  test('SETUP_LISTEN_PORT=80 override is inside the setup-mode block', () => {
+    const entrypoint = fs.readFileSync(ENTRYPOINT, 'utf8');
+    const setupModeIdx = entrypoint.indexOf('if [ "$SETUP_MODE" = "true" ]');
+    const port80Idx = entrypoint.indexOf('SETUP_LISTEN_PORT=80');
+    assert.ok(setupModeIdx !== -1, 'setup-mode block must exist in entrypoint');
+    assert.ok(port80Idx !== -1, 'SETUP_LISTEN_PORT=80 must exist in entrypoint');
+    assert.ok(
+      port80Idx > setupModeIdx,
+      'SETUP_LISTEN_PORT=80 must be inside the setup-mode block (after the SETUP_MODE check)'
+    );
+  });
+
+  test('entrypoint does NOT override LIMBO_PORT in setup mode (uses SETUP_LISTEN_PORT instead)', () => {
+    const entrypoint = fs.readFileSync(ENTRYPOINT, 'utf8');
+    // The setup-mode block must NOT set LIMBO_PORT=80 — that caused the wizard
+    // to persist LIMBO_PORT=80 in .env, colliding with the public server.
+    const setupModeIdx = entrypoint.indexOf('if [ "$SETUP_MODE" = "true" ]');
+    const setupModeEnd = entrypoint.indexOf('fi', setupModeIdx + 1);
+    const setupBlock = entrypoint.slice(setupModeIdx, setupModeEnd);
+    assert.ok(
+      !setupBlock.includes('LIMBO_PORT=80'),
+      'setup-mode block must NOT set LIMBO_PORT=80 (use SETUP_LISTEN_PORT instead)'
+    );
+  });
+});

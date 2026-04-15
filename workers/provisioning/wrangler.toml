@@ -1,0 +1,12 @@
+name = "limbo-provisioning"
+main = "worker.js"
+compatibility_date = "2024-09-25"
+
+# Secrets — set via `wrangler secret put`:
+#   CF_API_TOKEN      — Cloudflare API token with DNS edit permissions
+#   CF_ZONE_ID        — Cloudflare zone ID for heylimbo.com
+#   PROVISION_SECRET  — Bearer token clients must send
+
+routes = [
+  { pattern = "api.heylimbo.com/*", zone_name = "heylimbo.com" }
+]

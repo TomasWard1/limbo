@@ -64,19 +64,19 @@ function resetUserProfile() {
 
 function clearCrons() {
   const result = spawnSync('docker', [
-    'exec', CONTAINER, AGENT_BIN, 'cron', 'list', '--json',
+    'exec', '-u', 'limbo', CONTAINER, AGENT_BIN, 'cron', 'list', '--json',
   ], { encoding: 'utf8', timeout: 10000 });
   try {
     const data = JSON.parse(result.stdout || '{}');
     for (const job of (data.jobs || [])) {
-      spawnSync('docker', ['exec', CONTAINER, AGENT_BIN, 'cron', 'remove', job.id], { timeout: 5000 });
+      spawnSync('docker', ['exec', '-u', 'limbo', CONTAINER, AGENT_BIN, 'cron', 'remove', job.id], { timeout: 5000 });
     }
   } catch {}
 }
 
 function clearMcpLog() {
   spawnSync('docker', [
-    'exec', CONTAINER, 'sh', '-c', '> /data/logs/mcp.log',
+    'exec', '-u', 'limbo', CONTAINER, 'sh', '-c', '> /data/logs/mcp.log',
   ], { timeout: 5000 });
 }
 
@@ -186,6 +186,11 @@ function beforeAll() {
   resetUserProfile();
   clearCrons();
   clearMcpLog();
+  // Fix ownership — docker cp and root exec create files as root, but the
+  // MCP server and openclaw agent run as limbo (uid 999).
+  spawnSync('docker', [
+    'exec', CONTAINER, 'chown', '-R', 'limbo:limbo', '/data', `${AGENT_HOME}`,
+  ], { timeout: 10000 });
 }
 
 module.exports = { beforeAll, wipeVault, seedVault, resetUserProfile, clearCrons, clearMcpLog, setupGoogleCalendarMock };

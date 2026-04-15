@@ -20,24 +20,27 @@
 | Session store | `lib/session-store.js` (state machine with terminal-wins) |
 | Agent persona | `workspace/system/` (reset on boot) + `workspace/templates/` (persist) |
 | CLI | `cli.js` (single ~90KB file) |
-| Eval cases | `evals/cases/*.json` |
-| Eval runner | `evals/cli.js` |
+| Eval config | `evals/promptfoo/promptfooconfig.yaml` |
+| Eval runner | `evals/promptfoo/run.sh` (wraps `npx promptfoo eval`) |
 | Config template | `openclaw.json.template` |
 | Docker build | `Dockerfile` (2-stage: deps → runtime) |
 | Unit tests | `test/*.test.js` (node --test) — see `package.json` for authoritative list |
 | Setup wizard | `setup-server/server.js` (zero deps) |
+| Public server | `lib/public-server.js` (HTTP proxy to wizard when active, static page when idle) |
+| Cloud Workers | `workers/provisioning/worker.js` + `workers/auth-relay/worker.js` |
 
 ## Port Layout
 
-Every Limbo instance publishes three ports on the host's loopback interface:
+Every Limbo instance publishes ports on the host:
 
-| Port | What | Lifetime |
-|------|------|----------|
-| `LIMBO_PORT` (default 18789) | OpenClaw gateway — the agent API, Telegram/Discord/etc. channels, healthz | Always on |
-| `LIMBO_PORT+1` | On-demand wizard — setup-server child for connect-calendar / switch-brain / etc. | Only during a wizard |
-| `LIMBO_PORT+2` | Supervisor control plane — host CLI ↔ supervisor HTTP API | Always on |
+| Port | What | Lifetime | Binding |
+|------|------|----------|---------|
+| `LIMBO_PORT` (default 18789) | OpenClaw gateway | Always on | `127.0.0.1` (loopback) |
+| `LIMBO_PORT+1` | On-demand wizard | Only during a wizard | `127.0.0.1` (loopback) |
+| `LIMBO_PORT+2` | Supervisor control plane | Always on | `127.0.0.1` (loopback) |
+| `80` | Public server (Limbo Cloud) | Always on when `LIMBO_PUBLIC_URL` set | `0.0.0.0` (internet-facing) |
 
-The supervisor binds to `0.0.0.0` inside the container (Docker port-forwarding requires this; otherwise NAT'd packets never reach the listener). Security boundary is the `127.0.0.1:PORT:PORT` compose port mapping, which only exposes the port on the HOST's loopback. A `Host:` header allowlist in the control-server blocks DNS rebinding attacks.
+Port 80 is only added when `LIMBO_PUBLIC_URL` is in the `.env` (cloud mode). Cloudflare proxy terminates TLS. The public server proxies to the wizard when active, serves a static page when idle. See ARCHITECTURE.md for full details.
 
 ## Common Tasks
 
@@ -45,7 +48,7 @@ The supervisor binds to `0.0.0.0` inside the container (Docker port-forwarding r
 - **Changing agent behavior**: Edit `workspace/system/AGENTS.md` (resets on container boot)
 - **Adding a feature toggle**: Follow pattern: wizard toggle → `.env` key → `regen-openclaw-config.sh` injects JSON config
 - **Adding a new on-demand wizard (like connect-calendar)**: Add an entry to `DEFAULT_FEATURE_MODE_ENV` in `lib/wizard-spawner.js`, add a `handle<X>Mode` branch in `setup-server/server.js`, add a `cmd<X>()` in `cli.js` that mirrors `cmdConnectCalendar` (control-client + requestWizard + poll)
-- **Running evals**: `docker build -t limbo:eval . && LIMBO_IMAGE=limbo:eval docker compose -f evals/docker-compose.eval.yml up -d && node evals/cli.js run`
+- **Running evals**: `docker build -t limbo:eval . && LIMBO_IMAGE=limbo:eval docker compose -f evals/docker-compose.eval.yml up -d && cd evals/promptfoo && npx promptfoo eval`
 - **Bumping OpenClaw**: Update the `openclaw` version in `package.json`, then `npm install`
 - **Debugging the control plane**: `curl http://127.0.0.1:18791/health` from the host. Expect `{"ok":true,"activeSessions":N}`. For a full wizard flow, `curl -XPOST -d '{"feature":"calendar","timeoutMs":900000}' http://127.0.0.1:18791/wizard`.
 
@@ -218,7 +221,7 @@ The e2e state lives in `/tmp/limbo-e2e-test/` (bind mounts for vault, openclaw-s
 
 ## Evals
 
-`limbo-eval` tests Limbo end-to-end by sending real messages and checking tool calls + vault state.
+`limbo-eval` tests Limbo end-to-end using **promptfoo**. Tests send real messages to a Docker container and assert tool calls, vault state, and response content.
 
 ```bash
 # Build image from current branch
@@ -228,13 +231,34 @@ docker build -t limbo:eval .
 LIMBO_IMAGE=limbo:eval docker compose -f evals/docker-compose.eval.yml up -d
 
 # Run evals
-node evals/cli.js run
+cd evals/promptfoo && npx promptfoo eval
 
-# Compare against baseline
-node evals/cli.js compare --strict
-
-# Promote as new baseline after a good run
-node evals/cli.js promote
+# View results in browser
+npx promptfoo view
 ```
 
-Evals use real LLM calls (cost tokens). The MCP server logs tool calls to stderr when `LIMBO_EVAL=true`.
+**Or use the wrapper script** (builds + starts container + runs evals):
+```bash
+./evals/promptfoo/run.sh
+```
+
+**Key files:**
+- `evals/promptfoo/promptfooconfig.yaml` — test definitions (prompts + assertions)
+- `evals/promptfoo/provider.js` — sends messages to the container, parses MCP logs
+- `evals/promptfoo/assertions.js` — custom assertion functions (toolCalled, paramMatch, cronCountIncreased, etc.)
+- `evals/promptfoo/hooks.js` — beforeAll/afterEach lifecycle (resets vault, seeds notes, clears crons)
+- `evals/promptfoo/seeds/` — additional seed notes for tests
+
+**Adding a new eval test:** add a test block to `promptfooconfig.yaml`. Use `__sessionGroup` for multi-turn flows. Available custom assertions: `toolCalled`, `paramMatch`, `responseMatches`, `userProfileMatches`, `cronCreated`, `cronCountIncreased`, `vaultNoteCreated`.
+
+Evals use real LLM calls (cost tokens). The MCP server logs tool calls to `/data/logs/mcp.log` when `LIMBO_EVAL=true`.
+
+**Prerequisites:**
+- `~/.limbo-dev/secrets/auth-profiles.json` — Codex OAuth credentials (copy from a working Limbo instance's `agents/main/agent/auth-profiles.json`). The entrypoint seeds this into the eval container automatically.
+- `~/.limbo-dev/eval-tokens.env` — env file with `LLM_API_KEY`, `GATEWAY_TOKEN`, `TELEGRAM_BOT_TOKEN`, `GROQ_API_KEY`, `BRAVE_API_KEY` (create from `~/.limbo-dev/secrets/*`).
+
+**Gotchas:**
+- **`-u limbo` on all `docker exec`**: The container runs as user `limbo` (uid 999) via gosu. All `docker exec` calls in hooks.js and provider.js MUST use `-u limbo`, otherwise files get created as root and the MCP server can't write logs → `toolCalled` assertions fail silently.
+- **`--filter-pattern` breaks multi-turn flows**: Filtering only runs matching tests, so turn2 of a `__sessionGroup` flow won't have context from turn1. Always run the full suite, or filter by a pattern that captures both turns.
+- **Mock gws must echo input**: The mock `gws` binary in `evals/fixtures/gws/` must reflect the agent's input back (title, startTime) in create/update responses. Static fixtures cause the agent to detect inconsistencies and refuse to confirm.
+- **Single-turn vs multi-turn**: The agent sometimes completes an action in one turn without asking confirmation. Design tests accordingly: use "No me pidas confirmación, hacelo directo" for single-turn tests, use `__sessionGroup` for flows where confirmation is mandatory (like delete).
