@@ -30,7 +30,7 @@ Any Ubuntu/Debian VPS with 1 GB+ RAM.
 ### 2. Run the installer
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh | bash
+curl -fsSL https://get.heylimbo.com/install.sh | bash
 ```
 
 This installs Docker, Node.js, and the Limbo CLI.

@@ -2375,10 +2375,6 @@ async function cmdConnectCalendar() {
 async function cmdCloudActivate() {
   const existingEnv = parseEnvFile();
 
-  if (!existingEnv.MODEL_PROVIDER) {
-    die('Instance is not configured yet. Run `limbo start` first.');
-  }
-
   if (existingEnv.LIMBO_PUBLIC_URL) {
     log(`Already activated at ${existingEnv.LIMBO_PUBLIC_URL}`);
     return;
@@ -2420,11 +2416,16 @@ async function cmdCloudActivate() {
   // Regenerate compose (now includes 0.0.0.0:80:80 mapping)
   ensureComposeFile(false);
 
-  // Restart container to pick up new port mapping
-  runDockerCompose(['up', '-d']);
+  // Restart container only if it's already running
+  if (countRunningLimboContainers() > 0) {
+    runDockerCompose(['up', '-d']);
+  }
 
   console.log(`\n${c.green}✓ Cloud activated!${c.reset}`);
   console.log(`  Public URL: ${c.cyan}${url}${c.reset}`);
+  if (!existingEnv.MODEL_PROVIDER) {
+    console.log(`\n  Run ${c.cyan}limbo start${c.reset} to launch the setup wizard at this URL.`);
+  }
 }
 
 async function cmdCloudDeactivate() {

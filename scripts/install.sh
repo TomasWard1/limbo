@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # install.sh — Limbo one-line installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://get.heylimbo.com/install.sh | bash
 #
 # Installs Docker, Node.js, and the Limbo CLI. Pre-pulls the Docker image.
 # After running, SSH in and run `limbo start` to enter the setup wizard.
@@ -31,7 +31,7 @@ header() { echo -e "\n${BOLD}$*${NC}"; }
 header "=== Limbo Installer ==="
 
 if [[ $EUID -ne 0 ]]; then
-  die "Run as root. Try: sudo bash <(curl -fsSL https://raw.githubusercontent.com/TomasWard1/limbo/main/scripts/install.sh)"
+  die "Run as root. Try: sudo bash <(curl -fsSL https://get.heylimbo.com/install.sh)"
 fi
 
 if [[ -f /etc/os-release ]]; then
