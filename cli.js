@@ -45,6 +45,9 @@ const DEFAULT_PORT = 18789;
 const COEXIST_PORT = 18900;
 let PORT = DEFAULT_PORT;
 
+const PROVISION_API_URL = 'https://api.heylimbo.com';
+const PROVISION_SECRET = 'limbo-provision-2026';
+
 // ─── Port Conflict Detection ────────────────────────────────────────────────
 
 function isPortInUse(port) {
@@ -2734,6 +2737,108 @@ async function cmdConnectCalendar() {
   }
 }
 
+// ─── Limbo Cloud Commands ────────────────────────────────────────────────────
+
+async function cmdCloudActivate() {
+  const existingEnv = parseEnvFile();
+
+  if (!existingEnv.MODEL_PROVIDER) {
+    die('Instance is not configured yet. Run `limbo start` first.');
+  }
+
+  if (existingEnv.LIMBO_PUBLIC_URL) {
+    log(`Already activated at ${existingEnv.LIMBO_PUBLIC_URL}`);
+    return;
+  }
+
+  log('Detecting public IP...');
+  const ip = await fetch('https://api.ipify.org').then((r) => r.text()).catch(() => null);
+  if (!ip) {
+    die('Could not detect public IP address. Check your network connection.');
+  }
+
+  log(`Provisioning cloud instance for ${ip}...`);
+  let provisionRes;
+  try {
+    provisionRes = await fetch(`${PROVISION_API_URL}/provision`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${PROVISION_SECRET}`,
+      },
+      body: JSON.stringify({ ip }),
+    });
+  } catch (err) {
+    die(`Could not reach provisioning API: ${err.message}`);
+  }
+
+  if (!provisionRes.ok) {
+    const body = await provisionRes.text().catch(() => '');
+    die(`Provisioning failed (${provisionRes.status}): ${body}`);
+  }
+
+  const { id, url } = await provisionRes.json();
+
+  // Append cloud keys to .env
+  const currentContent = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, 'utf8') : '';
+  const updated = currentContent.trimEnd() + `\nLIMBO_PUBLIC_URL=${url}\nLIMBO_INSTANCE_ID=${id}\n`;
+  safeWriteEnvFile(updated);
+
+  // Regenerate compose (now includes 0.0.0.0:80:80 mapping)
+  ensureComposeFile(false);
+
+  // Restart container to pick up new port mapping
+  runDockerCompose(['up', '-d']);
+
+  console.log(`\n${c.green}✓ Cloud activated!${c.reset}`);
+  console.log(`  Public URL: ${c.cyan}${url}${c.reset}`);
+}
+
+async function cmdCloudDeactivate() {
+  const existingEnv = parseEnvFile();
+  const id = existingEnv.LIMBO_INSTANCE_ID;
+
+  if (!id) {
+    die('Not activated. Run `limbo cloud activate` first.');
+  }
+
+  log(`Deprovisioning instance ${id}...`);
+  try {
+    await fetch(`${PROVISION_API_URL}/provision/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${PROVISION_SECRET}` },
+    });
+  } catch (err) {
+    warn(`Could not reach provisioning API: ${err.message}. Removing local config anyway.`);
+  }
+
+  // Remove LIMBO_PUBLIC_URL and LIMBO_INSTANCE_ID from .env
+  if (fs.existsSync(ENV_FILE)) {
+    const lines = fs.readFileSync(ENV_FILE, 'utf8').split('\n');
+    const filtered = lines.filter((l) => !l.startsWith('LIMBO_PUBLIC_URL=') && !l.startsWith('LIMBO_INSTANCE_ID='));
+    safeWriteEnvFile(filtered.join('\n'));
+  }
+
+  // Regenerate compose (port 80 mapping will be absent now)
+  ensureComposeFile(false);
+
+  // Restart container
+  runDockerCompose(['up', '-d']);
+
+  ok('Cloud deactivated. Back to localhost mode.');
+}
+
+function cmdCloudStatus() {
+  const existingEnv = parseEnvFile();
+  if (existingEnv.LIMBO_PUBLIC_URL) {
+    console.log(`Cloud: ${c.green}active${c.reset}`);
+    console.log(`  URL: ${c.cyan}${existingEnv.LIMBO_PUBLIC_URL}${c.reset}`);
+  } else {
+    console.log(`Cloud: ${c.dim}not activated${c.reset}`);
+    console.log(`  Run 'limbo cloud activate' to get a public URL`);
+  }
+}
+
 function cmdHelp() {
   console.log(`
 ${c.bold}limbo${c.reset} - personal AI memory agent
@@ -2750,6 +2855,9 @@ ${c.bold}Commands:${c.reset}
   config             Configure optional features (voice, web-search)
   switch-brain       Change your AI provider (opens a quick wizard)
   connect-calendar   Connect Google Calendar (opens a quick wizard)
+  cloud activate     Get a public URL for this instance (https://{id}.heylimbo.com)
+  cloud deactivate   Remove the public URL and go back to localhost mode
+  cloud status       Show current cloud activation status
   help               Show this help
 
 ${c.bold}Flags:${c.reset}
@@ -2882,6 +2990,14 @@ if (require.main === module) {
       case 'config':  cmdConfig(); break;
       case 'switch-brain': await cmdSwitchBrain(); break;
       case 'connect-calendar': await cmdConnectCalendar(); break;
+      case 'cloud': {
+        const cloudSub = process.argv[3];
+        if (cloudSub === 'activate') await cmdCloudActivate();
+        else if (cloudSub === 'deactivate') await cmdCloudDeactivate();
+        else if (cloudSub === 'status') cmdCloudStatus();
+        else die('Usage: limbo cloud [activate|deactivate|status]');
+        break;
+      }
       case 'version':
       case '--version':
       case '-v':      console.log(require('./package.json').version); break;
