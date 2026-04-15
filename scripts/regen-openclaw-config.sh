@@ -52,6 +52,7 @@ BRAVE_API_KEY="${BRAVE_API_KEY:-}"
 GOOGLE_CALENDAR_ENABLED="${GOOGLE_CALENDAR_ENABLED:-false}"
 GATEWAY_TOKEN="${GATEWAY_TOKEN:-}"
 AUTH_MODE="${AUTH_MODE:-api-key}"
+LLM_API_KEY="${LLM_API_KEY:-}"
 
 # Subscription OAuth mode uses openai-codex, not openai
 if [ "$AUTH_MODE" = "subscription" ] && [ "$MODEL_PROVIDER" = "openai" ]; then
@@ -74,6 +75,28 @@ node -e "
   cfg.gateway.auth.token = process.env.GATEWAY_TOKEN || '';
   fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
 " "$TMP_CONFIG"
+
+# Provider API key — OpenClaw reads keys from config.env, not process env vars.
+# This is critical for hot-reload after switch-brain: the supervisor's process
+# env doesn't change, so the key MUST be in openclaw.json for the reloaded
+# gateway to find it.
+if [ "$AUTH_MODE" = "api-key" ] && [ -n "$LLM_API_KEY" ]; then
+  export LLM_API_KEY MODEL_PROVIDER
+  node -e "
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    const key = process.env.LLM_API_KEY;
+    const provider = process.env.MODEL_PROVIDER || 'anthropic';
+    const envVarName = {
+      openrouter: 'OPENROUTER_API_KEY',
+      openai: 'OPENAI_API_KEY',
+      anthropic: 'ANTHROPIC_API_KEY',
+    }[provider] || 'ANTHROPIC_API_KEY';
+    cfg.env = cfg.env || {};
+    cfg.env[envVarName] = key;
+    fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+  " "$TMP_CONFIG"
+fi
 
 # Telegram channel
 if [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
