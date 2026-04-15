@@ -365,6 +365,11 @@ export OPENCLAW_CONFIG_PATH
 # When setup completes, the server exits and Docker restarts the container.
 # On restart, /data/config/.env exists → normal startup path.
 if [ "$SETUP_MODE" = "true" ]; then
+  # Limbo Cloud instances expose port 80 to the internet via Cloudflare.
+  # Make the first-run wizard listen on the same port so Cloudflare can reach it.
+  if [ -n "${LIMBO_PUBLIC_URL:-}" ]; then
+    export LIMBO_PORT=80
+  fi
   log "INFO  No configuration found — starting setup wizard on port $LIMBO_PORT"
   exec gosu limbo node /app/setup-server/server.js
 fi

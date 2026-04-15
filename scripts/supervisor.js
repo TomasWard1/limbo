@@ -36,6 +36,11 @@ const LIMBO_PORT = parseInt(process.env.LIMBO_PORT || '18900', 10);
 const WIZARD_PORT = parseInt(process.env.LIMBO_WIZARD_PORT || '15789', 10);
 const CONTROL_PORT = parseInt(process.env.LIMBO_CONTROL_PORT || String(LIMBO_PORT + 2), 10);
 
+// Public server: enabled only when LIMBO_PUBLIC_URL is set (Limbo Cloud instances).
+// Listens on port 80 by default (Cloudflare-facing).
+const PUBLIC_URL = process.env.LIMBO_PUBLIC_URL || '';
+const PUBLIC_PORT = PUBLIC_URL ? parseInt(process.env.LIMBO_PUBLIC_PORT || '80', 10) : null;
+
 function log(level, msg) {
   const ts = new Date().toISOString();
   process.stdout.write(`[${ts}] ${level} [supervisor] ${msg}\n`);
@@ -52,6 +57,7 @@ async function main() {
     // `127.0.0.1:18902:18902` which only publishes the port on the HOST's
     // loopback, so only processes on your machine can reach it.
     controlHost: '0.0.0.0',
+    publicPort: PUBLIC_PORT,
     nodePath: process.execPath,
     setupServerPath: SETUP_SERVER_PATH,
     wizardPortBase: WIZARD_PORT,
@@ -87,6 +93,7 @@ async function main() {
   process.on('SIGINT', () => onSignal('SIGINT'));
 
   log('INFO ', `control plane: 127.0.0.1:${CONTROL_PORT}`);
+  if (PUBLIC_PORT !== null) log('INFO ', `public server: 0.0.0.0:${PUBLIC_PORT}`);
   await supervisor.start();
   log('INFO ', 'started — awaiting shutdown signal or OpenClaw exit');
 
