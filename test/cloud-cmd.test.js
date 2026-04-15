@@ -110,10 +110,12 @@ describe('command dispatch', () => {
 describe('cmdCloudActivate source guards', () => {
   const body = extractFn(CLI_SRC, 'async function cmdCloudActivate(');
 
-  test('checks MODEL_PROVIDER before proceeding', () => {
+  test('does NOT require MODEL_PROVIDER (cloud activate works before start)', () => {
+    // cmdCloudActivate must not gate on MODEL_PROVIDER — users need to activate
+    // cloud before running `limbo start` so the wizard is accessible publicly.
     assert.ok(
-      /MODEL_PROVIDER/.test(body),
-      'cmdCloudActivate must check MODEL_PROVIDER (instance must be configured first)'
+      !/die\(.*Instance is not configured/.test(body),
+      'cmdCloudActivate must not reject unconfigured instances'
     );
   });
 
@@ -152,10 +154,14 @@ describe('cmdCloudActivate source guards', () => {
     );
   });
 
-  test('restarts container', () => {
+  test('restarts container only if running', () => {
+    assert.ok(
+      /countRunningLimboContainers/.test(body),
+      'cmdCloudActivate must check if container is running before restarting'
+    );
     assert.ok(
       /runDockerCompose/.test(body),
-      'cmdCloudActivate must call runDockerCompose to restart the container'
+      'cmdCloudActivate must call runDockerCompose to restart the container when running'
     );
   });
 });
