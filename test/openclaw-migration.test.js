@@ -193,6 +193,19 @@ test('regen script uses node -e for conditional JSON config injection', () => {
   assert.ok(regen.includes('channels.telegram'), 'Should inject telegram config');
 });
 
+// Regression: switch-brain hot-reload left the provider API key only in process
+// env vars, but OpenClaw reads keys from openclaw.json's "env" section (not
+// process.env). The regen script must inject cfg.env.<PROVIDER>_API_KEY when
+// AUTH_MODE=api-key so the reloaded gateway can resolve the key.
+test('regen script injects provider API key into cfg.env for api-key mode', () => {
+  const regen = read('scripts/regen-openclaw-config.sh');
+  assert.ok(regen.includes('cfg.env'), 'Must inject into cfg.env for OpenClaw to read provider keys');
+  assert.ok(regen.includes('OPENROUTER_API_KEY'), 'Must map openrouter provider key');
+  assert.ok(regen.includes('OPENAI_API_KEY'), 'Must map openai provider key');
+  assert.ok(regen.includes('ANTHROPIC_API_KEY'), 'Must map anthropic provider key');
+  assert.ok(regen.includes('AUTH_MODE'), 'Must check AUTH_MODE before injecting');
+});
+
 // ─── 4. Dockerfile references OpenClaw, not ZeroClaw ────────────────────────
 
 test('Dockerfile installs openclaw via npm', () => {
