@@ -17,6 +17,7 @@ import { vaultGetFile } from "./tools/get-file.js";
 import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
 import { calendarRead, calendarCreate, calendarDelete, calendarUpdate } from "./tools/google-calendar.js";
 import { updateInstance } from "./tools/update-instance.js";
+import { cronList, cronAdd, cronRemove } from "./tools/cron.js";
 
 /**
  * General response size guard. Any tool_result text content exceeding this
@@ -390,6 +391,102 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {},
       },
     },
+    {
+      name: "cron_list",
+      description:
+        "List all scheduled cron jobs (reminders). Returns each job's ID, name, schedule, delivery target, and last/next run times. Use when the user asks 'what reminders do I have?'",
+      inputSchema: {
+        type: "object",
+        properties: {
+          includeDisabled: {
+            type: "boolean",
+            description: "Include disabled jobs in the list. Default: false.",
+          },
+        },
+        required: [],
+      },
+    },
+    {
+      name: "cron_add",
+      description:
+        "Create a scheduled cron job (reminder). Supports one-shot (kind='at'), recurring interval (kind='every'), and cron expressions (kind='cron'). Use for ANY request involving 'remind me', 'every day at', 'schedule', 'in X minutes'.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Short description of the reminder (e.g. 'Recordatorio: llamar al banco')",
+          },
+          prompt: {
+            type: "string",
+            description: "The message the agent will send when the job fires (e.g. 'Recordatorio — llamar al banco')",
+          },
+          schedule: {
+            type: "object",
+            description: "Schedule config. Must include 'kind' ('at', 'every', or 'cron'). For 'at': include 'at' (ISO-8601 UTC timestamp). For 'every': include 'everyMs' (interval in ms). For 'cron': include 'expr' (cron expression) and 'tz' (IANA timezone).",
+            properties: {
+              kind: {
+                type: "string",
+                enum: ["at", "every", "cron"],
+                description: "Schedule type",
+              },
+              at: {
+                type: "string",
+                description: "ISO-8601 UTC timestamp for one-shot schedules (kind='at')",
+              },
+              everyMs: {
+                type: "number",
+                description: "Interval in milliseconds for recurring schedules (kind='every', min 1000)",
+              },
+              expr: {
+                type: "string",
+                description: "Cron expression for recurring schedules (kind='cron'), e.g. '0 9 * * *'",
+              },
+              tz: {
+                type: "string",
+                description: "IANA timezone for cron expressions (kind='cron'), e.g. 'America/Argentina/Buenos_Aires'",
+              },
+            },
+            required: ["kind"],
+          },
+          delivery: {
+            type: "object",
+            description: "Optional delivery config for isolated agent reminders. For Telegram reminders: { mode: 'announce', channel: 'telegram', to: '<chat_id>' }. mode='none' suppresses announcement delivery.",
+            properties: {
+              mode: { type: "string", enum: ["none", "announce"], description: "Delivery mode" },
+              channel: { type: "string", description: "Channel type: 'telegram', 'slack', 'discord'" },
+              to: { type: "string", description: "Chat/channel ID to deliver to" },
+              accountId: { type: "string", description: "Account ID for multi-account channels" },
+            },
+          },
+          sessionTarget: {
+            type: "string",
+            enum: ["main", "isolated"],
+            description: "Session target for the job. Default: 'isolated'. Use 'main' only when you want to inject the prompt as a main-session system event instead of running an isolated agent turn.",
+          },
+          deleteAfterRun: {
+            type: "boolean",
+            description: "Delete job after first run. Default: true for one-shot ('at'), false for recurring.",
+          },
+        },
+        required: ["name", "prompt", "schedule"],
+      },
+    },
+    {
+      name: "cron_remove",
+      description:
+        "Remove a scheduled cron job by ID. Get the job ID from cron_list first. Use when the user asks to cancel or delete a reminder.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          jobId: {
+            type: "string",
+            description: "The job ID to remove (UUID from cron_list)",
+          },
+        },
+        required: ["jobId"],
+      },
+    },
   ],
 }));
 
@@ -541,6 +638,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "update_instance": {
         result = await updateInstance();
+        break;
+      }
+
+      case "cron_list": {
+        const jobs = await cronList(args);
+        result = {
+          content: [{ type: "text", text: JSON.stringify(jobs, null, 2) }],
+        };
+        break;
+      }
+
+      case "cron_add": {
+        const added = await cronAdd(args);
+        result = {
+          content: [{ type: "text", text: `Cron job created: ${added.name} (${added.id})\nSchedule: ${JSON.stringify(added.schedule)}` }],
+        };
+        break;
+      }
+
+      case "cron_remove": {
+        const removed = await cronRemove(args);
+        result = {
+          content: [{ type: "text", text: `Cron job removed: ${removed.name || removed.id}` }],
+        };
         break;
       }
 

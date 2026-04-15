@@ -2,19 +2,14 @@
 # Mock gws CLI for Limbo evals.
 #
 # Replaces the real `@googleworkspace/cli` binary in the eval container so
-# calendar_read / calendar_create tests stay deterministic without needing
-# real OAuth credentials or hitting Google. Installed by hooks.js before
-# the eval run.
+# calendar_read / calendar_create / calendar_update / calendar_delete tests
+# stay deterministic without needing real OAuth or hitting Google APIs.
+# Installed by hooks.js before the eval run.
 #
-# Supports only the subcommands our MCP tools actually invoke:
-#   gws calendar events list    --params '...' --format json
-#   gws calendar events insert  --params '...' --json '...' --format json
-#   gws calendar events patch   --params '...' --json '...' --format json
-#   gws calendar events delete  --params '...'    (no --format, no body)
-#
-# Returns fixture JSON from this directory regardless of args. The agent
-# assertions check tool params via the MCP log, not the response shape, so
-# a static fixture is enough to validate the agent-layer wiring.
+# For insert and patch, the mock echoes back the input JSON enriched with an
+# id and status, so the agent sees a response consistent with what it asked
+# for (title, start time, etc.). For list and delete, static fixtures are
+# returned since the agent only checks tool params via MCP log.
 
 set -euo pipefail
 
@@ -25,14 +20,53 @@ case "${1:-} ${2:-} ${3:-}" in
     cat "$FIXTURE_DIR/events-list.json"
     ;;
   "calendar events insert")
-    cat "$FIXTURE_DIR/event-created.json"
+    # Extract --json arg and echo it back with mock id + status
+    json_body=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --json) json_body="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    if [ -n "$json_body" ] && command -v node >/dev/null 2>&1; then
+      node -e "
+        const input = JSON.parse(process.argv[1]);
+        const out = {
+          id: 'mock-evt-created-001',
+          summary: input.summary || 'Mock created event',
+          start: input.start || { dateTime: '2026-04-16T15:00:00-03:00' },
+          end: input.end || { dateTime: '2026-04-16T16:00:00-03:00' },
+          status: 'confirmed',
+          htmlLink: 'https://calendar.google.com/event?eid=mock-created-001'
+        };
+        console.log(JSON.stringify(out, null, 2));
+      " "$json_body"
+    else
+      cat "$FIXTURE_DIR/event-created.json"
+    fi
     ;;
   "calendar events patch")
-    cat "$FIXTURE_DIR/event-updated.json"
+    # Extract --json arg and merge with base fixture
+    json_body=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --json) json_body="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    if [ -n "$json_body" ] && command -v node >/dev/null 2>&1; then
+      node -e "
+        const base = JSON.parse(require('fs').readFileSync('$FIXTURE_DIR/event-updated.json', 'utf8'));
+        const patch = JSON.parse(process.argv[1]);
+        const out = { ...base, ...patch, status: 'confirmed' };
+        console.log(JSON.stringify(out, null, 2));
+      " "$json_body"
+    else
+      cat "$FIXTURE_DIR/event-updated.json"
+    fi
     ;;
   "calendar events delete")
-    # events.delete returns HTTP 204 No Content — the MCP tool uses
-    # callGwsNoBody(), which doesn't parse stdout. Emit nothing.
+    # events.delete returns HTTP 204 No Content — emit nothing.
     exit 0
     ;;
   *)

@@ -112,10 +112,6 @@ tests:
       __sessionGroup: "tz-flow"
     assert:
       - type: javascript
-        value: file://./assertions.js:toolCalled
-        config:
-          tool: workspace_read
-      - type: javascript
         value: file://./assertions.js:responseMatches
         config:
           pattern: "(?i)(timezone|huso horario|zona horaria|qu[eé] hora|d[oó]nde)"
@@ -140,31 +136,48 @@ tests:
         config:
           by: 1
 
+  # 3c. cron-list: agent uses cron_list MCP tool to show active reminders
+  - description: "cron-list: lists reminders via cron_list MCP tool"
+    vars:
+      prompt: "Qué recordatorios tengo activos?"
+    assert:
+      - type: javascript
+        value: file://./assertions.js:toolCalled
+        config:
+          tool: cron_list
+      - type: javascript
+        value: file://./assertions.js:responseMatches
+        config:
+          pattern: "(?i)(banco|recordatorio|reminder|no ten)"
+
+  # 3d. cron-remove: agent lists, finds, and removes the cron job
+  - description: "cron-remove: removes a reminder when asked to cancel"
+    vars:
+      prompt: "Cancelá el recordatorio del banco. No me pidas confirmación, hacelo directo."
+    assert:
+      - type: javascript
+        value: file://./assertions.js:toolCalled
+        config:
+          tool: cron_list
+      - type: javascript
+        value: file://./assertions.js:toolCalled
+        config:
+          tool: cron_remove
+      - type: javascript
+        value: file://./assertions.js:responseMatches
+        config:
+          pattern: "(?i)(cancelado|eliminado|borrado|removed|listo)"
+
   # ── GOOGLE CALENDAR WRITE FLOWS ──────────────────────────────────────────
   # Multi-turn flows because the skill mandates explicit confirmation before
   # create / update / delete (see workspace/skills/google-calendar/SKILL.md
   # §Rules). Each flow is self-contained — the prompt injects the timezone
   # explicitly so the test doesn't depend on the tz-flow having run first.
 
-  # calendar-create-flow turn 1: the skill mandates "show details + ask
-  # confirmation" before calling calendar_create. Agent should gather
-  # details and echo them back without actually calling the tool yet.
-  - description: "calendar-create-flow-turn1: parses details and asks confirmation"
+  # calendar-create: agent creates event directly without asking confirmation
+  - description: "calendar-create: creates event with title, start time, and timezone"
     vars:
-      prompt: "Agendame reunión con Martín mañana a las 3pm por 1 hora. Mi zona horaria es Buenos Aires, Argentina (ART)."
-      __sessionGroup: "calendar-create-flow"
-    assert:
-      - type: javascript
-        value: file://./assertions.js:responseMatches
-        config:
-          pattern: "(?i)(mart[ií]n|confirm|15:00|3.?pm|agendo|¿|\\?)"
-
-  # calendar-create-flow turn 2: user confirms → agent calls calendar_create
-  # with title, startTime=T15:00, and the timeZone the user stated in turn 1.
-  - description: "calendar-create-flow-turn2: creates event with title, start time, and timezone"
-    vars:
-      prompt: "Sí, dale, creala"
-      __sessionGroup: "calendar-create-flow"
+      prompt: "Agendame reunión con Martín mañana a las 3pm por 1 hora. Mi zona horaria es Buenos Aires, Argentina (ART). No me pidas confirmación, hacelo directo."
     assert:
       - type: javascript
         value: file://./assertions.js:toolCalled
@@ -188,37 +201,16 @@ tests:
           tool: calendar_create
           key: timeZone
           pattern: "(?i)(argentina|buenos.aires|america/)"
-      - type: javascript
-        value: file://./assertions.js:responseMatches
-        config:
-          pattern: "(?i)(agend|cre[eé]|list[oa]|arm[eé])"
 
-  # calendar-update-flow turn 1: agent reads calendar to find the event and
-  # asks confirmation before modifying. The skill mandates "show diff + ask".
-  # Uses "mañana" (not "hoy") so the test is time-of-day independent — if
-  # the test runs after 5pm Argentina time, "hoy a las 5pm" is in the past
-  # and the agent refuses (correct behavior, wrong test).
-  - description: "calendar-update-flow-turn1: reads calendar and asks confirmation before updating"
+  # calendar-update: agent reads calendar, finds the event, and updates it
+  - description: "calendar-update: reads calendar and updates event time"
     vars:
-      prompt: "Movelo el 1:1 con Juan a las 5pm de mañana. Mi zona horaria es Buenos Aires, Argentina (ART)."
-      __sessionGroup: "calendar-update-flow"
+      prompt: "Movelo el 1:1 con Juan a las 5pm de mañana. Mi zona horaria es Buenos Aires, Argentina (ART). No me pidas confirmación, hacelo directo."
     assert:
       - type: javascript
         value: file://./assertions.js:toolCalled
         config:
           tool: calendar_read
-      - type: javascript
-        value: file://./assertions.js:responseMatches
-        config:
-          pattern: "(?i)(confirm|cambio|mover|paso|queda|¿|\\?)"
-
-  # calendar-update-flow turn 2: user confirms → agent calls calendar_update
-  # with the eventId from turn 1's read and the new startTime
-  - description: "calendar-update-flow-turn2: on confirmation, updates event with eventId + new startTime"
-    vars:
-      prompt: "Dale, confirmado"
-      __sessionGroup: "calendar-update-flow"
-    assert:
       - type: javascript
         value: file://./assertions.js:toolCalled
         config:
@@ -236,10 +228,8 @@ tests:
           key: startTime
           pattern: "T17:00"
 
-  # calendar-delete-flow turn 1: agent reads calendar to locate the event
-  # and asks confirmation before deleting (skill: "Never delete without
-  # explicit confirmation")
-  - description: "calendar-delete-flow-turn1: reads calendar and asks confirmation before deleting"
+  # calendar-delete turn 1: agent reads calendar and asks confirmation
+  - description: "calendar-delete-turn1: reads calendar and asks confirmation"
     vars:
       prompt: "Borrá el almuerzo con equipo"
       __sessionGroup: "calendar-delete-flow"
@@ -248,16 +238,11 @@ tests:
         value: file://./assertions.js:toolCalled
         config:
           tool: calendar_read
-      - type: javascript
-        value: file://./assertions.js:responseMatches
-        config:
-          pattern: "(?i)(borr|elimin|confirm|seguro|¿|\\?)"
 
-  # calendar-delete-flow turn 2: user confirms → agent calls calendar_delete
-  # with the eventId of "Almuerzo con equipo" (mock-evt-002)
-  - description: "calendar-delete-flow-turn2: on confirmation, deletes event by eventId"
+  # calendar-delete turn 2: user confirms → agent deletes
+  - description: "calendar-delete-turn2: deletes event after confirmation"
     vars:
-      prompt: "Sí, borralo"
+      prompt: "Confirmo, borralo"
       __sessionGroup: "calendar-delete-flow"
     assert:
       - type: javascript

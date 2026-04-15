@@ -1,10 +1,9 @@
 ---
-id: eval-seed-birthday
-title: "Cumpleaños de Tomas"
-description: "Tomas nació el 15 de marzo"
+title: Cumpleaños de Tomas
 type: fact
-schema_version: 1
-created: "2026-01-01"
+description: Tomas nació el 15 de marzo
+created: 2026-01-15T12:00:00.000Z
+updated: 2026-01-15T12:00:00.000Z
 ---
 
-Tomas nació el 15 de marzo. Lo festeja todos los años con asado.
+Tomas nació el 15 de marzo. Cumpleaños confirmado por el propio usuario.

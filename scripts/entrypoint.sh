@@ -253,6 +253,14 @@ if [ -f "$LEGACY_AUTH" ] && [ ! -f "$AGENT_AUTH" ]; then
   log "INFO  Migrated auth-profiles.json to per-agent path (format converted)"
 fi
 
+# Seed auth-profiles from /data/config/ (for eval/dev containers that bind-mount credentials)
+SEED_AUTH="/data/config/auth-profiles.json"
+if [ -f "$SEED_AUTH" ] && [ ! -f "$AGENT_AUTH" ]; then
+  cp "$SEED_AUTH" "$AGENT_AUTH"
+  chmod 600 "$AGENT_AUTH"
+  log "INFO  Seeded auth-profiles.json from /data/config/"
+fi
+
 # System files: copy from image on every boot (overwrite — image is source of truth)
 for f in /app/workspace/system/*.md; do
   [ -f "$f" ] || continue
@@ -401,4 +409,7 @@ fi
 LIMBO_CONTROL_PORT="${LIMBO_CONTROL_PORT:-$((LIMBO_PORT + 2))}"
 export LIMBO_CONTROL_PORT
 log "INFO  Starting wizard supervisor (control plane: 127.0.0.1:${LIMBO_CONTROL_PORT})"
+# Final ownership fix — entrypoint creates dirs/files as root; ensure everything
+# is limbo-owned before dropping privileges via gosu.
+chown -R limbo:limbo /data /home/limbo/.openclaw 2>/dev/null || true
 exec gosu limbo node /app/scripts/supervisor.js

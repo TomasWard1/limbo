@@ -47,7 +47,7 @@
   },
   "scripts": {
     "start": "node cli.js start",
-    "test": "node --test test/cli-filter.test.js test/cli-auth.test.js test/cli-compose.test.js test/openclaw-migration.test.js test/setup-server.test.js test/cli-wizard-parity.test.js test/fts.test.js test/sanitize-control-chars.test.js test/mcp-tools.test.js test/entrypoint.test.js test/update-system.test.js test/session-store.test.js test/control-router.test.js test/control-server.test.js test/wizard-spawner.test.js test/control-client.test.js test/supervisor.test.js test/public-server.test.js test/google-calendar-cli.test.js test/switch-brain-cli.test.js test/cloud-cmd.test.js test/cloud-oauth.test.js",
+    "test": "node --test test/cli-filter.test.js test/cli-auth.test.js test/cli-compose.test.js test/openclaw-migration.test.js test/setup-server.test.js test/cli-wizard-parity.test.js test/fts.test.js test/sanitize-control-chars.test.js test/mcp-tools.test.js test/entrypoint.test.js test/update-system.test.js test/session-store.test.js test/control-router.test.js test/control-server.test.js test/wizard-spawner.test.js test/control-client.test.js test/supervisor.test.js test/public-server.test.js test/google-calendar-cli.test.js test/switch-brain-cli.test.js test/cloud-cmd.test.js test/cloud-oauth.test.js test/cron.test.js",
     "postinstall": "[ -d mcp-server ] && cd mcp-server && npm install --ignore-scripts && cd node_modules/better-sqlite3 && npx node-gyp rebuild --release 2>/dev/null || true",
     "prepare": "if [ -n \"$CI\" ] || ! command -v husky >/dev/null 2>&1; then exit 0; fi; husky"
   },

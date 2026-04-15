@@ -26,7 +26,7 @@ function stripAnsi(str) {
 function listCronJobs() {
   try {
     const result = spawnSync('docker', [
-      'exec', CONTAINER, AGENT_BIN, 'cron', 'list', '--json',
+      'exec', '-u', 'limbo', CONTAINER, AGENT_BIN, 'cron', 'list', '--json',
     ], { encoding: 'utf8', timeout: 10000 });
     const data = JSON.parse(result.stdout || '{}');
     return (data.jobs || []).map(j => ({ id: j.id, raw: JSON.stringify(j) }));
@@ -38,7 +38,7 @@ function listCronJobs() {
 function readUserProfile() {
   try {
     return execFileSync('docker', [
-      'exec', CONTAINER, 'cat', `${AGENT_HOME}/workspace/USER.md`,
+      'exec', '-u', 'limbo', CONTAINER, 'cat', `${AGENT_HOME}/workspace/USER.md`,
     ], { encoding: 'utf8', timeout: 5000 });
   } catch {
     return '';
@@ -116,7 +116,7 @@ function sendMessage(message, sessionStateFile) {
   const notesBefore = listVaultNotes();
 
   const dockerArgs = [
-    'exec', CONTAINER,
+    'exec', '-u', 'limbo', CONTAINER,
     AGENT_BIN, 'agent',
     '--session-id', sessionId,
     '--message', message,
