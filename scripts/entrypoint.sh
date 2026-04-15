@@ -8,7 +8,9 @@ set -e
 # Bind-mounted dirs may be owned by the host user (uid ≠ 999). Named volumes
 # may be root-owned. chown everything to limbo:limbo so the app can read/write.
 # This runs before mkdir, before logging, before anything that touches /data.
-chown -R limbo:limbo /data /home/limbo/.openclaw /home/limbo/.npm 2>/dev/null || true
+if ! chown -R limbo:limbo /data /home/limbo/.openclaw /home/limbo/.npm 2>/dev/null; then
+  echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] WARN  chown failed on data dirs — container may lack CHOWN capability (cap_add: [CHOWN, FOWNER, SETGID, SETUID, DAC_OVERRIDE])"
+fi
 
 LOG_DIR="/data/logs"
 LOG_FILE="$LOG_DIR/startup.log"
@@ -374,11 +376,13 @@ export OPENCLAW_CONFIG_PATH
 # On restart, /data/config/.env exists → normal startup path.
 if [ "$SETUP_MODE" = "true" ]; then
   # Limbo Cloud instances expose port 80 to the internet via Cloudflare.
-  # Make the first-run wizard listen on the same port so Cloudflare can reach it.
+  # Use SETUP_LISTEN_PORT to override the wizard's listen port without touching
+  # LIMBO_PORT — the wizard persists LIMBO_PORT to .env on completion, and we
+  # don't want it to save "80" (which would collide with the public server).
   if [ -n "${LIMBO_PUBLIC_URL:-}" ]; then
-    export LIMBO_PORT=80
+    export SETUP_LISTEN_PORT=80
   fi
-  log "INFO  No configuration found — starting setup wizard on port $LIMBO_PORT"
+  log "INFO  No configuration found — starting setup wizard on port ${SETUP_LISTEN_PORT:-$LIMBO_PORT}"
   exec gosu limbo node /app/setup-server/server.js
 fi
 

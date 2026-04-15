@@ -10,7 +10,9 @@ const crypto = require('crypto');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const PORT = parseInt(process.env.LIMBO_PORT, 10) || 18789;
+// SETUP_LISTEN_PORT overrides the listen port without affecting LIMBO_PORT
+// (which gets persisted to .env). Used by cloud mode to listen on port 80.
+const PORT = parseInt(process.env.SETUP_LISTEN_PORT || process.env.LIMBO_PORT, 10) || 18789;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = process.env.LIMBO_DATA_DIR || '/data';
 const OPENCLAW_STATE = process.env.OPENCLAW_STATE_DIR || '/home/limbo/.openclaw';
@@ -951,7 +953,7 @@ async function handleConfigure(req, res) {
         AUTH_MODE: data.authMode || 'api-key',
         MODEL_PROVIDER: data.provider,
         MODEL_NAME: modelName,
-        LIMBO_PORT: String(PORT),
+        LIMBO_PORT: process.env.LIMBO_PORT || String(PORT),
         // Tokens live directly in the env file now.
         LLM_API_KEY: data.apiKey || '',
         GATEWAY_TOKEN: gatewayToken,
@@ -983,11 +985,27 @@ async function handleConfigure(req, res) {
     // Full first-run installs still exit and let the container restart.
     const isIncrementalWizard = SWITCH_BRAIN_MODE || CONNECT_CALENDAR_MODE;
     if (isIncrementalWizard) {
+      // Source the updated .env so regen + OpenClaw reload pick up the new
+      // provider key. The entrypoint normally maps LLM_API_KEY to the
+      // provider-specific env var (OPENROUTER_API_KEY, etc.), but incremental
+      // wizards skip the entrypoint — we must do the mapping here.
+      const regenEnv = { ...process.env };
+      for (const [k, v] of Object.entries(envVars)) {
+        regenEnv[k] = v;
+      }
+      const llmKey = regenEnv.LLM_API_KEY || '';
+      if (llmKey && regenEnv.AUTH_MODE !== 'subscription') {
+        switch (regenEnv.MODEL_PROVIDER) {
+          case 'openrouter': regenEnv.OPENROUTER_API_KEY = llmKey; break;
+          case 'openai':     regenEnv.OPENAI_API_KEY = llmKey; break;
+          case 'anthropic':  regenEnv.ANTHROPIC_API_KEY = llmKey; break;
+        }
+      }
       try {
         const { execFileSync } = require('node:child_process');
         execFileSync('sh', ['/app/scripts/regen-openclaw-config.sh'], {
           stdio: 'inherit',
-          env: process.env,
+          env: regenEnv,
         });
         log('OpenClaw config regenerated — hot reload will fire');
       } catch (regenErr) {

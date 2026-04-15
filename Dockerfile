@@ -42,7 +42,8 @@ ARG OPENCLAW_VERSION
 #   tini         — minimal init for proper signal handling (PID 1 reaping)
 #   libssl3      — OpenSSL 3 shared lib needed by OpenClaw's ACP runtime (codex-acp)
 #   python3      — required by OpenClaw's pinned-write-helper for safe atomic file writes
-RUN apt-get update && apt-get install -y --no-install-recommends gettext-base tzdata tini libssl3 python3 ca-certificates gosu && rm -rf /var/lib/apt/lists/* \
+#   git          — required by @googleworkspace/cli (gws) npm package at install time
+RUN apt-get update && apt-get install -y --no-install-recommends gettext-base tzdata tini libssl3 python3 ca-certificates gosu git && rm -rf /var/lib/apt/lists/* \
   && groupadd -r limbo && useradd --create-home -r -g limbo limbo
 
 # Install OpenClaw globally — replaces the ZeroClaw Rust binary.
