@@ -25,6 +25,8 @@ const ENV_BACKUP_FILE = path.join(CONFIG_DIR, '.env.bak');
 const SETUP_TOKEN_FILE = path.join(CONFIG_DIR, 'setup_token');
 const SWITCH_BRAIN_MODE = process.env.SWITCH_BRAIN_MODE === 'true';
 const CONNECT_CALENDAR_MODE = process.env.CONNECT_CALENDAR_MODE === 'true';
+const PUBLIC_URL = process.env.LIMBO_PUBLIC_URL || '';
+const OAUTH_RELAY_URL = process.env.LIMBO_OAUTH_RELAY_URL || 'https://auth.heylimbo.com';
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -727,10 +729,18 @@ function handleGoogleOAuthStart(req, res) {
 
   const pkce = generatePKCE();
   const state = crypto.randomBytes(16).toString('hex');
-  const redirectUri = `http://localhost:${PORT}/auth/google/callback`;
-  // PORT is already the fixed wizard port (default 15789) passed by the
-  // supervisor via LIMBO_PORT env var. The redirect URI is deterministic
-  // so a single URI can be registered in Google Console for all installs.
+  const redirectUri = PUBLIC_URL
+    ? `${OAUTH_RELAY_URL}/callback`
+    : `http://localhost:${PORT}/auth/google/callback`;
+  // In relay mode, PUBLIC_URL is set and the Worker at OAUTH_RELAY_URL handles
+  // the Google callback then 302s the browser back to {PUBLIC_URL}/auth/google/callback
+  // with the original nonce as the state param.
+
+  // When using the relay, encode returnUrl + nonce into the state so the Worker
+  // knows where to redirect after receiving the code from Google.
+  const stateForGoogle = PUBLIC_URL
+    ? Buffer.from(JSON.stringify({ returnUrl: PUBLIC_URL, nonce: state })).toString('base64url')
+    : state;
 
   googlePkceSession = { verifier: pkce.verifier, state, redirectUri, clientId, clientSecret, ts: Date.now() };
   googleOauthResult = null;
@@ -742,7 +752,7 @@ function handleGoogleOAuthStart(req, res) {
     scope: GOOGLE_OAUTH.scopes,
     code_challenge: pkce.challenge,
     code_challenge_method: 'S256',
-    state,
+    state: stateForGoogle,
     access_type: 'offline',
     prompt: 'consent',
   });
@@ -1102,6 +1112,8 @@ module.exports = {
   _internals: {
     OPENAI_OAUTH,
     GOOGLE_OAUTH,
+    PUBLIC_URL,
+    OAUTH_RELAY_URL,
     readBody,
     sendJSON,
     sendError,
@@ -1121,7 +1133,8 @@ if (require.main === module) {
 
   server.listen(PORT, '0.0.0.0', () => {
     log(`Limbo Setup Wizard listening on port ${PORT}`);
-    log(`SETUP_URL=http://127.0.0.1:${PORT}/?token=${SETUP_TOKEN}`);
+    const baseUrl = PUBLIC_URL || `http://127.0.0.1:${PORT}`;
+    log(`SETUP_URL=${baseUrl}/?token=${SETUP_TOKEN}`);
     log('Share the URL above with the user to complete setup.');
   });
 
