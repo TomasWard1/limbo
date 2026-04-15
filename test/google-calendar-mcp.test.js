@@ -216,6 +216,17 @@ describe('calendarUpdate', () => {
 });
 
 describe('MCP tool registration', () => {
+  test('Dockerfile pins @googleworkspace/cli to a known-compatible version', () => {
+    const dockerfile = fs.readFileSync(
+      path.join(__dirname, '..', 'Dockerfile'), 'utf8',
+    );
+    assert.match(
+      dockerfile,
+      /@googleworkspace\/cli@0\.22\.4/,
+      'Dockerfile should pin @googleworkspace/cli to 0.22.4',
+    );
+  });
+
   test('calendar_read is registered in index.js tool list', async () => {
     const indexSrc = fs.readFileSync(
       path.join(__dirname, '..', 'mcp-server', 'index.js'), 'utf8',
