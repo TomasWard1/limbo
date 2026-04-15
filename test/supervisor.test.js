@@ -347,3 +347,173 @@ test('stop: safe to call multiple times (idempotent)', async () => {
   const stop2 = supervisor.stop();
   await Promise.all([stop1, stop2]);
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Public server integration
+// ──────────────────────────────────────────────────────────────────────────
+
+const http = require('node:http');
+
+function httpGet(port, path = '/') {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, path, method: 'GET' }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+test('supervisor with publicPort creates and starts public server', async () => {
+  const sup = require('../lib/supervisor').createSupervisor({
+    controlPort: 0,
+    publicPort: 0,
+    spawnSetupServerFn: (cmd, args, opts) => {
+      const { EventEmitter } = require('node:events');
+      const child = new EventEmitter();
+      child.pid = 99999;
+      child.kill = () => { setImmediate(() => child.emit('exit', null, 'SIGTERM')); return true; };
+      return child;
+    },
+    launchOpenclawFn: () => {
+      const { EventEmitter } = require('node:events');
+      const child = new EventEmitter();
+      child.pid = 99998;
+      child.kill = () => { setImmediate(() => child.emit('exit', null, 'SIGTERM')); return true; };
+      return child;
+    },
+    nodePath: '/fake/bin/node',
+    setupServerPath: '/fake/setup-server/server.js',
+    idGenerator: () => 'sess_pub_1',
+    tokenGenerator: () => 'tok_pub',
+    wizardPortBase: 18901,
+  });
+
+  await sup.start();
+  try {
+    assert.ok(sup.publicPort > 0, 'publicPort should be a positive number after start');
+    const res = await httpGet(sup.publicPort);
+    assert.equal(res.status, 200);
+    assert.ok(res.body.includes('Limbo'));
+  } finally {
+    await sup.stop();
+  }
+});
+
+test('supervisor with publicPort=0 leaves publicPort as null', async () => {
+  const { supervisor } = makeHarness();
+  await supervisor.start();
+  try {
+    assert.equal(supervisor.publicPort, null);
+  } finally {
+    await supervisor.stop();
+  }
+});
+
+test('wizard request sets wizard target on public server', async () => {
+  // Spin up a tiny HTTP server to act as the wizard target
+  const wizardServerPayload = 'wizard-ui';
+  const backendServer = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end(wizardServerPayload);
+  });
+  await new Promise((resolve) => backendServer.listen(0, '127.0.0.1', resolve));
+  const backendPort = backendServer.address().port;
+
+  const sup = require('../lib/supervisor').createSupervisor({
+    controlPort: 0,
+    publicPort: 0,
+    spawnSetupServerFn: (cmd, args, opts) => {
+      const { EventEmitter } = require('node:events');
+      const child = new EventEmitter();
+      child.pid = 88888;
+      child.kill = () => { setImmediate(() => child.emit('exit', null, 'SIGTERM')); return true; };
+      return child;
+    },
+    launchOpenclawFn: () => {
+      const { EventEmitter } = require('node:events');
+      const child = new EventEmitter();
+      child.pid = 88887;
+      child.kill = () => { setImmediate(() => child.emit('exit', null, 'SIGTERM')); return true; };
+      return child;
+    },
+    nodePath: '/fake/bin/node',
+    setupServerPath: '/fake/setup-server/server.js',
+    idGenerator: (() => { let n = 0; return () => `sess_wiz_${++n}`; })(),
+    tokenGenerator: () => 'tok_wiz',
+    // wizardPortBase points at our fake backend so we can verify proxying
+    wizardPortBase: backendPort,
+  });
+
+  await sup.start();
+  const { createControlClient } = require('../lib/control-client');
+  const client = createControlClient({ port: sup.controlPort });
+
+  try {
+    // Before wizard: static page
+    const before = await httpGet(sup.publicPort);
+    assert.ok(before.body.includes('Limbo'));
+
+    // Request wizard — supervisor calls setWizardTarget(wizardPortBase)
+    await client.requestWizard({ feature: 'calendar', timeoutMs: 900_000 });
+
+    // Public server should now proxy to the wizard backend
+    const proxied = await httpGet(sup.publicPort);
+    assert.equal(proxied.body, wizardServerPayload);
+  } finally {
+    await sup.stop();
+    await new Promise((r) => backendServer.close(r));
+  }
+});
+
+test('wizard exit clears wizard target on public server', async () => {
+  const { EventEmitter } = require('node:events');
+  let setupChild = null;
+
+  const sup = require('../lib/supervisor').createSupervisor({
+    controlPort: 0,
+    publicPort: 0,
+    spawnSetupServerFn: (cmd, args, opts) => {
+      const child = new EventEmitter();
+      child.pid = 77777;
+      child.kill = () => { setImmediate(() => child.emit('exit', null, 'SIGTERM')); return true; };
+      setupChild = child;
+      return child;
+    },
+    launchOpenclawFn: () => {
+      const child = new EventEmitter();
+      child.pid = 77776;
+      child.kill = () => { setImmediate(() => child.emit('exit', null, 'SIGTERM')); return true; };
+      return child;
+    },
+    nodePath: '/fake/bin/node',
+    setupServerPath: '/fake/setup-server/server.js',
+    idGenerator: (() => { let n = 0; return () => `sess_exit_${++n}`; })(),
+    tokenGenerator: () => 'tok_exit',
+    wizardPortBase: 18901,
+  });
+
+  await sup.start();
+  const { createControlClient } = require('../lib/control-client');
+  const client = createControlClient({ port: sup.controlPort });
+
+  try {
+    await client.requestWizard({ feature: 'calendar', timeoutMs: 900_000 });
+    assert.ok(setupChild, 'setup child should have been spawned');
+
+    // Simulate wizard exit
+    setupChild.emit('exit', 0, null);
+
+    // Give the exit handler a tick to run
+    await new Promise((r) => setImmediate(r));
+
+    // Public server should be back to static page
+    const res = await httpGet(sup.publicPort);
+    assert.equal(res.status, 200);
+    assert.ok(res.body.includes('Limbo'), 'should serve static page after wizard exits');
+  } finally {
+    await sup.stop();
+  }
+});

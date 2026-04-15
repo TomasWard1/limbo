@@ -898,3 +898,35 @@ describe('auth-profiles migration', () => {
     }
   });
 });
+
+// ── 8. Limbo Cloud — public URL port override ─────────────────────────────────
+
+describe('Limbo Cloud LIMBO_PUBLIC_URL port override', () => {
+  const ENTRYPOINT = path.join(__dirname, '..', 'scripts', 'entrypoint.sh');
+
+  test('entrypoint overrides LIMBO_PORT=80 in setup mode when LIMBO_PUBLIC_URL is set', () => {
+    const entrypoint = fs.readFileSync(ENTRYPOINT, 'utf8');
+    // The setup-mode branch must set LIMBO_PORT=80 when LIMBO_PUBLIC_URL is non-empty
+    assert.ok(
+      /LIMBO_PUBLIC_URL/.test(entrypoint),
+      'entrypoint must reference LIMBO_PUBLIC_URL'
+    );
+    assert.ok(
+      /LIMBO_PORT=80/.test(entrypoint),
+      'entrypoint must set LIMBO_PORT=80 for Limbo Cloud instances in setup mode'
+    );
+  });
+
+  test('LIMBO_PORT=80 override is inside the setup-mode block', () => {
+    const entrypoint = fs.readFileSync(ENTRYPOINT, 'utf8');
+    // The override must appear inside the setup-mode block, not unconditionally.
+    const setupModeIdx = entrypoint.indexOf('if [ "$SETUP_MODE" = "true" ]');
+    const port80Idx = entrypoint.indexOf('LIMBO_PORT=80');
+    assert.ok(setupModeIdx !== -1, 'setup-mode block must exist in entrypoint');
+    assert.ok(port80Idx !== -1, 'LIMBO_PORT=80 must exist in entrypoint');
+    assert.ok(
+      port80Idx > setupModeIdx,
+      'LIMBO_PORT=80 must be inside the setup-mode block (after the SETUP_MODE check)'
+    );
+  });
+});

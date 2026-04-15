@@ -178,6 +178,7 @@ function resolveExtraEnv() {
 // docker-compose.yml written to ~/.limbo on install
 function composeContent() {
   const wizardPort = parseInt(process.env.LIMBO_WIZARD_PORT, 10) || DEFAULT_WIZARD_PORT;
+  const publicUrl = parseEnvFile().LIMBO_PUBLIC_URL || '';
   return `services:
   limbo:
     image: ${resolveImage()}
@@ -202,6 +203,7 @@ function composeContent() {
       - "127.0.0.1:${wizardPort}:${wizardPort}"
       # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
       - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
+${publicUrl ? '      # Public server (Cloudflare-facing, wizard + static page)\n      - "0.0.0.0:80:80"\n' : ''}
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
@@ -231,6 +233,7 @@ volumes:
 // Hardened variant: adds Squid egress proxy sidecar with domain allowlist
 function composeContentHardened() {
   const wizardPort = parseInt(process.env.LIMBO_WIZARD_PORT, 10) || DEFAULT_WIZARD_PORT;
+  const publicUrl = parseEnvFile().LIMBO_PUBLIC_URL || '';
   return `services:
   limbo:
     image: ${resolveImage()}
@@ -255,6 +258,7 @@ function composeContentHardened() {
       - "127.0.0.1:${wizardPort}:${wizardPort}"
       # Control plane (LIMBO_PORT + 2) — host CLI talks to the supervisor here.
       - "127.0.0.1:${PORT + CONTROL_PORT_OFFSET}:${PORT + CONTROL_PORT_OFFSET}"
+${publicUrl ? '      # Public server (Cloudflare-facing, wizard + static page)\n      - "0.0.0.0:80:80"\n' : ''}
     volumes:
       - limbo-data:/data
       - ${VAULT_DIR}:/data/vault
