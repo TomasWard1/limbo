@@ -198,7 +198,7 @@ Limbo uses ~150 MB at rest, peaks ~300 MB during agent runs. CPU usage is neglig
 - **MCP server** — Node.js vault read/write tools, spawned by OpenClaw
 - **Vault** — plain markdown with YAML frontmatter, persisted in a Docker volume
 
-All three ports bind to the host loopback only (`127.0.0.1`), never LAN.
+Gateway, wizard, and control plane bind to host loopback only (`127.0.0.1`). In **cloud mode** (`limbo cloud activate`), an additional public server on port 80 makes the wizard accessible via `https://{id}.heylimbo.com` — no SSH or tunnels needed.
 
 ---
 
