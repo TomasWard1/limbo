@@ -1,0 +1,7 @@
+name = "limbo-auth-relay"
+main = "worker.js"
+compatibility_date = "2024-09-25"
+
+routes = [
+  { pattern = "auth.heylimbo.com/*", zone_name = "heylimbo.com" }
+]
