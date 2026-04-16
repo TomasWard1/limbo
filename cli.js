@@ -379,7 +379,7 @@ const TEXT = {
     envWritten: '.env written.',
     pullingImage: 'Pulling image...',
     imagePulled: 'Image pulled.',
-    pullFailed: 'Could not pull from GHCR. Trying local build fallback...',
+    pullFailed: 'Could not pull from GitLab Container Registry. Trying local build fallback...',
     buildingFallback: 'Building from local Dockerfile...',
     buildOk: (tag) => `Built: ${REGISTRY_IMAGE}:${tag}`,
     starting: 'Starting Limbo...',
@@ -507,7 +507,7 @@ const TEXT = {
     envWritten: '.env escrito.',
     pullingImage: 'Bajando imagen...',
     imagePulled: 'Imagen descargada.',
-    pullFailed: 'No se pudo bajar la imagen desde GHCR. Probando build local...',
+    pullFailed: 'No se pudo bajar la imagen desde GitLab Container Registry. Probando build local...',
     buildingFallback: 'Construyendo desde el Dockerfile local...',
     buildOk: (tag) => `Imagen construida: ${REGISTRY_IMAGE}:${tag}`,
     starting: 'Arrancando Limbo...',
@@ -1263,7 +1263,7 @@ function pullOrBuildImage(lang) {
     run('docker compose pull -q');
     ok(t(lang, 'imagePulled'));
   } catch {
-    die('Could not pull image and no local Dockerfile found. Check your network or GHCR access.');
+    die('Could not pull image and no local Dockerfile found. Check your network or registry access.');
   }
 }
 
