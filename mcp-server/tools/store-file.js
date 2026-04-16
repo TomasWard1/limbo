@@ -1,34 +1,14 @@
 import { copyFile, readFile, writeFile, mkdir, stat, unlink } from "fs/promises";
 import { join, resolve, extname, basename as pathBasename } from "path";
 import { vaultWriteNote } from "./write.js";
+import { VAULT_PATH, sanitizeNoteId, assertWithinDir, sanitizeSubdirectory, detectMimeType } from "./shared.js";
 
-const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const ASSETS_DIR = join(VAULT_PATH, "assets");
 
 const MAX_BASE64_LENGTH = 14_000_000; // ~10MB decoded
 const MAX_FILE_SIZE = 10_000_000; // 10MB
 
 const REQUIRED_FIELDS = ["noteId", "title", "description", "content"];
-
-const MIME_MAP = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".pdf": "application/pdf",
-  ".doc": "application/msword",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".txt": "text/plain",
-  ".csv": "text/csv",
-  ".json": "application/json",
-};
-
-function detectMimeType(filename) {
-  const ext = extname(filename).toLowerCase();
-  return MIME_MAP[ext] || "application/octet-stream";
-}
 
 function sanitizeFilename(raw) {
   // Strip path separators and traversal
@@ -72,10 +52,7 @@ export async function vaultStoreFile(args) {
   }
 
   // Sanitize noteId
-  const safeNoteId = args.noteId.replace(/[^a-zA-Z0-9_\-]/g, "");
-  if (safeNoteId !== args.noteId) {
-    throw new Error("noteId contains invalid characters");
-  }
+  const safeNoteId = sanitizeNoteId(args.noteId);
 
   // Resolve filename — from args.filename, or derived from filePath
   const rawFilename = args.filename || (args.filePath ? pathBasename(args.filePath) : null);
@@ -88,22 +65,14 @@ export async function vaultStoreFile(args) {
   // Determine asset directory
   let assetDir = ASSETS_DIR;
   if (args.subdirectory) {
-    const safeSub = args.subdirectory.replace(/[^a-zA-Z0-9_\-/]/g, "");
-    if (safeSub !== args.subdirectory) {
-      throw new Error("subdirectory contains invalid characters");
-    }
-    if (safeSub.includes("..")) {
-      throw new Error("subdirectory cannot contain '..'");
-    }
+    const safeSub = sanitizeSubdirectory(args.subdirectory);
     assetDir = join(ASSETS_DIR, safeSub);
   }
 
   await mkdir(assetDir, { recursive: true });
 
   const assetFilePath = resolve(assetDir, finalFilename);
-  if (!assetFilePath.startsWith(resolve(ASSETS_DIR) + "/")) {
-    throw new Error("Path traversal detected");
-  }
+  assertWithinDir(assetFilePath, ASSETS_DIR);
 
   // Write file to vault — either by copying from filePath or decoding base64
   let sourcePath = null;
