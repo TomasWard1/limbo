@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "fs/promises";
 import { join, resolve } from "path";
+import { assertWithinDir } from "./shared.js";
 
 // OpenClaw workspace: where the agent's personality/config files live at runtime.
 // Entrypoint copies templates here on first run; the agent can modify them after.
@@ -25,9 +26,7 @@ export async function workspaceRead(filename) {
   }
 
   const filePath = resolve(WORKSPACE_DIR, filename);
-  if (!filePath.startsWith(resolve(WORKSPACE_DIR) + "/")) {
-    throw new Error("Path traversal detected");
-  }
+  assertWithinDir(filePath, WORKSPACE_DIR);
 
   const content = await readFile(filePath, "utf8");
   return { filename, content };
@@ -47,9 +46,7 @@ export async function workspaceWrite(filename, content) {
   }
 
   const filePath = resolve(WORKSPACE_DIR, filename);
-  if (!filePath.startsWith(resolve(WORKSPACE_DIR) + "/")) {
-    throw new Error("Path traversal detected");
-  }
+  assertWithinDir(filePath, WORKSPACE_DIR);
 
   await writeFile(filePath, content, "utf8");
   return { filename, path: filePath, size: content.length };

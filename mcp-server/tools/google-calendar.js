@@ -30,6 +30,38 @@ async function callGws(args) {
 }
 
 /**
+ * Parse a startTime + duration into ISO start/end datetime strings.
+ * Handles both offset-bearing ("2026-04-11T11:00:00-03:00") and floating
+ * local-time ("2026-04-11T11:00:00") formats.
+ *
+ * @param {string} startTime - ISO datetime, with or without timezone offset
+ * @param {number} durationMin - Duration in minutes
+ * @returns {{ startDateTimeStr: string, endDateTimeStr: string }}
+ */
+function parseTimePair(startTime, durationMin) {
+  const hasOffset = /[+-]\d{2}:\d{2}$|Z$/.test(startTime);
+
+  if (hasOffset) {
+    const start = new Date(startTime);
+    const end = new Date(start.getTime() + durationMin * 60 * 1000);
+    return { startDateTimeStr: start.toISOString(), endDateTimeStr: end.toISOString() };
+  }
+
+  // No offset — keep it as a "floating" local time and let Google interpret it
+  // via the timeZone field. Compute end by parsing the local-time components.
+  const m = startTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) throw new Error(`Invalid startTime format: ${startTime}`);
+  const [, y, mo, d, h, min, s] = m;
+  const startMs = Date.UTC(+y, +mo - 1, +d, +h, +min, +(s || 0));
+  const endMs = startMs + durationMin * 60 * 1000;
+  const fmt = (ms) => {
+    const dt = new Date(ms);
+    return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}T${String(dt.getUTCHours()).padStart(2, '0')}:${String(dt.getUTCMinutes()).padStart(2, '0')}:${String(dt.getUTCSeconds()).padStart(2, '0')}`;
+  };
+  return { startDateTimeStr: fmt(startMs), endDateTimeStr: fmt(endMs) };
+}
+
+/**
  * Call gws CLI for operations that return no body (HTTP 204, e.g. delete).
  * Skip JSON parsing — gws still writes a placeholder file but we don't read it.
  */
@@ -47,6 +79,7 @@ async function callGwsNoBody(args) {
  * @param {string} [opts.startDate] - ISO date, defaults to today
  * @param {string} [opts.endDate] - ISO date, defaults to end of startDate
  * @param {number} [opts.maxResults] - max events, default 25
+ * @returns {Promise<Array<{id: string, summary: string, start: string|null, end: string|null, location: string|null, status: string, htmlLink: string|null}>>}
  */
 export async function calendarRead({ startDate, endDate, maxResults } = {}) {
   ensureEnabled();
@@ -111,6 +144,7 @@ export async function calendarRead({ startDate, endDate, maxResults } = {}) {
  * @param {string} [opts.timeZone] - IANA timezone (e.g. "America/Argentina/Buenos_Aires").
  *   If the startTime has no offset, this tells Google how to interpret it.
  *   The agent should pass this from USER.md.
+ * @returns {Promise<{id: string, summary: string, start: string, end: string, htmlLink: string|null}>}
  */
 export async function calendarCreate({ title, startTime, duration, description, location, timeZone } = {}) {
   ensureEnabled();
@@ -118,34 +152,7 @@ export async function calendarCreate({ title, startTime, duration, description, 
   if (!title) throw new Error('title is required');
   if (!startTime) throw new Error('startTime is required');
 
-  // Preserve the literal startTime string if the agent passed one without offset —
-  // Google will interpret it using the provided timeZone. If the agent passed an
-  // offset (e.g. "2026-04-11T11:00:00-03:00"), normalize to ISO.
-  const hasOffset = /[+-]\d{2}:\d{2}$|Z$/.test(startTime);
-  let startDateTimeStr;
-  let endDateTimeStr;
-  const durationMin = duration || 60;
-
-  if (hasOffset) {
-    const start = new Date(startTime);
-    const end = new Date(start.getTime() + durationMin * 60 * 1000);
-    startDateTimeStr = start.toISOString();
-    endDateTimeStr = end.toISOString();
-  } else {
-    // No offset — keep it as a "floating" local time and let Google interpret it
-    // via the timeZone field. Compute end by parsing the local-time components.
-    const m = startTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
-    if (!m) throw new Error(`Invalid startTime format: ${startTime}`);
-    const [, y, mo, d, h, min, s] = m;
-    const startMs = Date.UTC(+y, +mo - 1, +d, +h, +min, +(s || 0));
-    const endMs = startMs + durationMin * 60 * 1000;
-    const fmt = (ms) => {
-      const dt = new Date(ms);
-      return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}T${String(dt.getUTCHours()).padStart(2, '0')}:${String(dt.getUTCMinutes()).padStart(2, '0')}:${String(dt.getUTCSeconds()).padStart(2, '0')}`;
-    };
-    startDateTimeStr = fmt(startMs);
-    endDateTimeStr = fmt(endMs);
-  }
+  const { startDateTimeStr, endDateTimeStr } = parseTimePair(startTime, duration || 60);
 
   const event = {
     summary: title,
@@ -181,6 +188,7 @@ export async function calendarCreate({ title, startTime, duration, description, 
  * Delete a Google Calendar event by id.
  * @param {object} opts
  * @param {string} opts.eventId - The Google Calendar event id (from calendar_read)
+ * @returns {Promise<{id: string, deleted: true}>}
  */
 export async function calendarDelete({ eventId } = {}) {
   ensureEnabled();
@@ -208,6 +216,7 @@ export async function calendarDelete({ eventId } = {}) {
  * @param {string} [opts.description] - New description
  * @param {string} [opts.location] - New location
  * @param {string} [opts.timeZone] - IANA timezone, passed from USER.md
+ * @returns {Promise<{id: string, summary: string, start: string, end: string, htmlLink: string|null}>}
  */
 export async function calendarUpdate({ eventId, title, startTime, duration, description, location, timeZone } = {}) {
   ensureEnabled();
@@ -219,30 +228,7 @@ export async function calendarUpdate({ eventId, title, startTime, duration, desc
   if (location) patch.location = location;
 
   if (startTime) {
-    // Same parsing logic as calendarCreate — respect floating time + timeZone.
-    const hasOffset = /[+-]\d{2}:\d{2}$|Z$/.test(startTime);
-    const durationMin = duration || 60;
-    let startDateTimeStr;
-    let endDateTimeStr;
-
-    if (hasOffset) {
-      const start = new Date(startTime);
-      const end = new Date(start.getTime() + durationMin * 60 * 1000);
-      startDateTimeStr = start.toISOString();
-      endDateTimeStr = end.toISOString();
-    } else {
-      const m = startTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
-      if (!m) throw new Error(`Invalid startTime format: ${startTime}`);
-      const [, y, mo, d, h, min, s] = m;
-      const startMs = Date.UTC(+y, +mo - 1, +d, +h, +min, +(s || 0));
-      const endMs = startMs + durationMin * 60 * 1000;
-      const fmt = (ms) => {
-        const dt = new Date(ms);
-        return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}T${String(dt.getUTCHours()).padStart(2, '0')}:${String(dt.getUTCMinutes()).padStart(2, '0')}:${String(dt.getUTCSeconds()).padStart(2, '0')}`;
-      };
-      startDateTimeStr = fmt(startMs);
-      endDateTimeStr = fmt(endMs);
-    }
+    const { startDateTimeStr, endDateTimeStr } = parseTimePair(startTime, duration || 60);
 
     patch.start = { dateTime: startDateTimeStr };
     patch.end = { dateTime: endDateTimeStr };

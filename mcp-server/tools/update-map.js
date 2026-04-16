@@ -1,17 +1,8 @@
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { join, resolve } from "path";
+import { VAULT_PATH, sanitizeNoteId, assertWithinDir } from "./shared.js";
 
-const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const MAPS_DIR = join(VAULT_PATH, "maps");
-
-/**
- * Sanitizes a map name (filename without extension).
- */
-function sanitizeName(name) {
-  const safe = name.replace(/[^a-zA-Z0-9_\-]/g, "");
-  if (safe !== name) throw new Error(`Invalid characters in name: ${name}`);
-  return safe;
-}
 
 /**
  * Builds frontmatter for a new map file.
@@ -100,13 +91,11 @@ export async function vaultUpdateMap(map, section, entries) {
   if (!section || typeof section !== "string") throw new Error("section must be a non-empty string");
   if (!Array.isArray(entries) || entries.length === 0) throw new Error("entries must be a non-empty array");
 
-  const safeMap = sanitizeName(map);
+  const safeMap = sanitizeNoteId(map);
   await mkdir(MAPS_DIR, { recursive: true });
 
   const filePath = resolve(MAPS_DIR, `${safeMap}.md`);
-  if (!filePath.startsWith(resolve(MAPS_DIR) + "/")) {
-    throw new Error("Path traversal detected");
-  }
+  assertWithinDir(filePath, MAPS_DIR);
 
   let existing = "";
   try {
