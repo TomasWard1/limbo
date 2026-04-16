@@ -1,7 +1,7 @@
 # Eval-mode Limbo — isolated vault, MCP logging enabled
 # Usage: LIMBO_IMAGE=limbo:staging docker compose -f evals/docker-compose.eval.yml up -d
 # Intentionally fails if LIMBO_IMAGE is unset to avoid accidentally testing
-# ghcr.io/tomasward1/limbo:latest instead of the freshly built PR image.
+# registry.gitlab.com/tomas209/limbo:latest instead of the freshly built PR image.
 services:
   limbo-eval:
     image: ${LIMBO_IMAGE:?LIMBO_IMAGE must be set (for example LIMBO_IMAGE=limbo:staging)}
