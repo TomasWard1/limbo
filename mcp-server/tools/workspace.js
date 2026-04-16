@@ -17,9 +17,6 @@ function isReadable(filename) {
   return filename.endsWith(".md") && !filename.includes("/") && !filename.includes("..");
 }
 
-/**
- * workspace_read(filename): read a workspace file's content.
- */
 export async function workspaceRead(filename) {
   if (!isReadable(filename)) {
     throw new Error(`Cannot read "${filename}" — only .md files in the workspace root are accessible.`);
@@ -32,9 +29,6 @@ export async function workspaceRead(filename) {
   return { filename, content };
 }
 
-/**
- * workspace_write(filename, content): overwrite a writable workspace file.
- */
 export async function workspaceWrite(filename, content) {
   if (!WRITABLE_FILES.has(filename)) {
     const list = [...WRITABLE_FILES].join(", ");

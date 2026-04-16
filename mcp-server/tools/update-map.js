@@ -4,9 +4,6 @@ import { VAULT_PATH, sanitizeNoteId, assertWithinDir } from "./shared.js";
 
 const MAPS_DIR = join(VAULT_PATH, "maps");
 
-/**
- * Builds frontmatter for a new map file.
- */
 function buildMapFrontmatter(name) {
   const lines = [
     "---",
@@ -17,10 +14,7 @@ function buildMapFrontmatter(name) {
   return lines.join("\n");
 }
 
-/**
- * Extracts wikilink noteIds from a block of text.
- * Matches [[noteId]] and [[noteId|Display Title]].
- */
+// Matches [[noteId]] and [[noteId|Display Title]]
 function extractWikilinks(text) {
   const regex = /\[\[([^\]|]+)/g;
   const ids = new Set();
@@ -31,11 +25,6 @@ function extractWikilinks(text) {
   return ids;
 }
 
-/**
- * Finds or creates a section in markdown content.
- * Deduplicates entries — skips any whose wikilink noteId already exists in the section.
- * Returns the updated content string.
- */
 function upsertSection(content, section, entries) {
   const sectionHeader = `## ${section}`;
   const lines = content.split("\n");
@@ -76,16 +65,6 @@ function upsertSection(content, section, entries) {
   return { content: lines.join("\n"), added: newEntries.length };
 }
 
-/**
- * vault_update_map(map, section, entries): appends entries to a MOC section.
- * Creates the map file and/or section if they don't exist.
- * New maps are created with proper YAML frontmatter.
- * Entries are markdown link strings, e.g. ["- [[note-id|Note Title]]"]
- *
- * @param {string} map - map filename without extension
- * @param {string} section - section heading text
- * @param {string[]} entries - array of markdown link strings to append
- */
 export async function vaultUpdateMap(map, section, entries) {
   if (!map || typeof map !== "string") throw new Error("map must be a non-empty string");
   if (!section || typeof section !== "string") throw new Error("section must be a non-empty string");

@@ -67,9 +67,6 @@ async function walkAndIndex(dir, base = dir) {
   await Promise.all(promises);
 }
 
-/**
- * Build (or rebuild) the full in-memory index from disk.
- */
 export async function buildIndex() {
   index.clear();
   await walkAndIndex(NOTES_DIR);
@@ -99,9 +96,6 @@ export async function buildIndex() {
   return index.size;
 }
 
-/**
- * Ensure the index is built before use.
- */
 export async function ensureIndex() {
   if (!built) await buildIndex();
 }
@@ -113,9 +107,6 @@ export function getNote(noteId) {
   return index.get(noteId) || null;
 }
 
-/**
- * Update a single entry in the index (called after vault_write_note).
- */
 export function updateEntry(noteId, path, content, domain) {
   const title = extractTitle(content) || noteId;
   index.set(noteId, { path, title, content, domain });
