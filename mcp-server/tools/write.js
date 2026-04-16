@@ -12,11 +12,6 @@ function escapeYaml(str) {
   return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-/**
- * Builds YAML frontmatter string from note metadata.
- * Supports the merged schema: id, title, description, type, status, domain,
- * created, source, topics.
- */
 function buildFrontmatter(note) {
   const lines = ["---"];
   lines.push(`id: ${note.id}`);
@@ -50,12 +45,6 @@ function buildFrontmatter(note) {
   return lines.join("\n");
 }
 
-/**
- * vault_write_note(note): creates a markdown file with YAML frontmatter.
- * Input: {id, title, type, description, content, subdirectory?, status?, domain?, source?, topics?}
- * Writes to /data/vault/notes/{subdirectory?}/{id}.md
- * Creates the subdirectory if it doesn't exist.
- */
 export async function vaultWriteNote(note) {
   for (const field of REQUIRED_FIELDS) {
     if (!note[field] || typeof note[field] !== "string") {

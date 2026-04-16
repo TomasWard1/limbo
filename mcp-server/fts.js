@@ -3,10 +3,6 @@ import Database from "better-sqlite3";
 
 let db = null;
 
-/**
- * Open (or create) the FTS database at dbPath.
- * Enables WAL mode, creates notes_meta + notes_fts tables if missing.
- */
 export function initFts(dbPath) {
   db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
@@ -28,9 +24,6 @@ export function initFts(dbPath) {
   `);
 }
 
-/**
- * Insert or replace a note in both tables (transactional).
- */
 export function upsertNote(noteId, title, content, domain) {
   const run = db.transaction(() => {
     db.prepare("DELETE FROM notes_fts WHERE note_id = ?").run(noteId);
@@ -41,9 +34,6 @@ export function upsertNote(noteId, title, content, domain) {
   run();
 }
 
-/**
- * Delete a note from both tables.
- */
 export function deleteNote(noteId) {
   const run = db.transaction(() => {
     db.prepare("DELETE FROM notes_fts WHERE note_id = ?").run(noteId);
@@ -122,24 +112,15 @@ export function searchNotes(query) {
   }
 }
 
-/**
- * Return the number of indexed notes.
- */
 export function indexedCount() {
   return db.prepare("SELECT COUNT(*) AS cnt FROM notes_meta").get().cnt;
 }
 
-/**
- * Return all indexed note IDs as a Set.
- */
 export function indexedIds() {
   const rows = db.prepare("SELECT note_id FROM notes_meta").all();
   return new Set(rows.map((r) => r.note_id));
 }
 
-/**
- * Close the database connection.
- */
 export function closeFts() {
   if (db) {
     db.close();

@@ -3,16 +3,8 @@ import { join, resolve, basename } from "path";
 import { getNote, ensureIndex } from "../vault-index.js";
 import { VAULT_PATH, sanitizeNoteId, assertWithinDir, detectMimeType } from "./shared.js";
 
-/**
- * vault_get_file: retrieves a stored file by its linked note ID.
- *
- * Reads the note from the index, extracts asset_path from frontmatter,
- * checks that the binary exists, and returns metadata plus a path reference.
- *
- * Limbo's real user-facing channel is Telegram, which expects file attachments
- * to come from paths/documents rather than inline base64 image blocks.
- * Returning references also avoids large payloads entering the LLM context.
- */
+// Returns path references (not inline base64) because Telegram expects file
+// attachments as paths/documents, and it avoids large payloads in the LLM context.
 export async function vaultGetFile(noteId) {
   const safe = sanitizeNoteId(noteId);
 
