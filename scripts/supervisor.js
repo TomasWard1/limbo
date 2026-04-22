@@ -24,6 +24,7 @@
 
 const { spawn } = require('node:child_process');
 const { createSupervisor } = require('../lib/supervisor');
+const { buildChannelsFromEnv } = require('../lib/build-channels');
 
 const SETUP_SERVER_PATH = process.env.LIMBO_SETUP_SERVER_PATH || '/app/setup-server/server.js';
 const OPENCLAW_BIN = process.env.LIMBO_OPENCLAW_BIN || 'openclaw';
@@ -47,8 +48,26 @@ function log(level, msg) {
 }
 
 async function main() {
+  const logger = {
+    info: (msg, meta) => log('INFO ', meta ? `${msg} ${JSON.stringify(meta)}` : msg),
+    warn: (msg, meta) => log('WARN ', meta ? `${msg} ${JSON.stringify(meta)}` : msg),
+    error: (msg, meta) => log('ERROR', meta ? `${msg} ${JSON.stringify(meta)}` : msg),
+  };
+
+  let channels = {};
+  try {
+    channels = buildChannelsFromEnv(process.env, { logger });
+  } catch (err) {
+    log('FATAL', `failed to build channels: ${err && err.message}`);
+    process.exit(1);
+  }
+  for (const name of Object.keys(channels)) {
+    log('INFO ', `channel enabled: ${name}`);
+  }
+
   const supervisor = createSupervisor({
     controlPort: CONTROL_PORT,
+    channels,
     // Bind to 0.0.0.0 inside the container, NOT 127.0.0.1. Docker's port
     // mapping routes host → container via eth0, not via the container's
     // loopback interface — a server bound to the container's 127.0.0.1
