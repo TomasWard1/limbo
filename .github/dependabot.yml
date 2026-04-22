@@ -1,13 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: docker
-    directory: /
-    schedule:
-      interval: weekly
-    reviewers:
-      - TomasWard1
-    labels:
-      - dependencies
-      - docker
-    allow:
-      - dependency-name: ghcr.io/zeroclaw-labs/zeroclaw
+  # Docker ecosystem entry removed: watched ghcr.io/zeroclaw-labs/zeroclaw
+  # which is defunct (GitHub suspended + ZeroClaw renamed to OpenClaw).
+  # Limbo now uses OpenClaw as an npm dependency, not a Docker base image.

@@ -1,28 +1,12 @@
 import { stat } from "fs/promises";
-import { join, resolve, basename, extname } from "path";
+import { join, resolve, basename } from "path";
 import { getNote, ensureIndex } from "../vault-index.js";
+import { VAULT_PATH, sanitizeNoteId, assertWithinDir, detectMimeType } from "./shared.js";
 
-const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
-
-/**
- * vault_get_file: retrieves a stored file by its linked note ID.
- *
- * Reads the note from the index, extracts asset_path from frontmatter,
- * checks that the binary exists, and returns metadata plus a path reference.
- *
- * Limbo's real user-facing channel is Telegram, which expects file attachments
- * to come from paths/documents rather than inline base64 image blocks.
- * Returning references also avoids large payloads entering the LLM context.
- */
+// Returns path references (not inline base64) because Telegram expects file
+// attachments as paths/documents, and it avoids large payloads in the LLM context.
 export async function vaultGetFile(noteId) {
-  if (!noteId || typeof noteId !== "string") {
-    throw new Error("noteId must be a non-empty string");
-  }
-
-  const safe = noteId.replace(/[^a-zA-Z0-9_\-]/g, "");
-  if (safe !== noteId) {
-    throw new Error("noteId contains invalid characters");
-  }
+  const safe = sanitizeNoteId(noteId);
 
   await ensureIndex();
   const entry = getNote(safe);
@@ -46,9 +30,7 @@ export async function vaultGetFile(noteId) {
   const fullPath = resolve(join(VAULT_PATH, assetPath));
 
   // Path traversal check
-  if (!fullPath.startsWith(resolve(VAULT_PATH) + "/")) {
-    throw new Error("Path traversal detected");
-  }
+  assertWithinDir(fullPath, VAULT_PATH);
 
   // Size check before reading into memory (protect 256MB heap)
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -66,10 +48,9 @@ export async function vaultGetFile(noteId) {
   }
 
   const filename = basename(fullPath);
-  const ext = extname(fullPath).toLowerCase();
   const mimeType = assetTypeMatch
     ? assetTypeMatch[1]
-    : guessMime(ext);
+    : detectMimeType(filename);
 
   return {
     filename,
@@ -77,20 +58,4 @@ export async function vaultGetFile(noteId) {
     size: fileStats.size,
     assetPath,
   };
-}
-
-function guessMime(ext) {
-  const map = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-    ".svg": "image/svg+xml",
-    ".pdf": "application/pdf",
-    ".txt": "text/plain",
-    ".csv": "text/csv",
-    ".json": "application/json",
-  };
-  return map[ext] || "application/octet-stream";
 }

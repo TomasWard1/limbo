@@ -328,7 +328,7 @@ describe('vault_update_map', () => {
   it('rejects invalid map name', async () => {
     await assert.rejects(
       () => vaultUpdateMap('bad/name', 'S', ['- entry']),
-      /Invalid characters/
+      /invalid characters/i
     );
   });
 

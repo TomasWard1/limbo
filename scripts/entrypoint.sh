@@ -139,7 +139,7 @@ fi
 # Connect-calendar mode used to be handled here by setting CONNECT_CALENDAR_MODE=true
 # in the container env and letting the entrypoint exec the setup-server instead of
 # OpenClaw. That path is gone: the host CLI now talks to the wizard supervisor over a
-# Unix socket and the supervisor spawns the setup-server as a sibling of OpenClaw.
+# TCP loopback and the supervisor spawns the setup-server as a sibling of OpenClaw.
 
 # ── Detect setup mode (no config yet → wizard will handle everything) ────────
 # Two states are treated as "setup mode": (a) no .env at all, and (b) .env

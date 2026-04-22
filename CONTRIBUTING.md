@@ -11,7 +11,7 @@
 ### First-time setup
 
 ```bash
-git clone https://gitlab.com/tomas209/limbo.git
+git clone https://github.com/TomasWard1/limbo.git
 cd limbo
 nvm use                    # if you use nvm, otherwise make sure node -v starts with v22
 npm install                # installs deps AND activates husky git hooks
@@ -57,15 +57,16 @@ Use [conventional commit](https://www.conventionalcommits.org/) messages on `sta
 
 ## Release process
 
-See `CLAUDE.md` § "Versioning & Release Workflow" for the full release procedure. Short version:
+See `CLAUDE.md` § "Versioning & Release Workflow" for the full procedure. Short version (GitHub flow):
 
-1. Bump version locally with `npx release-it` (runs on `staging`)
-2. Push the release commit to `staging`
-3. Merge the auto-promoted MR into `main`
-4. Manually trigger the release pipeline from the GitLab UI with `RELEASE=true`
+1. Merge feature branch into `staging` via PR.
+2. The `promote-staging-to-main` workflow keeps an auto-updated PR from `staging` to `main`. Merge it when ready.
+3. On push to `main`, the `Release` workflow auto-bumps the version from conventional commits, builds multi-arch images, publishes to npm with OIDC provenance, tags the commit, and creates a GitHub Release.
 
-Releases publish to the npm package `limbo-ai` and to the GitLab Container Registry at `registry.gitlab.com/tomas209/limbo`.
+Releases publish to the npm package `limbo-ai` and to GitHub Container Registry at `ghcr.io/tomasward1/limbo`. During the GitHub migration window, they are also dual-pushed to `registry.gitlab.com/tomas209/limbo` if the `ENABLE_GITLAB_DUAL_PUSH` repo variable is set to `true`.
+
+**GitLab fallback**: the full `.gitlab-ci.yml` pipeline is kept dormant. If GitHub becomes unavailable again, bump locally with `npx release-it`, push to `gitlab`, and trigger the release pipeline with `RELEASE=true`.
 
 ## Reporting issues
 
-Open issues at https://gitlab.com/tomas209/limbo/-/issues. For security issues, see `SECURITY.md`.
+Open issues at https://github.com/TomasWard1/limbo/issues. For security issues, see `SECURITY.md`.

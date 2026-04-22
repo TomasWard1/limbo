@@ -1,34 +1,14 @@
 import { copyFile, readFile, writeFile, mkdir, stat, unlink } from "fs/promises";
 import { join, resolve, extname, basename as pathBasename } from "path";
 import { vaultWriteNote } from "./write.js";
+import { VAULT_PATH, sanitizeNoteId, assertWithinDir, sanitizeSubdirectory, detectMimeType } from "./shared.js";
 
-const VAULT_PATH = process.env.VAULT_PATH || "/data/vault";
 const ASSETS_DIR = join(VAULT_PATH, "assets");
 
 const MAX_BASE64_LENGTH = 14_000_000; // ~10MB decoded
 const MAX_FILE_SIZE = 10_000_000; // 10MB
 
 const REQUIRED_FIELDS = ["noteId", "title", "description", "content"];
-
-const MIME_MAP = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".pdf": "application/pdf",
-  ".doc": "application/msword",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".txt": "text/plain",
-  ".csv": "text/csv",
-  ".json": "application/json",
-};
-
-function detectMimeType(filename) {
-  const ext = extname(filename).toLowerCase();
-  return MIME_MAP[ext] || "application/octet-stream";
-}
 
 function sanitizeFilename(raw) {
   // Strip path separators and traversal
@@ -47,20 +27,7 @@ function timestampedFilename(filename) {
   return `${ts}-${filename}`;
 }
 
-/**
- * vault_store_file: stores a file in assets/ and creates a linked note.
- *
- * Primary mode (filePath): copies a local file into the vault.
- * Fallback mode (fileData): decodes base64 content into the vault.
- *
- * Input: { noteId, title, description, content,
- *          filePath | (filename + fileData),
- *          subdirectory?, noteSubdirectory?, mimeType?, domain?, source?, topics? }
- *
- * Returns: { noteId, notePath, assetPath }
- */
 export async function vaultStoreFile(args) {
-  // Validate required fields
   for (const field of REQUIRED_FIELDS) {
     if (!args[field] || typeof args[field] !== "string") {
       throw new Error(`Missing or invalid required field: ${field}`);
@@ -71,13 +38,8 @@ export async function vaultStoreFile(args) {
     throw new Error("Either filePath or fileData is required");
   }
 
-  // Sanitize noteId
-  const safeNoteId = args.noteId.replace(/[^a-zA-Z0-9_\-]/g, "");
-  if (safeNoteId !== args.noteId) {
-    throw new Error("noteId contains invalid characters");
-  }
+  const safeNoteId = sanitizeNoteId(args.noteId);
 
-  // Resolve filename — from args.filename, or derived from filePath
   const rawFilename = args.filename || (args.filePath ? pathBasename(args.filePath) : null);
   if (!rawFilename) {
     throw new Error("filename is required when using fileData (derived automatically from filePath)");
@@ -85,30 +47,19 @@ export async function vaultStoreFile(args) {
   const safeFilename = sanitizeFilename(rawFilename);
   const finalFilename = timestampedFilename(safeFilename);
 
-  // Determine asset directory
   let assetDir = ASSETS_DIR;
   if (args.subdirectory) {
-    const safeSub = args.subdirectory.replace(/[^a-zA-Z0-9_\-/]/g, "");
-    if (safeSub !== args.subdirectory) {
-      throw new Error("subdirectory contains invalid characters");
-    }
-    if (safeSub.includes("..")) {
-      throw new Error("subdirectory cannot contain '..'");
-    }
+    const safeSub = sanitizeSubdirectory(args.subdirectory);
     assetDir = join(ASSETS_DIR, safeSub);
   }
 
   await mkdir(assetDir, { recursive: true });
 
   const assetFilePath = resolve(assetDir, finalFilename);
-  if (!assetFilePath.startsWith(resolve(ASSETS_DIR) + "/")) {
-    throw new Error("Path traversal detected");
-  }
+  assertWithinDir(assetFilePath, ASSETS_DIR);
 
-  // Write file to vault — either by copying from filePath or decoding base64
   let sourcePath = null;
   if (args.filePath) {
-    // filePath mode: copy local file to vault assets
     sourcePath = resolve(args.filePath);
     const fileStat = await stat(sourcePath);
     if (fileStat.size > MAX_FILE_SIZE) {
@@ -116,7 +67,6 @@ export async function vaultStoreFile(args) {
     }
     await copyFile(sourcePath, assetFilePath);
   } else {
-    // fileData mode: decode base64
     if (args.fileData.trim().length < 4) {
       throw new Error("fileData is empty or too short");
     }
@@ -127,7 +77,6 @@ export async function vaultStoreFile(args) {
     await writeFile(assetFilePath, buffer);
   }
 
-  // Compute relative asset path from vault root
   const safeSub = args.subdirectory
     ? args.subdirectory.replace(/[^a-zA-Z0-9_\-/]/g, "")
     : null;
@@ -135,19 +84,15 @@ export async function vaultStoreFile(args) {
     ? `assets/${safeSub}/${finalFilename}`
     : `assets/${finalFilename}`;
 
-  // Detect MIME type
   const mimeType = args.mimeType || detectMimeType(safeFilename);
   const isImage = mimeType.startsWith("image/");
 
-  // Build inline reference for the note body
   const inlineRef = isImage
     ? `![${args.title}](../${subPath})`
     : `[${args.title}](../${subPath})`;
 
-  // Prepend the asset reference to the user-provided content
   const noteContent = `${inlineRef}\n\n${args.content}`;
 
-  // Create the linked note via vaultWriteNote
   const writeResult = await vaultWriteNote({
     id: safeNoteId,
     title: args.title,
@@ -162,7 +107,6 @@ export async function vaultStoreFile(args) {
     asset_type: mimeType,
   });
 
-  // Clean up source file after successful copy
   if (sourcePath) {
     try { await unlink(sourcePath); } catch {}
   }

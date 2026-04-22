@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "fs/promises";
 import { join, resolve } from "path";
+import { assertWithinDir } from "./shared.js";
 
 // OpenClaw workspace: where the agent's personality/config files live at runtime.
 // Entrypoint copies templates here on first run; the agent can modify them after.
@@ -16,26 +17,18 @@ function isReadable(filename) {
   return filename.endsWith(".md") && !filename.includes("/") && !filename.includes("..");
 }
 
-/**
- * workspace_read(filename): read a workspace file's content.
- */
 export async function workspaceRead(filename) {
   if (!isReadable(filename)) {
     throw new Error(`Cannot read "${filename}" — only .md files in the workspace root are accessible.`);
   }
 
   const filePath = resolve(WORKSPACE_DIR, filename);
-  if (!filePath.startsWith(resolve(WORKSPACE_DIR) + "/")) {
-    throw new Error("Path traversal detected");
-  }
+  assertWithinDir(filePath, WORKSPACE_DIR);
 
   const content = await readFile(filePath, "utf8");
   return { filename, content };
 }
 
-/**
- * workspace_write(filename, content): overwrite a writable workspace file.
- */
 export async function workspaceWrite(filename, content) {
   if (!WRITABLE_FILES.has(filename)) {
     const list = [...WRITABLE_FILES].join(", ");
@@ -47,9 +40,7 @@ export async function workspaceWrite(filename, content) {
   }
 
   const filePath = resolve(WORKSPACE_DIR, filename);
-  if (!filePath.startsWith(resolve(WORKSPACE_DIR) + "/")) {
-    throw new Error("Path traversal detected");
-  }
+  assertWithinDir(filePath, WORKSPACE_DIR);
 
   await writeFile(filePath, content, "utf8");
   return { filename, path: filePath, size: content.length };
