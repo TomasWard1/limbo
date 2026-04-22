@@ -54,22 +54,25 @@ Port 80 is only added when `LIMBO_PUBLIC_URL` is in the `.env` (cloud mode). Clo
 
 ## Git Workflow
 
-- **Remote: `gitlab`** — GitHub account is suspended (appeal pending, Ticket #4254416). Push to `gitlab`, not `origin`.
-- **Integration branch: `staging`** — ALL merge requests MUST target `staging`, never `main`
-- `main` is the production/release branch — only receives merges from `staging`
-- Feature branches are created from `staging`
-- Use `git push gitlab <branch>` for all pushes
-- Create MRs via `glab mr create` CLI (not `gh pr create` — GitHub is down)
-- **When GitHub is restored**: resume `git push origin`, optionally remove `gitlab` remote
+- **Primary remote: `origin`** → `github.com/TomasWard1/limbo`. All pushes and PRs go here.
+- **Fallback remote: `gitlab`** → `gitlab.com/tomas209/limbo`. Kept intact but dormant. Only use if GitHub becomes unavailable again.
+- **Integration branch: `staging`** — ALL PRs MUST target `staging`, never `main`.
+- `main` is the production/release branch — only receives merges from `staging` via the auto-promote PR.
+- Feature branches are created from `staging`.
+- Use `git push origin <branch>` for all pushes. Create PRs via `gh pr create`.
+- **Do not push to both remotes by default.** `gitlab` stays frozen unless we need to fall back.
 
-## Container Registry (MIGRATED)
+## Container Registry
 
-> **Status: GitLab registry active, ghcr.io inaccessible (GitHub suspended)**
+> **Status: GitHub migration in progress (2026-04-22).**
 
-Limbo container image lives on **GitLab Container Registry**, not ghcr.io:
-- Limbo image: `registry.gitlab.com/tomas209/limbo`
+Transition phase to avoid prod breakage:
 
-**When GitHub is restored**: evaluate whether to move back to ghcr.io or stay on GitLab.
+- **Phase A (now)**: `Release` workflow builds multi-arch and pushes to **both** `ghcr.io/tomasward1/limbo` (primary) and `registry.gitlab.com/tomas209/limbo` (legacy) when `ENABLE_GITLAB_DUAL_PUSH=true` is set as a repo variable. Prod installs keep pulling from GitLab unchanged.
+- **Phase B**: once Phase A has shipped a release successfully, flip `DEFAULT_REGISTRY` in `cli.js`, `docker-compose.yml`, and `scripts/install.sh` to `ghcr.io/tomasward1/limbo`. Users get the new compose template on next `limbo update` via `regen-openclaw-config.sh` (see [[limbo-update-must-regenerate-compose-not-patch]]). Keep dual-push for 2–3 releases as a safety net.
+- **Phase C**: drop the GitLab login + dual tags from `publish.yml`. `.gitlab-ci.yml` stays dormant.
+
+Legacy image tags already pushed to GitLab (`2026.4.x`, `2026.5.x`, `latest`) stay available indefinitely — we are not deleting anything on GitLab.
 
 ## OpenClaw Runtime
 
@@ -79,29 +82,41 @@ Limbo uses OpenClaw (Node.js) as its agent runtime. OpenClaw is an npm dependenc
 
 ## CI/CD
 
-Limbo uses **GitLab CI** (`.gitlab-ci.yml`). GitHub Actions files are kept but inactive.
+Limbo uses **GitHub Actions** (`.github/workflows/*.yml`). The `.gitlab-ci.yml` is kept dormant as a fallback.
 
-**Runner topology:** all jobs run on a self-hosted GitLab runner (tag `self-hosted`). The project does not consume GitLab SaaS minutes. The release job used to run on SaaS because of OIDC trusted publishing, but npm does not yet accept id_tokens from self-hosted runners, so release was moved to self-hosted with a classic `NPM_TOKEN` instead (trade-off: no provenance attestation).
+| Workflow | File | Trigger | What it does |
+|----------|------|---------|--------------|
+| CI | `ci.yml` | PRs to main/staging + push to staging | docker-build, mcp-server-check, unit tests |
+| Promote | `promote.yml` | Push to staging | Auto-creates/updates a PR from `staging` → `main` with bump type in title |
+| Release | `publish.yml` | Push to main | Auto-bumps version from conventional commits, builds multi-arch images, pushes to GHCR (+ GitLab when dual-push enabled), publishes to npm with OIDC provenance, tags + creates GitHub Release |
+| Deploy install | `deploy-install.yml` | Push to main/staging touching `scripts/install.sh` | Deploys to Cloudflare Pages (`get.heylimbo.com`) |
 
-| Stage | Jobs | Trigger | Runner |
-|-------|------|---------|--------|
-| test | `docker-build`, `mcp-server-check`, `tests` | MRs + push to staging | self-hosted |
-| promote | `promote-staging-to-main` | Push to staging | self-hosted |
-| release | `release` (validate + docker build/push + npm publish + tag) | **Manual** — Run pipeline on `main` with `RELEASE=true` | self-hosted |
+**Release model is auto-bump on merge.** Unlike the legacy GitLab flow (manual `npx release-it` + `RELEASE=true`), the GitHub release workflow parses conventional commits on `main` and bumps the version automatically. **Do not pre-bump `package.json` locally anymore** — `publish.yml` does it in CI, commits the bump back to `main`, tags, and pushes.
 
-**Docker layer cache:** `docker-build` and `release` mount the host Docker socket (`/var/run/docker.sock`) instead of using `docker:dind`. This gives persistent layer cache across pipeline runs on the same runner — first cold build is ~5 min, subsequent builds are ~30-60s when only code changes.
+If conventional commits since last tag yield no `feat:` / `fix:` / `feat!:`, the workflow exits clean without publishing.
 
-**Required CI/CD variables** (set `hidden` + `masked`):
+**Required repo secrets:**
 
-- `NPM_TOKEN` — npm granular automation token, scope: `limbo-ai` read+write. Used by the release job.
-- `GITLAB_TOKEN` — GitLab PAT with `api` scope. Used by the promote job (create/update MR) and release job (push tag + create GitLab Release).
+- `PAT_TOKEN` — GitHub PAT (`repo` scope) used by the release workflow to push the version-bump commit + tag back to `main` (the default `GITHUB_TOKEN` cannot trigger follow-up workflows or bypass branch protection on its own).
+- `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` — for `deploy-install.yml`.
+- `GITLAB_REGISTRY_USER` + `GITLAB_REGISTRY_TOKEN` — optional. GitLab deploy token with `read_registry,write_registry` scope. Only used when `vars.ENABLE_GITLAB_DUAL_PUSH == 'true'`.
 
-The release job:
-- Is **read-only over git branches** — never commits or pushes to `main`, only pushes an annotated tag at the end.
-- Is **idempotent** — checks `npm view` first; skips publish if the version is already on npm.
-- Fails fast with actionable errors if `NPM_TOKEN` or `GITLAB_TOKEN` is missing.
+**Required repo variables:**
+
+- `ENABLE_GITLAB_DUAL_PUSH` — set to `'true'` during the migration window to also push images to `registry.gitlab.com/tomas209/limbo`. Unset or any other value skips the GitLab login/push.
+
+**npm OIDC trusted publishing:** `limbo-ai` must be configured on npmjs.com → Package settings → Trusted publishers → add GitHub publisher (`TomasWard1/limbo`, workflow `publish.yml`). This enables `npm publish --provenance` without `NPM_TOKEN`.
 
 **Local hooks (see CONTRIBUTING.md):** husky pre-commit runs lint-staged + gitleaks. Pre-push runs `npm test`. Both source nvm so they always use the pinned Node version from `.nvmrc`.
+
+### GitLab fallback (dormant)
+
+`.gitlab-ci.yml` preserves the previous pipeline (self-hosted runner, manual release via `RELEASE=true`, classic `NPM_TOKEN`). To reactivate:
+1. Push the branch to `gitlab` instead of `origin`.
+2. Use the local `npx release-it` bump flow (see previous version of this doc in git history).
+3. Trigger `RELEASE=true` manually from the GitLab UI.
+
+Do not run both pipelines simultaneously — double-tag / double-publish.
 
 ## Versioning & Release Workflow
 
@@ -110,62 +125,35 @@ Limbo uses **Calendar Versioning** (CalVer) in the format `YYYY.M.N`:
 - `M` — month (1-12, no leading zero)
 - `N` — release counter within the month, resets to 0 each month
 
-Version is managed locally by [`release-it`](https://github.com/release-it/release-it) with the [`@csmith/release-it-calver-plugin`](https://github.com/casmith/release-it-calver-plugin) and [`@release-it/conventional-changelog`](https://github.com/release-it/conventional-changelog) plugins. Config lives in `.release-it.json`.
+Version is auto-bumped by the GitHub `Release` workflow (`publish.yml`) on merge to `main`, based on conventional commit prefixes since the last tag. The `.release-it.json` config is kept only for the dormant GitLab fallback flow.
 
 ### Dev workflow (normal features)
 
-- Branch from `staging` with conventional commit messages: `feat:`, `fix:`, `feat!:` (breaking), etc.
-- Open MR against `staging`, merge. Auto-promote MR to `main` gets created/updated by the `promote-staging-to-main` job.
-- **Do NOT touch `package.json` or `CHANGELOG.md` in feature MRs.** They're managed by `release-it`.
+- Branch from `staging` with conventional commit messages: `feat:`, `fix:`, `feat!:` (breaking), `chore:`, `docs:`.
+- Open PR against `staging` via `gh pr create`. Merge when green.
+- The `Promote staging to main` workflow maintains an auto-updated PR from `staging` → `main`.
+- **Do NOT touch `package.json` or `CHANGELOG.md` in feature PRs.** The release workflow owns the bump.
 
-### Release workflow (when ready to publish)
+### Release workflow
 
-**1. Bump version and generate changelog locally:**
-```bash
-git checkout staging && git pull gitlab staging
-npx release-it
-```
-
-`release-it` will:
-- Ask you to confirm the next version (e.g. `2026.4.0 → 2026.5.0`)
-- Parse conventional commits since the last tag
-- Bump `package.json` to the new CalVer version
-- Update `CHANGELOG.md` with the new entries
-- Commit `chore: release v<version>` locally
-
-It does **NOT** tag, push, or publish — all those are handled by CI.
-
-**2. Push the release commit to staging:**
-```bash
-git push gitlab staging
-```
-
-This triggers the staging pipeline and updates the auto-promote MR to main.
-
-**3. Merge the promote MR** (staging → main) as usual.
-
-**4. Trigger the release pipeline manually:**
-- Go to **GitLab UI → CI/CD → Pipelines → Run pipeline**
-- Branch: `main`
-- Add variable: `RELEASE = true`
-- Click **Run pipeline**
-
-The release job will:
-- Read the version from `package.json`
-- Validate CalVer format
-- Skip if the version is already on npm (idempotency check)
-- Build and push Docker images (`:VERSION`, `:MINOR`, `:MAJOR`, `:latest`)
-- Publish to npm via `NPM_TOKEN` (classic auth — no provenance until npm supports self-hosted runners)
-- Create annotated git tag `v<version>` and push it
-- Create the GitLab Release with changelog
+1. Merge the staging→main promote PR.
+2. `publish.yml` fires on push to `main`. It:
+   - Parses first-parent commits since the last tag; derives bump type (`feat!` → major, `feat` → minor, `fix` → patch, else no-op).
+   - Exits cleanly if nothing releasable.
+   - Runs `npm version <bump> --no-git-tag-version` in CI to compute the new version.
+   - Builds multi-arch images (`linux/amd64,linux/arm64`) and pushes to `ghcr.io/tomasward1/limbo` with tags `:VERSION`, `:MINOR`, `:MAJOR`, `:latest`. When `ENABLE_GITLAB_DUAL_PUSH=true`, also pushes the same tags to `registry.gitlab.com/tomas209/limbo`.
+   - Smoke-tests the published image (pulls amd64, runs with a dummy key, checks startup).
+   - `npm publish --provenance --access public` (OIDC trusted publishing; no token needed — configure the trusted publisher on npmjs.com first).
+   - Commits `chore: release v<version> [skip ci]`, tags, and pushes via `PAT_TOKEN`.
+   - Creates a GitHub Release with changelog from commit log.
 
 ### Safety properties
 
-- **Dev-proof**: the bump is the trigger for everything. Forgetting to bump means nothing gets published (idempotency check catches it).
-- **No automatic publishing on merge**: merging staging→main does NOT publish. You have to explicitly run the pipeline with `RELEASE=true`.
-- **Rollback trivial**: if you merged the bump but don't want to publish, just don't run the release pipeline.
-- **Re-runnable**: if a release job fails mid-way, re-running it is idempotent — already-published steps (npm, docker tags) are detected and skipped.
-- **No CI writes to main**: the release job never commits or pushes to `main`, only pushes the tag. Branch protection on `main` stays strict.
+- **Idempotent no-op**: no `feat`/`fix` commits since last tag → workflow exits without side effects.
+- **`[skip ci]` on the release commit** prevents the version-bump push from re-triggering `publish.yml`.
+- **OIDC trusted publishing** replaces long-lived `NPM_TOKEN`. Provenance is attested automatically.
+- **Branch protection on `main`**: the release commit is pushed via `PAT_TOKEN` (GitHub PAT with `repo` scope); `GITHUB_TOKEN` alone would be blocked.
+- **Rollback**: if a release goes out wrong, `gh release delete` + `npm unpublish` (within 72h) + `git push --delete origin v<version>`. The next conventional-commit PR to main will re-release.
 
 ## Dev Secrets
 
