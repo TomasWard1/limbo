@@ -14,22 +14,49 @@
 # Tear down: docker compose -f docker-compose.local-whatsapp.yml down
 
 services:
+  # Postgres side-car for LiteLLM state (virtual keys, budgets, usage logs).
+  # LiteLLM hardcodes Prisma with provider=postgresql so this cannot be swapped
+  # for sqlite. In production pool mode (Fase 3) this becomes a managed
+  # Postgres; locally we use the official alpine image with a named volume.
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    env_file:
+      - /tmp/limbo-local-whatsapp/config/postgres.env
+    volumes:
+      - limbo-local-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "127.0.0.1:4000:4000"
     volumes:
       - /tmp/limbo-local-whatsapp/litellm-config.yaml:/app/config.yaml:ro
-      - limbo-local-litellm-data:/app/db
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     env_file:
       - /tmp/limbo-local-whatsapp/config/litellm.env
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4000/health/readiness"]
+      # LiteLLM image is wolfi-based without wget/curl; use python stdlib.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:4000/health/readiness', timeout=3).status==200 else 1)"]
       interval: 10s
       timeout: 5s
-      start_period: 15s
+      start_period: 20s
       retries: 5
     logging:
       driver: json-file
@@ -55,11 +82,9 @@ services:
       - /tmp:size=100M,noexec,nosuid,nodev
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
-      - "127.0.0.1:18900:18900"
-      - "127.0.0.1:15789:15789"
-      - "127.0.0.1:18902:18902"
-      # Public server — where ngrok forwards webhooks to.
-      # Bound to 0.0.0.0 so the docker-proxy can route ngrok-terminated traffic.
+      # Only the public server is published — that's what ngrok forwards to.
+      # Wizard/gateway/control-plane ports stay on the container network so
+      # they don't collide with a host-side dev instance.
       - "0.0.0.0:80:80"
     depends_on:
       litellm:
@@ -91,5 +116,5 @@ services:
 volumes:
   limbo-local-data:
     name: limbo-local-whatsapp_limbo-data
-  limbo-local-litellm-data:
-    name: limbo-local-whatsapp_litellm-data
+  limbo-local-postgres-data:
+    name: limbo-local-whatsapp_postgres-data

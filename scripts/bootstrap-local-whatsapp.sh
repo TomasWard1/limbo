@@ -85,11 +85,41 @@ if [ ! -f "$GATEWAY_TOKEN_FILE" ]; then
 fi
 GATEWAY_TOKEN="$(tr -d '\n' < "$GATEWAY_TOKEN_FILE")"
 
-# ── 4. litellm files ──────────────────────────────────────────────────
+POSTGRES_PASSWORD_FILE="$CONFIG_DIR/.postgres_password"
+if [ ! -f "$POSTGRES_PASSWORD_FILE" ]; then
+  openssl rand -hex 24 > "$POSTGRES_PASSWORD_FILE"
+  chmod 600 "$POSTGRES_PASSWORD_FILE"
+  info "generated POSTGRES_PASSWORD"
+fi
+POSTGRES_PASSWORD="$(tr -d '\n' < "$POSTGRES_PASSWORD_FILE")"
+
+LITELLM_UI_PASSWORD_FILE="$CONFIG_DIR/.litellm_ui_password"
+if [ ! -f "$LITELLM_UI_PASSWORD_FILE" ]; then
+  openssl rand -hex 16 > "$LITELLM_UI_PASSWORD_FILE"
+  chmod 600 "$LITELLM_UI_PASSWORD_FILE"
+  info "generated LITELLM_UI_PASSWORD (login at http://127.0.0.1:4000/ui as admin)"
+fi
+LITELLM_UI_PASSWORD="$(tr -d '\n' < "$LITELLM_UI_PASSWORD_FILE")"
+
+# ── 4. litellm + postgres files ───────────────────────────────────────
 cp "$REPO_ROOT/litellm-config.yaml.template" "$STATE_DIR/litellm-config.yaml"
+
+# Postgres env (read by the postgres service itself).
+cat > "$CONFIG_DIR/postgres.env" <<EOF
+POSTGRES_USER=litellm
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+POSTGRES_DB=litellm
+EOF
+chmod 600 "$CONFIG_DIR/postgres.env"
+
+# LiteLLM env (read by the litellm service).
 cat > "$CONFIG_DIR/litellm.env" <<EOF
 ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
 LITELLM_MASTER_KEY=$LITELLM_MASTER_KEY
+DATABASE_URL=postgresql://litellm:$POSTGRES_PASSWORD@postgres:5432/litellm
+STORE_MODEL_IN_DB=True
+UI_USERNAME=admin
+UI_PASSWORD=$LITELLM_UI_PASSWORD
 EOF
 chmod 600 "$CONFIG_DIR/litellm.env"
 
@@ -101,11 +131,11 @@ if ! docker image inspect "$LIMBO_IMAGE" >/dev/null 2>&1; then
   docker build -t "$LIMBO_IMAGE" .
 fi
 
-info "starting litellm container..."
-docker compose -f docker-compose.local-whatsapp.yml up -d litellm
+info "starting postgres + litellm containers..."
+docker compose -f docker-compose.local-whatsapp.yml up -d postgres litellm
 
-info "waiting for litellm to be ready..."
-deadline=$(( $(date +%s) + 60 ))
+info "waiting for litellm to be ready (postgres migration must complete)..."
+deadline=$(( $(date +%s) + 180 ))
 while :; do
   cid="$(docker compose -f docker-compose.local-whatsapp.yml ps -q litellm 2>/dev/null || true)"
   if [ -n "$cid" ]; then
@@ -120,19 +150,21 @@ while :; do
 done
 info "litellm healthy"
 
-# ── 6. virtual key ────────────────────────────────────────────────────
+# ── 6. virtual key via /key/generate ─────────────────────────────────
+# Postgres-backed LiteLLM supports virtual keys. We mint one for Limbo with
+# a $50 budget; usage shows up in the LiteLLM admin endpoints per key.
 VIRTUAL_KEY_FILE="$CONFIG_DIR/.litellm_virtual_key"
 if [ ! -f "$VIRTUAL_KEY_FILE" ]; then
-  info "generating virtual key via /key/generate..."
+  info "minting virtual key via /key/generate..."
   resp="$(curl -fsS -X POST http://127.0.0.1:4000/key/generate \
     -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
     -H 'Content-Type: application/json' \
-    -d '{"models":["limbo-default"],"max_budget":50.0}')"
+    -d '{"models":["claude-sonnet-4-6"],"max_budget":50.0,"key_alias":"limbo-local-whatsapp"}')"
   virtual="$(echo "$resp" | jq -r '.key')"
   [ -n "$virtual" ] && [ "$virtual" != "null" ] || fail "LiteLLM /key/generate failed: $resp"
   printf '%s' "$virtual" > "$VIRTUAL_KEY_FILE"
   chmod 600 "$VIRTUAL_KEY_FILE"
-  info "virtual key saved"
+  info "virtual key saved (\$50 budget, alias limbo-local-whatsapp)"
 fi
 VIRTUAL_KEY="$(tr -d '\n' < "$VIRTUAL_KEY_FILE")"
 
@@ -149,13 +181,14 @@ AUTH_MODE=api-key
 GATEWAY_TOKEN=$GATEWAY_TOKEN
 
 # ── LLM via LiteLLM side-car ───────────────────────────────────────
-# LiteLLM exposes OpenAI-compatible endpoints; the real Anthropic
-# key is container-local to litellm and never touches this file.
-MODEL_PROVIDER=openai
-MODEL_NAME=limbo-default
+# OpenClaw talks native Anthropic protocol; LiteLLM transparently proxies
+# /v1/messages to the real Anthropic backend. The real provider key is
+# container-local to litellm and never touches this file.
+MODEL_PROVIDER=anthropic
+MODEL_NAME=claude-sonnet-4-6
 LLM_API_KEY=$VIRTUAL_KEY
 LITELLM_ENABLED=true
-LITELLM_URL=http://litellm:4000/v1
+LITELLM_URL=http://litellm:4000
 
 # ── WhatsApp (Kapso) channel ───────────────────────────────────────
 CHANNEL_ADAPTER_WHATSAPP_KAPSO_ENABLED=true
@@ -183,3 +216,7 @@ info "  5) send a WhatsApp message from your phone to the Kapso number"
 info ""
 info "state dir:   $STATE_DIR"
 info "tail logs:   docker compose -f docker-compose.local-whatsapp.yml logs -f"
+info ""
+info "LiteLLM admin UI: http://127.0.0.1:4000/ui"
+info "  username: admin"
+info "  password: \$(cat $LITELLM_UI_PASSWORD_FILE)"
