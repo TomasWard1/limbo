@@ -36,7 +36,9 @@
   },
 
   "tools": {
-    "profile": "full",
+    "profile": "minimal",
+    "allow": ["session_status"],
+    "deny": ["gateway", "cron"],
     "exec": {
       "timeoutSec": 1800
     }

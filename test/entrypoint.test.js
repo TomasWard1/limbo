@@ -874,8 +874,11 @@ describe('Full config pipeline integration', () => {
     // Cron
     assert.equal(final.cron.enabled, true);
 
-    // Tools
-    assert.equal(final.tools.profile, 'full');
+    // Tools — minimal profile + explicit session_status allow; gateway + native cron denied
+    assert.equal(final.tools.profile, 'minimal');
+    assert.ok(final.tools.allow.includes('session_status'));
+    assert.ok(final.tools.deny.includes('gateway'));
+    assert.ok(final.tools.deny.includes('cron'));
   });
 });
 
