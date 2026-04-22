@@ -182,6 +182,52 @@ test('duplicate messageIds within the dedup window are dropped', async () => {
   await pipeline.stop();
 });
 
+test('budget_exceeded error triggers the upgrade-plan message instead of a silent log', async () => {
+  const sent = [];
+  const logs = [];
+  const chat = async () => {
+    const err = new Error('LiteLLM virtual key budget exhausted');
+    err.code = 'budget_exceeded';
+    throw err;
+  };
+  const adapter = {
+    id: 'test-adapter',
+    receive: async () => [],
+    send: async (msg) => { sent.push(msg); return { messageId: 'ok' }; },
+    capabilities: () => ({ supportsVoice: false, supportsProactive: true, proactiveCostUSD: 0, supportsMediaOut: false }),
+  };
+  const logger = {
+    info: (...a) => logs.push(['info', ...a]),
+    warn: (...a) => logs.push(['warn', ...a]),
+    error: (...a) => logs.push(['error', ...a]),
+  };
+  const pipeline = createChannelPipeline({
+    adapter,
+    openclaw: { sendChat: chat },
+    logger,
+  });
+  pipeline.enqueue(event({ messageId: 'budget-test', text: 'hola' }));
+
+  // Wait for the worker to process.
+  for (let i = 0; i < 40 && sent.length === 0; i++) {
+    await new Promise((r) => setTimeout(r, 10));
+  }
+
+  assert.strictEqual(sent.length, 1, 'adapter.send should have been called exactly once');
+  assert.strictEqual(sent[0].to, '+5491123456789');
+  assert.match(sent[0].text, /please upgrade plan/i);
+  assert.ok(
+    logs.some(([level, msg]) => level === 'warn' && /budget exhausted/i.test(String(msg))),
+    'expected a warn log about budget exhaustion',
+  );
+  assert.ok(
+    !logs.some(([level]) => level === 'error'),
+    'error log should NOT fire — we handled the condition gracefully',
+  );
+
+  await pipeline.stop();
+});
+
 test('stop() drains in-flight work and rejects further enqueues', async () => {
   const h = makeHarness({
     chat: async ({ text }) => {
