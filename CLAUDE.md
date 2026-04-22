@@ -125,35 +125,53 @@ Limbo uses **Calendar Versioning** (CalVer) in the format `YYYY.M.N`:
 - `M` — month (1-12, no leading zero)
 - `N` — release counter within the month, resets to 0 each month
 
-Version is auto-bumped by the GitHub `Release` workflow (`publish.yml`) on merge to `main`, based on conventional commit prefixes since the last tag. The `.release-it.json` config is kept only for the dormant GitLab fallback flow.
+Version is managed locally by [`release-it`](https://github.com/release-it/release-it) with the [`@csmith/release-it-calver-plugin`](https://github.com/casmith/release-it-calver-plugin) and [`@release-it/conventional-changelog`](https://github.com/release-it/conventional-changelog) plugins. Config lives in `.release-it.json`. The same tool is used for both GitHub (primary) and GitLab (dormant fallback).
 
 ### Dev workflow (normal features)
 
 - Branch from `staging` with conventional commit messages: `feat:`, `fix:`, `feat!:` (breaking), `chore:`, `docs:`.
 - Open PR against `staging` via `gh pr create`. Merge when green.
 - The `Promote staging to main` workflow maintains an auto-updated PR from `staging` → `main`.
-- **Do NOT touch `package.json` or `CHANGELOG.md` in feature PRs.** The release workflow owns the bump.
+- **Do NOT touch `package.json` or `CHANGELOG.md` in feature PRs.** They are managed by `release-it` in the release step below.
 
-### Release workflow
+### Release workflow (when ready to publish)
 
-1. Merge the staging→main promote PR.
-2. `publish.yml` fires on push to `main`. It:
-   - Parses first-parent commits since the last tag; derives bump type (`feat!` → major, `feat` → minor, `fix` → patch, else no-op).
-   - Exits cleanly if nothing releasable.
-   - Runs `npm version <bump> --no-git-tag-version` in CI to compute the new version.
-   - Builds multi-arch images (`linux/amd64,linux/arm64`) and pushes to `ghcr.io/tomasward1/limbo` with tags `:VERSION`, `:MINOR`, `:MAJOR`, `:latest`. When `ENABLE_GITLAB_DUAL_PUSH=true`, also pushes the same tags to `registry.gitlab.com/tomas209/limbo`.
-   - Smoke-tests the published image (pulls amd64, runs with a dummy key, checks startup).
-   - `npm publish --provenance --access public` (OIDC trusted publishing; no token needed — configure the trusted publisher on npmjs.com first).
-   - Commits `chore: release v<version> [skip ci]`, tags, and pushes via `PAT_TOKEN`.
-   - Creates a GitHub Release with changelog from commit log.
+**1. Bump version and generate changelog locally on `staging`:**
+```bash
+git checkout staging && git pull origin staging
+npx release-it
+```
+
+`release-it` asks you to confirm the next CalVer, parses conventional commits since the last tag, bumps `package.json`, updates `CHANGELOG.md`, and commits `chore: release v<version>` locally. It does **NOT** tag, push, or publish — all of that is CI.
+
+**2. Push to staging:**
+```bash
+git push origin staging
+```
+
+This updates the auto-promote PR (staging → main).
+
+**3. Merge the auto-promote PR** as usual.
+
+**4. `publish.yml` fires on push to `main`.** It:
+- Reads the version from `package.json` (single source of truth — the one release-it just bumped).
+- Validates CalVer format (`YYYY.M.N`, no leading zero on month).
+- Idempotency check: if `limbo-ai@<version>` already exists on npm, skips the build/publish steps and only reconciles tag + GitHub Release.
+- Builds multi-arch images (`linux/amd64,linux/arm64`) and pushes to `ghcr.io/tomasward1/limbo` with tags `:VERSION`, `:MINOR`, `:MAJOR`, `:latest`. When `ENABLE_GITLAB_DUAL_PUSH=true`, also pushes the same tags to `registry.gitlab.com/tomas209/limbo`.
+- Smoke-tests the published image.
+- `npm publish --provenance --access public` (OIDC trusted publishing; configure the trusted publisher on npmjs.com).
+- Pushes the annotated tag `v<version>` via `PAT_TOKEN`.
+- Creates (or updates) the GitHub Release with changelog entries.
+
+You can also trigger it manually via `workflow_dispatch` if a push-triggered run fails partway through — the idempotency check makes re-runs safe.
 
 ### Safety properties
 
-- **Idempotent no-op**: no `feat`/`fix` commits since last tag → workflow exits without side effects.
-- **`[skip ci]` on the release commit** prevents the version-bump push from re-triggering `publish.yml`.
+- **Dev-proof**: the local `release-it` bump is the trigger for everything. Forgetting to bump → no-op (the version is already on npm, everything skips).
+- **No CI writes to `main` branch**: the release job never commits or pushes to `main`, only pushes the annotated tag at the end. Branch protection on `main` stays strict.
+- **Idempotent re-runs**: if `publish.yml` fails mid-way, re-running it detects the already-published version and skips completed steps.
 - **OIDC trusted publishing** replaces long-lived `NPM_TOKEN`. Provenance is attested automatically.
-- **Branch protection on `main`**: the release commit is pushed via `PAT_TOKEN` (GitHub PAT with `repo` scope); `GITHUB_TOKEN` alone would be blocked.
-- **Rollback**: if a release goes out wrong, `gh release delete` + `npm unpublish` (within 72h) + `git push --delete origin v<version>`. The next conventional-commit PR to main will re-release.
+- **Rollback**: if a release goes out wrong, `npm unpublish` (within 72h) + `git push --delete origin v<version>` + `gh release delete`. Then bump locally and re-ship.
 
 ## Dev Secrets
 

@@ -6,15 +6,15 @@
     "@release-it/conventional-changelog": {
       "preset": {
         "name": "conventionalcommits",
-        "commitUrlFormat": "{{host}}/{{owner}}/{{repository}}/-/commit/{{hash}}",
-        "compareUrlFormat": "{{host}}/{{owner}}/{{repository}}/-/compare/{{previousTag}}...{{currentTag}}",
-        "issueUrlFormat": "{{host}}/{{owner}}/{{repository}}/-/issues/{{id}}",
+        "commitUrlFormat": "{{host}}/{{owner}}/{{repository}}/commit/{{hash}}",
+        "compareUrlFormat": "{{host}}/{{owner}}/{{repository}}/compare/{{previousTag}}...{{currentTag}}",
+        "issueUrlFormat": "{{host}}/{{owner}}/{{repository}}/issues/{{id}}",
         "userUrlFormat": "{{host}}/{{user}}"
       },
       "infile": "CHANGELOG.md",
       "context": {
-        "host": "https://gitlab.com",
-        "owner": "tomas209",
+        "host": "https://github.com",
+        "owner": "TomasWard1",
         "repository": "limbo"
       }
     }
