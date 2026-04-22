@@ -113,7 +113,7 @@ test('no wizard target: serves static HTML page with 200', async () => {
     assert.equal(res.status, 200);
     assert.ok(res.headers['content-type'].startsWith('text/html'), 'content-type should be text/html');
     assert.ok(res.body.includes('<h1>Limbo</h1>'), 'body should contain Limbo heading');
-    assert.ok(res.body.includes('Telegram'), 'body should mention Telegram');
+    assert.ok(res.body.includes('WhatsApp'), 'body should mention WhatsApp');
   } finally {
     await server.stop();
   }
