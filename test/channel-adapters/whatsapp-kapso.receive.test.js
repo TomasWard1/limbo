@@ -143,10 +143,47 @@ test('receive() returns all events when data[] has multiple messages', async () 
   assert.strictEqual(events[1].messageId, 'wamid.M2');
 });
 
-test('receive() throws on payload with no data array', async () => {
+test('receive() parses Kapso v2 single-event payload (message at root)', async () => {
+  // The real Kapso v2 webhook shape: message + conversation + phone_number_id
+  // live at the top level, no { type, data[] } wrapper. Detected by the
+  // header X-Webhook-Payload-Version: v2 that Kapso includes on every delivery.
+  const payload = {
+    message: {
+      from: '541160156399',
+      id: 'wamid.HBgM.v2',
+      timestamp: '1776888546',
+      type: 'text',
+      text: { body: 'hello' },
+      kapso: { direction: 'inbound', status: 'delivered', content: 'hello' },
+    },
+    conversation: {
+      id: 'c-86f19b09',
+      contact_name: 'Tomas Ward',
+      kapso: { last_message_text: 'hello' },
+    },
+    is_new_conversation: true,
+    phone_number_id: '597907523413541',
+  };
+
+  const events = await makeAdapter().receive(payload, {
+    'x-webhook-payload-version': 'v2',
+    'x-webhook-event': 'whatsapp.message.received',
+  });
+  assert.strictEqual(events.length, 1);
+  const e = events[0];
+  assert.strictEqual(e.channelId, 'whatsapp-kapso');
+  // Kapso v2 omits the leading '+' on the "from" field — we normalize to E.164.
+  assert.strictEqual(e.from, '+541160156399');
+  assert.strictEqual(e.fromName, 'Tomas Ward');
+  assert.strictEqual(e.text, 'hello');
+  assert.strictEqual(e.type, 'text');
+  assert.strictEqual(e.messageId, 'wamid.HBgM.v2');
+});
+
+test('receive() throws on payload with no data array AND no message at root', async () => {
   await assert.rejects(
     () => makeAdapter().receive({ type: 'hello' }, {}),
-    /data/i,
+    /data|message/i,
   );
 });
 
