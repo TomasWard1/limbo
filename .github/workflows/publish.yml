@@ -1,8 +1,15 @@
 name: Release
 
+# Triggered on push to main (after a release-it bump commit lands) or
+# manually via workflow_dispatch. Reads the version from package.json
+# (single source of truth); skips cleanly if that version is already
+# on npm (idempotent). No auto-bump, no commits back to main — the
+# bump is done locally by the dev with `npx release-it`.
+
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: release-main
@@ -10,7 +17,6 @@ concurrency:
 
 jobs:
   release:
-    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,54 +36,35 @@ jobs:
       - name: Update npm for trusted publishing
         run: npm install -g npm@11.6.2
 
-      - name: Determine version bump
-        id: bump
-        run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$LAST_TAG" ]; then
-            RANGE="HEAD"
-          else
-            RANGE="${LAST_TAG}..HEAD"
-          fi
-
-          # Use --first-parent to only see merge commits on main,
-          # not individual commits from feature branches via staging.
-          # Parse full commit message (subject + body) since GitHub merge
-          # commits have the PR title in the body.
-          COMMITS=$(git log "$RANGE" --first-parent --pretty=format:"%B" 2>/dev/null || echo "")
-          echo "--- First-parent commits since last tag ---"
-          echo "$COMMITS"
-
-          if echo "$COMMITS" | grep -qE "^feat(\(.+\))?!:|BREAKING CHANGE"; then
-            echo "type=major" >> "$GITHUB_OUTPUT"
-          elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
-            echo "type=minor" >> "$GITHUB_OUTPUT"
-          elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:"; then
-            echo "type=patch" >> "$GITHUB_OUTPUT"
-          else
-            echo "type=none" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Stop if no releasable changes
-        if: steps.bump.outputs.type == 'none'
-        run: echo "No releasable changes found on main."
-
-      - name: Set version from package.json + bump
-        if: steps.bump.outputs.type != 'none'
+      - name: Read version from package.json
         id: version
         run: |
-          npm version "${{ steps.bump.outputs.type }}" --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
+          echo "Target version: $VERSION"
+
+          # Validate CalVer: YYYY.M.N (no leading zero on month)
+          if ! echo "$VERSION" | grep -qE '^[0-9]{4}\.[1-9][0-9]*\.[0-9]+$'; then
+            echo "ERROR: version '$VERSION' does not match CalVer YYYY.M.N"
+            exit 1
+          fi
+
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f1-2)
           echo "new_version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "major_version=$MAJOR" >> "$GITHUB_OUTPUT"
           echo "minor_version=$MINOR" >> "$GITHUB_OUTPUT"
-          echo "new_tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Publishing version: $VERSION (bump: ${{ steps.bump.outputs.type }})"
+
+      - name: Idempotency check (skip if already on npm)
+        id: npm_check
+        run: |
+          if npm view "limbo-ai@${{ steps.version.outputs.new_version }}" version >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "Version ${{ steps.version.outputs.new_version }} already on npm — will reconcile tag/release only"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Normalize image name
-        if: steps.bump.outputs.type != 'none'
         id: image
         env:
           REPOSITORY: ${{ github.repository }}
@@ -85,15 +72,15 @@ jobs:
           echo "name=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU (multi-arch)
-        if: steps.bump.outputs.type != 'none'
+        if: steps.npm_check.outputs.already_published == 'false'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: steps.bump.outputs.type != 'none'
+        if: steps.npm_check.outputs.already_published == 'false'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: steps.bump.outputs.type != 'none'
+        if: steps.npm_check.outputs.already_published == 'false'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -106,7 +93,7 @@ jobs:
       # or not 'true', this step is skipped and only GHCR gets pushed.
       - name: Log in to GitLab Container Registry
         id: gitlab_login
-        if: steps.bump.outputs.type != 'none' && vars.ENABLE_GITLAB_DUAL_PUSH == 'true'
+        if: steps.npm_check.outputs.already_published == 'false' && vars.ENABLE_GITLAB_DUAL_PUSH == 'true'
         uses: docker/login-action@v3
         with:
           registry: registry.gitlab.com
@@ -114,7 +101,7 @@ jobs:
           password: ${{ secrets.GITLAB_REGISTRY_TOKEN }}
 
       - name: Build and push images (GHCR + optional GitLab)
-        if: steps.bump.outputs.type != 'none'
+        if: steps.npm_check.outputs.already_published == 'false'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -133,56 +120,52 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Smoke test published image
-        if: steps.bump.outputs.type != 'none'
+        if: steps.npm_check.outputs.already_published == 'false'
         env:
           IMAGE_NAME: ${{ steps.image.outputs.name }}
           IMAGE_VERSION: ${{ steps.version.outputs.new_version }}
         run: |
           IMAGE="${IMAGE_NAME}:${IMAGE_VERSION}"
-          echo "Pulling $IMAGE for smoke test..."
           docker pull --platform linux/amd64 "$IMAGE"
-
-          CID=$(docker run -d \
-            -p 18789:18789 \
-            -e ANTHROPIC_API_KEY=smoke-test-key \
-            "$IMAGE")
-
+          CID=$(docker run -d -p 18789:18789 -e ANTHROPIC_API_KEY=smoke-test-key "$IMAGE")
           sleep 8
           docker logs "$CID" || true
           docker stop "$CID" || true
           docker rm "$CID" || true
-          echo "Smoke test passed (container started successfully)"
 
       - name: Publish to npm
-        if: steps.bump.outputs.type != 'none'
+        if: steps.npm_check.outputs.already_published == 'false'
         run: npm publish --provenance --access public
 
-      - name: Commit version bump and tag
-        if: steps.version.outputs.new_version != ''
+      # Tag + Release always run (also when reconciling). Both are
+      # idempotent so re-runs on the same version are safe.
+      - name: Push annotated tag
         env:
           VERSION: ${{ steps.version.outputs.new_version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
-          git commit -m "chore: release v${VERSION} [skip ci]"
-          git tag "v${VERSION}"
-          git push origin main --follow-tags
+          TAG="v${VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists on origin — skipping tag push"
+          else
+            git tag -a "${TAG}" -m "Release ${TAG}"
+            git push origin "${TAG}"
+          fi
+          git fetch --tags origin
 
-      - name: Generate changelog
-        if: steps.version.outputs.new_version != ''
+      - name: Generate changelog body
         env:
           TAG: v${{ steps.version.outputs.new_version }}
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
-            git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges > /tmp/changelog.md
+            git log "${PREV_TAG}..${TAG}" --pretty=format:"- %s (%h)" --no-merges > /tmp/changelog.md
           else
-            git log HEAD --pretty=format:"- %s (%h)" --no-merges > /tmp/changelog.md
+            git log "${TAG}" --pretty=format:"- %s (%h)" --no-merges > /tmp/changelog.md
           fi
 
-      - name: Create GitHub Release
-        if: steps.version.outputs.new_version != ''
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.new_version }}
