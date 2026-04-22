@@ -14,11 +14,22 @@
 # under model_list with per-tenant budgets.
 
 model_list:
-  - model_name: limbo-default
+  # OpenClaw's "litellm" provider talks openai-completions to LiteLLM and
+  # sends the fully-qualified model id (e.g. "anthropic/claude-sonnet-4-6").
+  # LiteLLM's router matches model_name exactly, so publish the same id.
+  # Second entry (bare name) is a courtesy alias for direct curl testing.
+  - model_name: anthropic/claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-sonnet-4-6
     litellm_params:
       model: anthropic/claude-sonnet-4-6
       api_key: os.environ/ANTHROPIC_API_KEY
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
-  database_url: sqlite:///app/litellm.db
+  database_url: os.environ/DATABASE_URL
+  # Enables /key/generate + per-key budgets + usage tracking. Required for
+  # multi-tenant parity. Provider must be Postgres — LiteLLM hardcodes that
+  # in its Prisma schema, so sqlite is not an option.

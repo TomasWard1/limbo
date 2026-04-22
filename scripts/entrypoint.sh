@@ -205,6 +205,32 @@ else
   esac
 fi
 
+# ── LiteLLM gateway override ──────────────────────────────────────────────────
+# When LITELLM_ENABLED=true + LITELLM_URL is set, export the SDK-level base-URL
+# env vars so OpenClaw's own HTTP clients (which read process.env at load time)
+# target LiteLLM instead of the upstream provider. regen-openclaw-config.sh
+# also mirrors these into openclaw.json's cfg.env for agent subprocesses.
+LITELLM_ENABLED="${LITELLM_ENABLED:-false}"
+LITELLM_URL="${LITELLM_URL:-}"
+if [ "$LITELLM_ENABLED" = "true" ] && [ -n "$LITELLM_URL" ]; then
+  # Strip trailing slashes once so downstream concatenation stays clean.
+  LITELLM_URL_CLEAN="${LITELLM_URL%/}"
+  case "$MODEL_PROVIDER" in
+    anthropic)
+      # Anthropic SDK convention: base URL excludes /v1; SDK appends /v1/messages.
+      export ANTHROPIC_BASE_URL="$LITELLM_URL_CLEAN"
+      ;;
+    openai|openai-codex)
+      # OpenAI SDK convention: base URL includes /v1; SDK appends /chat/completions.
+      export OPENAI_API_BASE="$LITELLM_URL_CLEAN/v1"
+      export OPENAI_BASE_URL="$LITELLM_URL_CLEAN/v1"
+      ;;
+    openrouter)
+      export OPENROUTER_API_BASE="$LITELLM_URL_CLEAN/v1"
+      ;;
+  esac
+fi
+
 # ── Bootstrap data dirs ───────────────────────────────────────────────────────
 OC_CRON="$OPENCLAW_STATE_DIR/cron"
 mkdir -p /data/vault/notes /data/vault/maps /data/vault/assets /data/config "$OPENCLAW_STATE_DIR" "$OC_CRON"
