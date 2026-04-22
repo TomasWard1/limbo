@@ -1,0 +1,24 @@
+# LiteLLM proxy configuration template.
+#
+# The CLI materializes this file at install/configure time into
+# ~/.limbo/litellm-config.yaml, substituting environment-specific
+# values. The live file is bind-mounted into the litellm container.
+#
+# Virtual keys are generated via LiteLLM's /key/generate endpoint and
+# stored in the embedded sqlite (database_url below). The real provider
+# API keys (ANTHROPIC_API_KEY etc.) live ONLY in the litellm container's
+# environment — never in Limbo's openclaw.json.
+#
+# For the single-tenant MVP we ship one model_name 'limbo-default' that
+# routes to Anthropic Sonnet. Future multi-tenant setups add more rows
+# under model_list with per-tenant budgets.
+
+model_list:
+  - model_name: limbo-default
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: sqlite:///app/litellm.db

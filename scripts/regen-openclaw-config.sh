@@ -53,6 +53,8 @@ GOOGLE_CALENDAR_ENABLED="${GOOGLE_CALENDAR_ENABLED:-false}"
 GATEWAY_TOKEN="${GATEWAY_TOKEN:-}"
 AUTH_MODE="${AUTH_MODE:-api-key}"
 LLM_API_KEY="${LLM_API_KEY:-}"
+LITELLM_ENABLED="${LITELLM_ENABLED:-false}"
+LITELLM_URL="${LITELLM_URL:-}"
 
 # Subscription OAuth mode uses openai-codex, not openai
 if [ "$AUTH_MODE" = "subscription" ] && [ "$MODEL_PROVIDER" = "openai" ]; then
@@ -94,6 +96,26 @@ if [ "$AUTH_MODE" = "api-key" ] && [ -n "$LLM_API_KEY" ]; then
     }[provider] || 'ANTHROPIC_API_KEY';
     cfg.env = cfg.env || {};
     cfg.env[envVarName] = key;
+    fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+  " "$TMP_CONFIG"
+fi
+
+# LiteLLM gateway override — reroute OpenClaw's LLM calls through a local
+# LiteLLM side-car (listening on $LITELLM_URL, typically http://litellm:4000/v1
+# via docker-compose networking). Sets cfg.env.OPENAI_API_BASE so OpenClaw's
+# openai-compatible client targets LiteLLM; sets cfg.env.OPENAI_API_KEY to the
+# virtual key issued by LiteLLM (distinct from the real provider key, which
+# lives only in the LiteLLM process env).
+#
+# Runs after the provider-key block so it has precedence when both fire.
+if [ "$LITELLM_ENABLED" = "true" ] && [ -n "$LITELLM_URL" ]; then
+  export LITELLM_URL LLM_API_KEY
+  node -e "
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    cfg.env = cfg.env || {};
+    cfg.env.OPENAI_API_BASE = process.env.LITELLM_URL;
+    if (process.env.LLM_API_KEY) cfg.env.OPENAI_API_KEY = process.env.LLM_API_KEY;
     fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
   " "$TMP_CONFIG"
 fi

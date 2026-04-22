@@ -171,6 +171,15 @@ describe('Config injection (node -e scripts)', () => {
   // Voice: OpenClaw auto-detects GROQ_API_KEY from env — no config injection needed.
   // We test that the entrypoint exports the env var, not that it injects config.
 
+  const LITELLM_SCRIPT = `
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    cfg.env = cfg.env || {};
+    cfg.env.OPENAI_API_BASE = process.env.LITELLM_URL;
+    if (process.env.LLM_API_KEY) cfg.env.OPENAI_API_KEY = process.env.LLM_API_KEY;
+    fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+  `;
+
   const WEB_SEARCH_SCRIPT = `
     const fs = require('fs');
     const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
@@ -231,6 +240,27 @@ describe('Config injection (node -e scripts)', () => {
     const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
     assert.ok(!cfg.transcription, 'Config should NOT have top-level transcription key');
     assert.ok(!cfg.audio, 'Voice is handled via GROQ_API_KEY env var, not config');
+  });
+
+  test('litellm injection writes OPENAI_API_BASE + OPENAI_API_KEY to cfg.env', () => {
+    const cfgPath = writeBaseConfig();
+    runNodeInject(LITELLM_SCRIPT, cfgPath, {
+      LITELLM_URL: 'http://litellm:4000/v1',
+      LLM_API_KEY: 'sk-virtual-123',
+    });
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.equal(cfg.env.OPENAI_API_BASE, 'http://litellm:4000/v1');
+    assert.equal(cfg.env.OPENAI_API_KEY, 'sk-virtual-123');
+  });
+
+  test('litellm injection without LLM_API_KEY still sets the URL (key may be pre-set)', () => {
+    const cfgPath = writeBaseConfig({ env: { OPENAI_API_KEY: 'pre-existing' } });
+    runNodeInject(LITELLM_SCRIPT, cfgPath, {
+      LITELLM_URL: 'http://litellm:4000/v1',
+    });
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.equal(cfg.env.OPENAI_API_BASE, 'http://litellm:4000/v1');
+    assert.equal(cfg.env.OPENAI_API_KEY, 'pre-existing', 'existing key preserved when LLM_API_KEY not provided');
   });
 
   test('web search injection adds tools.web.search config', () => {
