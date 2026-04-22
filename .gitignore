@@ -18,3 +18,4 @@ data/
 !evals/.env.eval
 evals/config.eval.env
 !evals/config.eval.env.example
+.env.local
