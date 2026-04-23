@@ -113,8 +113,12 @@ EOF
 chmod 600 "$CONFIG_DIR/postgres.env"
 
 # LiteLLM env (read by the litellm service).
+# NVIDIA_API_KEY is optional — empty is fine, the GLM fallback row will
+# simply error out if invoked. We emit it unconditionally so LiteLLM
+# doesn't bail at config load with a missing-env-var complaint.
 cat > "$CONFIG_DIR/litellm.env" <<EOF
 ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
 LITELLM_MASTER_KEY=$LITELLM_MASTER_KEY
 DATABASE_URL=postgresql://litellm:$POSTGRES_PASSWORD@postgres:5432/litellm
 STORE_MODEL_IN_DB=True
@@ -122,6 +126,10 @@ UI_USERNAME=admin
 UI_PASSWORD=$LITELLM_UI_PASSWORD
 EOF
 chmod 600 "$CONFIG_DIR/litellm.env"
+
+if [ -z "${NVIDIA_API_KEY:-}" ]; then
+  warn "NVIDIA_API_KEY unset — GLM-5.1 fallback row will 401 if invoked (Sonnet path still works)"
+fi
 
 # ── 5. ensure image + bring up litellm ────────────────────────────────
 cd "$REPO_ROOT"

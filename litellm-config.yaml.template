@@ -40,6 +40,38 @@ model_list:
         - location: message
           role: system
 
+  # Dev fallback — GLM-5.1 via NVIDIA NIM free tier. Used as an auto-failover
+  # for Sonnet (see router_settings.fallbacks) and as a swap target for
+  # A/B testing model quality during dev. 40 req/min cap, credit-limited,
+  # latency is erratic — NOT suitable for prod traffic. No cache_control:
+  # NVIDIA's openai-completions endpoint rejects Anthropic-style caching.
+  # The two rows mirror the Sonnet alias pattern: the qualified id matches
+  # what OpenClaw sends (provider=nvidia_nim from .env), the bare id is a
+  # courtesy for direct curl testing.
+  - model_name: nvidia_nim/z-ai/glm-5.1
+    litellm_params:
+      model: nvidia_nim/z-ai/glm-5.1
+      api_key: os.environ/NVIDIA_API_KEY
+      api_base: https://integrate.api.nvidia.com/v1
+      rpm: 40
+  - model_name: z-ai/glm-5.1
+    litellm_params:
+      model: nvidia_nim/z-ai/glm-5.1
+      api_key: os.environ/NVIDIA_API_KEY
+      api_base: https://integrate.api.nvidia.com/v1
+      rpm: 40
+
+router_settings:
+  # Auto-failover: when Sonnet errors (429, 5xx, timeout), retry once on
+  # GLM-5.1 via NVIDIA. The reverse fallback (GLM -> Sonnet) is intentionally
+  # omitted — if the operator flipped primary=GLM on purpose (dev/testing),
+  # we don't want silent Sonnet billing on every GLM hiccup.
+  fallbacks:
+    - anthropic/claude-sonnet-4-6: ["nvidia_nim/z-ai/glm-5.1"]
+  # Free-tier NVIDIA 429s recover slowly; fail over immediately instead of
+  # retrying on the same model.
+  num_retries: 0
+
 litellm_settings:
   # Full verbose logging so we can see the outbound request body to Anthropic
   # — needed to verify whether `tools` and `tool_choice` are actually being
