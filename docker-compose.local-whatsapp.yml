@@ -82,10 +82,12 @@ services:
       - /tmp:size=100M,noexec,nosuid,nodev
       - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
     ports:
-      # Only the public server is published — that's what ngrok forwards to.
-      # Wizard/gateway/control-plane ports stay on the container network so
-      # they don't collide with a host-side dev instance.
+      # Public server (legacy, static/wizard only — kept for cloud-mode parity).
       - "0.0.0.0:80:80"
+      # Gateway HTTP — exposed so ngrok can forward Kapso webhooks directly to
+      # the plugin's mounted route (/webhooks/whatsapp-kapso/<accountId>).
+      # Loopback-only on the host so it stays behind ngrok, never public.
+      - "127.0.0.1:18789:18900"
     depends_on:
       litellm:
         condition: service_healthy

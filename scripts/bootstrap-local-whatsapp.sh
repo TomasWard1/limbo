@@ -15,9 +15,9 @@
 #   6. Writes /tmp/limbo-local-whatsapp/config/.env for the Limbo container.
 #
 # What you do after this script:
-#   - ngrok http 80   (keep running in another terminal)
-#   - LIMBO_PUBLIC_URL=<ngrok-https-url> docker compose -f docker-compose.local-whatsapp.yml up -d limbo
-#   - Configure Kapso webhook → <LIMBO_PUBLIC_URL>/channel/whatsapp
+#   - ngrok http 18789   (keep running in another terminal — tunnels the gateway)
+#   - docker compose -f docker-compose.local-whatsapp.yml up -d limbo
+#   - Configure Kapso webhook → <ngrok-https-url>/webhooks/whatsapp-kapso
 #   - Message the Kapso number from your phone
 
 set -euo pipefail
@@ -194,6 +194,7 @@ LITELLM_URL=http://litellm:4000
 CHANNEL_ADAPTER_WHATSAPP_KAPSO_ENABLED=true
 KAPSO_API_KEY=$KAPSO_API_KEY
 KAPSO_PHONE_NUMBER_ID=$KAPSO_PHONE_NUMBER_ID
+KAPSO_WEBHOOK_SECRET=${KAPSO_WEBHOOK_SECRET:-}
 
 # ── Legacy features (deprecated; disabled in local MVP) ────────────
 TELEGRAM_ENABLED=false
@@ -207,12 +208,11 @@ info ""
 info "bootstrap complete."
 info ""
 info "next steps:"
-info "  1) ngrok http 80     (keep this running in another terminal)"
-info "  2) export LIMBO_PUBLIC_URL=<ngrok-https-url>"
-info "  3) docker compose -f docker-compose.local-whatsapp.yml up -d limbo"
-info "  4) Kapso dashboard → set the inbound_message webhook to"
-info "       <LIMBO_PUBLIC_URL>/channel/whatsapp"
-info "  5) send a WhatsApp message from your phone to the Kapso number"
+info "  1) ngrok http 18789  (keep this running — tunnels the OpenClaw gateway)"
+info "  2) docker compose -f docker-compose.local-whatsapp.yml up -d limbo"
+info "  3) Kapso dashboard → set the inbound_message webhook to"
+info "       <ngrok-https-url>/webhooks/whatsapp-kapso"
+info "  4) send a WhatsApp message from your phone to the Kapso number"
 info ""
 info "state dir:   $STATE_DIR"
 info "tail logs:   docker compose -f docker-compose.local-whatsapp.yml logs -f"

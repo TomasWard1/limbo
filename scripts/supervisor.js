@@ -24,7 +24,6 @@
 
 const { spawn } = require('node:child_process');
 const { createSupervisor } = require('../lib/supervisor');
-const { buildChannelsFromEnv } = require('../lib/build-channels');
 
 const SETUP_SERVER_PATH = process.env.LIMBO_SETUP_SERVER_PATH || '/app/setup-server/server.js';
 const OPENCLAW_BIN = process.env.LIMBO_OPENCLAW_BIN || 'openclaw';
@@ -54,20 +53,8 @@ async function main() {
     error: (msg, meta) => log('ERROR', meta ? `${msg} ${JSON.stringify(meta)}` : msg),
   };
 
-  let channels = {};
-  try {
-    channels = buildChannelsFromEnv(process.env, { logger });
-  } catch (err) {
-    log('FATAL', `failed to build channels: ${err && err.message}`);
-    process.exit(1);
-  }
-  for (const name of Object.keys(channels)) {
-    log('INFO ', `channel enabled: ${name}`);
-  }
-
   const supervisor = createSupervisor({
     controlPort: CONTROL_PORT,
-    channels,
     // Bind to 0.0.0.0 inside the container, NOT 127.0.0.1. Docker's port
     // mapping routes host → container via eth0, not via the container's
     // loopback interface — a server bound to the container's 127.0.0.1
@@ -82,7 +69,16 @@ async function main() {
     wizardPortBase: WIZARD_PORT,
     spawnSetupServerFn: (cmd, args, opts) => spawn(cmd, args, opts),
     launchOpenclawFn: () => {
-      const args = OPENCLAW_VERBOSE ? ['gateway', '--verbose'] : ['gateway'];
+      // When a webhook-based channel is enabled, the gateway has to accept
+      // requests from the docker eth0 interface (not just 127.0.0.1 inside
+      // the container) so an external tunnel (ngrok / Cloudflare) forwarded
+      // to the mapped port actually reaches the plugin's webhook route.
+      // The CLI flag is the only reliable override — OpenClaw normalizes
+      // gateway.bind in config back to 'loopback' on write.
+      const needsLanBind = process.env.CHANNEL_ADAPTER_WHATSAPP_KAPSO_ENABLED === 'true';
+      const args = ['gateway'];
+      if (OPENCLAW_VERBOSE) args.push('--verbose');
+      if (needsLanBind) args.push('--bind', 'lan');
       log('INFO ', `launching ${OPENCLAW_BIN} ${args.join(' ')}`);
       // OPENCLAW_NO_RESPAWN=1 tells OpenClaw to do in-process restarts
       // instead of fork+exec detached children when its config watcher

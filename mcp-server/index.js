@@ -18,6 +18,7 @@ import { workspaceRead, workspaceWrite } from "./tools/workspace.js";
 import { calendarRead, calendarCreate, calendarDelete, calendarUpdate } from "./tools/google-calendar.js";
 import { updateInstance } from "./tools/update-instance.js";
 import { cronList, cronAdd, cronRemove } from "./tools/cron.js";
+import { getCurrentTime } from "./tools/current-time.js";
 
 /**
  * General response size guard. Any tool_result text content exceeding this
@@ -230,7 +231,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "workspace_read",
       description:
-        "Read one of your workspace personality/config files. Use this to check your current USER.md before updating it. Also readable: SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md, limbo-skill.md (all read-only).",
+        "Read one of your workspace personality/config files. Use this to check your current USER.md before updating it. Also readable: SOUL.md, IDENTITY.md, AGENTS.md, TOOLS.md (all read-only).",
       inputSchema: {
         type: "object",
         properties: {
@@ -386,6 +387,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "update_instance",
       description:
         "Trigger a Limbo self-update. Notifies the user that Limbo is going offline briefly, then signals the host to pull the latest image and restart. Use when the user wants to update Limbo.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "get_current_time",
+      description:
+        "Get the current date, time, and timezone. Returns ISO 8601 with offset, UTC ISO, IANA timezone, unix timestamp, and weekday name. ALWAYS call this before creating time-sensitive cron jobs or calendar events — never guess the current date.",
       inputSchema: {
         type: "object",
         properties: {},
@@ -638,6 +648,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "update_instance": {
         result = await updateInstance();
+        break;
+      }
+
+      case "get_current_time": {
+        result = await getCurrentTime();
         break;
       }
 
