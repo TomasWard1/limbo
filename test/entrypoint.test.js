@@ -874,13 +874,13 @@ describe('Full config pipeline integration', () => {
     // Cron
     assert.equal(final.cron.enabled, true);
 
-    // Tools — minimal profile + group-level deny that blocks every native
-    // tool category. MCP tools (vault_*, cron_*, etc.) are registered under
-    // mcp.servers and are unaffected by these denies.
-    assert.equal(final.tools.profile, 'minimal');
-    assert.ok(final.tools.deny.includes('group:runtime')); // blocks exec/process
-    assert.ok(final.tools.deny.includes('group:sessions')); // blocks session_status
-    assert.ok(final.tools.deny.includes('group:automation')); // blocks gateway + native cron
+    // Tools — full profile + explicit per-tool deny list. MCP tools
+    // (vault_*, cron_*, etc.) are registered under mcp.servers and are
+    // unaffected by these denies.
+    assert.equal(final.tools.profile, 'full');
+    assert.ok(final.tools.deny.includes('gateway'));        // blocks gateway self-reconfig
+    assert.ok(final.tools.deny.includes('cron'));           // native cron duplicated by MCP cron_*
+    assert.ok(final.tools.deny.includes('session_status')); // duplicate of MCP tools
   });
 });
 

@@ -40,39 +40,46 @@ function renderTemplate() {
   return JSON.parse(json);
 }
 
-test('template uses profile "minimal" (not "full")', () => {
+test('template uses profile "full" with an explicit per-tool deny list', () => {
   const cfg = renderTemplate();
-  assert.equal(cfg.tools.profile, 'minimal',
-    'profile:full exposes ~40 native tools and confuses the model. Use minimal.');
+  assert.equal(cfg.tools.profile, 'full',
+    'Template uses profile:full because MCP tools need to coexist with a curated native subset. Specific tools are silenced via tools.deny.');
 });
 
-// OpenClaw's `allow: []` + `profile: minimal` does NOT exclude exec/process —
-// in practice an empty allow behaves as "allow everything", and profile:minimal
-// only *adds* session_status to the base set. The only reliable way to block
-// native tools is an explicit group-level deny. We observed Sonnet calling
-// the native `exec` tool (with `echo "vault_search"`) because exec was visible.
-// Always block every native group — MCP tools are registered separately and
-// are not affected by these deny entries.
-const REQUIRED_DENY_GROUPS = [
-  'group:fs',          // read/write/edit/apply_patch — vault is the only persistence
-  'group:runtime',     // exec/process/code_execution — Limbo is not a shell
-  'group:web',         // only re-enabled by regen script when WEB_SEARCH_ENABLED=true
-  'group:ui',          // browser/canvas — not a UI agent
-  'group:sessions',    // sessions_* + session_status — single-session memory agent
-  'group:memory',      // memory_search/memory_get — duplicates vault_*
-  'group:messaging',   // native message tool — channels auto-deliver replies
-  'group:automation',  // native cron + gateway — duplicate + self-reconfig risk
-  'group:agents',      // agents_list — single-agent setup
-  'group:nodes',       // nodes — no paired devices
-  'group:media',       // image_generate/video_generate/tts — vision is in the model
+// The tool-surface-reduction work collapsed group-level denies into an
+// explicit per-tool list so we keep profile:full (needed for MCP tooling to
+// register cleanly) while still blocking the tools that confused the agent.
+// This list mirrors what ships in openclaw.json.template — update it here
+// when you deliberately re-enable or disable a native tool.
+const REQUIRED_DENY_TOOLS = [
+  'gateway',
+  'nodes',
+  'agents_list',
+  'image_generate',
+  'video_generate',
+  'music_generate',
+  'tts',
+  'browser',
+  'canvas',
+  'cron',
+  'memory_search',
+  'memory_get',
+  'sessions_list',
+  'sessions_history',
+  'sessions_send',
+  'sessions_spawn',
+  'sessions_yield',
+  'subagents',
+  'session_status',
+  'message',
 ];
 
-test('template denies every native tool group (profile:minimal alone is not sufficient)', () => {
+test('template denies every native tool that confuses the agent', () => {
   const cfg = renderTemplate();
   assert.ok(Array.isArray(cfg.tools.deny), 'tools.deny must be an array');
-  for (const g of REQUIRED_DENY_GROUPS) {
-    assert.ok(cfg.tools.deny.includes(g),
-      `tools.deny must include ${g} — otherwise tools in that group leak through profile:minimal and the agent sees (and calls) them`);
+  for (const t of REQUIRED_DENY_TOOLS) {
+    assert.ok(cfg.tools.deny.includes(t),
+      `tools.deny must include ${t} — otherwise it leaks through profile:full and the agent sees (and calls) it`);
   }
 });
 
