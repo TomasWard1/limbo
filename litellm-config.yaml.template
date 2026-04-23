@@ -1,0 +1,48 @@
+# LiteLLM proxy configuration template.
+#
+# The CLI materializes this file at install/configure time into
+# ~/.limbo/litellm-config.yaml, substituting environment-specific
+# values. The live file is bind-mounted into the litellm container.
+#
+# Virtual keys are generated via LiteLLM's /key/generate endpoint and
+# stored in the embedded sqlite (database_url below). The real provider
+# API keys (ANTHROPIC_API_KEY etc.) live ONLY in the litellm container's
+# environment — never in Limbo's openclaw.json.
+#
+# For the single-tenant MVP we ship one model_name 'limbo-default' that
+# routes to Anthropic Sonnet. Future multi-tenant setups add more rows
+# under model_list with per-tenant budgets.
+
+model_list:
+  # OpenClaw's "litellm" provider talks openai-completions to LiteLLM and
+  # sends the fully-qualified model id (e.g. "anthropic/claude-sonnet-4-6").
+  # LiteLLM's router matches model_name exactly, so publish the same id.
+  # Second entry (bare name) is a courtesy alias for direct curl testing.
+  #
+  # cache_control_injection_points tells LiteLLM to inject the
+  # `cache_control: {type: ephemeral}` marker on the outgoing Anthropic
+  # request so the system prompt + tool definitions are cached for 5 min.
+  # This cuts input tokens 90% on repeat turns and dodges the 30k
+  # tokens-per-minute organization rate limit that otherwise gets hit
+  # within 2-3 agent turns (system prompt alone is ~25k tokens).
+  - model_name: anthropic/claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      cache_control_injection_points:
+        - location: message
+          role: system
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      cache_control_injection_points:
+        - location: message
+          role: system
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  # Enables /key/generate + per-key budgets + usage tracking. Required for
+  # multi-tenant parity. Provider must be Postgres — LiteLLM hardcodes that
+  # in its Prisma schema, so sqlite is not an option.

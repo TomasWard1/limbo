@@ -27,6 +27,11 @@
     "auth": {
       "mode": "token",
       "token": ""
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": { "enabled": true }
+      }
     }
   },
 

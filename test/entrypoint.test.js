@@ -171,6 +171,32 @@ describe('Config injection (node -e scripts)', () => {
   // Voice: OpenClaw auto-detects GROQ_API_KEY from env — no config injection needed.
   // We test that the entrypoint exports the env var, not that it injects config.
 
+  // LiteLLM inject — registers LiteLLM as a custom OpenClaw provider under
+  // models.providers.litellm and repoints the default agent at it. Env-var
+  // overrides like ANTHROPIC_BASE_URL don't work at the gateway layer; the
+  // base URL MUST live inside the config itself.
+  const LITELLM_SCRIPT = `
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    const base = (process.env.LITELLM_URL || '').replace(/\\/+$/, '');
+    const provider = process.env.MODEL_PROVIDER || 'anthropic';
+    const name = process.env.MODEL_NAME || 'claude-sonnet-4-6';
+    const modelId = provider + '/' + name;
+    cfg.models = cfg.models || {};
+    cfg.models.providers = cfg.models.providers || {};
+    cfg.models.providers.litellm = {
+      baseUrl: base,
+      apiKey: process.env.LLM_API_KEY,
+      api: 'openai-completions',
+      models: [{ id: modelId, name: name, input: ['text'], contextWindow: 200000, maxTokens: 8192 }],
+    };
+    cfg.agents = cfg.agents || {};
+    cfg.agents.defaults = cfg.agents.defaults || {};
+    cfg.agents.defaults.model = cfg.agents.defaults.model || {};
+    cfg.agents.defaults.model.primary = 'litellm/' + modelId;
+    fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+  `;
+
   const WEB_SEARCH_SCRIPT = `
     const fs = require('fs');
     const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
@@ -231,6 +257,57 @@ describe('Config injection (node -e scripts)', () => {
     const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
     assert.ok(!cfg.transcription, 'Config should NOT have top-level transcription key');
     assert.ok(!cfg.audio, 'Voice is handled via GROQ_API_KEY env var, not config');
+  });
+
+  test('litellm injection registers a custom provider block with baseUrl + apiKey', () => {
+    const cfgPath = writeBaseConfig();
+    runNodeInject(LITELLM_SCRIPT, cfgPath, {
+      MODEL_PROVIDER: 'anthropic',
+      MODEL_NAME: 'claude-sonnet-4-6',
+      LITELLM_URL: 'http://litellm:4000',
+      LLM_API_KEY: 'sk-virtual-1',
+    });
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.equal(cfg.models.providers.litellm.baseUrl, 'http://litellm:4000');
+    assert.equal(cfg.models.providers.litellm.apiKey, 'sk-virtual-1');
+    assert.equal(cfg.models.providers.litellm.api, 'openai-completions');
+  });
+
+  test('litellm injection strips trailing slash from the base URL', () => {
+    const cfgPath = writeBaseConfig();
+    runNodeInject(LITELLM_SCRIPT, cfgPath, {
+      MODEL_PROVIDER: 'anthropic',
+      MODEL_NAME: 'claude-sonnet-4-6',
+      LITELLM_URL: 'http://litellm:4000/',
+      LLM_API_KEY: 'sk-virtual',
+    });
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.equal(cfg.models.providers.litellm.baseUrl, 'http://litellm:4000');
+  });
+
+  test('litellm injection lists the target model with the fully-qualified id', () => {
+    const cfgPath = writeBaseConfig();
+    runNodeInject(LITELLM_SCRIPT, cfgPath, {
+      MODEL_PROVIDER: 'anthropic',
+      MODEL_NAME: 'claude-sonnet-4-6',
+      LITELLM_URL: 'http://litellm:4000',
+      LLM_API_KEY: 'sk-virtual',
+    });
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.equal(cfg.models.providers.litellm.models[0].id, 'anthropic/claude-sonnet-4-6');
+    assert.equal(cfg.models.providers.litellm.models[0].name, 'claude-sonnet-4-6');
+  });
+
+  test('litellm injection repoints the default agent primary model to litellm/...', () => {
+    const cfgPath = writeBaseConfig();
+    runNodeInject(LITELLM_SCRIPT, cfgPath, {
+      MODEL_PROVIDER: 'anthropic',
+      MODEL_NAME: 'claude-sonnet-4-6',
+      LITELLM_URL: 'http://litellm:4000',
+      LLM_API_KEY: 'sk-virtual',
+    });
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.equal(cfg.agents.defaults.model.primary, 'litellm/anthropic/claude-sonnet-4-6');
   });
 
   test('web search injection adds tools.web.search config', () => {

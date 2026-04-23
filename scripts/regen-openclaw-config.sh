@@ -53,6 +53,8 @@ GOOGLE_CALENDAR_ENABLED="${GOOGLE_CALENDAR_ENABLED:-false}"
 GATEWAY_TOKEN="${GATEWAY_TOKEN:-}"
 AUTH_MODE="${AUTH_MODE:-api-key}"
 LLM_API_KEY="${LLM_API_KEY:-}"
+LITELLM_ENABLED="${LITELLM_ENABLED:-false}"
+LITELLM_URL="${LITELLM_URL:-}"
 
 # Subscription OAuth mode uses openai-codex, not openai
 if [ "$AUTH_MODE" = "subscription" ] && [ "$MODEL_PROVIDER" = "openai" ]; then
@@ -94,6 +96,60 @@ if [ "$AUTH_MODE" = "api-key" ] && [ -n "$LLM_API_KEY" ]; then
     }[provider] || 'ANTHROPIC_API_KEY';
     cfg.env = cfg.env || {};
     cfg.env[envVarName] = key;
+    fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+  " "$TMP_CONFIG"
+fi
+
+# LiteLLM gateway override — register LiteLLM as a custom OpenClaw provider
+# and point the default agent at it. OpenClaw's SDK does NOT honor
+# ANTHROPIC_BASE_URL / OPENAI_API_BASE environment variables at the gateway
+# layer; the base URL must live in models.providers.<name>.baseUrl in the
+# config itself. So the wiring is:
+#
+#   1. models.providers.litellm   — baseUrl + apiKey + api + models[]
+#   2. agents.defaults.model.primary = "litellm/<MODEL_PROVIDER>/<MODEL_NAME>"
+#
+# OpenClaw proxies the request to LiteLLM with the configured base URL and
+# virtual key; LiteLLM forwards to the real upstream with the container-local
+# provider key.
+#
+# Runs after the provider-key block so the litellm/... primary clobbers the
+# bare <provider>/<model> that block may have written.
+if [ "$LITELLM_ENABLED" = "true" ] && [ -n "$LITELLM_URL" ] && [ -n "$LLM_API_KEY" ]; then
+  export LITELLM_URL LLM_API_KEY MODEL_PROVIDER MODEL_NAME
+  node -e "
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    const base = (process.env.LITELLM_URL || '').replace(/\/+$/, '');
+    const provider = process.env.MODEL_PROVIDER || 'anthropic';
+    const name = process.env.MODEL_NAME || 'claude-sonnet-4-6';
+    const modelId = provider + '/' + name;
+
+    // LiteLLM accepts both openai-completions and anthropic-messages. We use
+    // openai-completions because it is the provider wire-format OpenClaw's
+    // 'litellm' driver expects; LiteLLM routes the OpenAI-shaped payload to
+    // the real Anthropic backend based on its own config.yaml model_list.
+    cfg.models = cfg.models || {};
+    cfg.models.providers = cfg.models.providers || {};
+    cfg.models.providers.litellm = {
+      baseUrl: base,
+      apiKey: process.env.LLM_API_KEY,
+      api: 'openai-completions',
+      models: [
+        {
+          id: modelId,
+          name: name,
+          input: ['text'],
+          contextWindow: 200000,
+          maxTokens: 8192,
+        },
+      ],
+    };
+    cfg.agents = cfg.agents || {};
+    cfg.agents.defaults = cfg.agents.defaults || {};
+    cfg.agents.defaults.model = cfg.agents.defaults.model || {};
+    cfg.agents.defaults.model.primary = 'litellm/' + modelId;
+
     fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
   " "$TMP_CONFIG"
 fi
