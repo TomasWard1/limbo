@@ -125,16 +125,27 @@ if [ "$LITELLM_ENABLED" = "true" ] && [ -n "$LITELLM_URL" ] && [ -n "$LLM_API_KE
     const name = process.env.MODEL_NAME || 'claude-sonnet-4-6';
     const modelId = provider + '/' + name;
 
-    // LiteLLM accepts both openai-completions and anthropic-messages. We use
-    // openai-completions because it is the provider wire-format OpenClaw's
-    // 'litellm' driver expects; LiteLLM routes the OpenAI-shaped payload to
-    // the real Anthropic backend based on its own config.yaml model_list.
+    // Use anthropic-messages (native Anthropic Messages API) — NOT
+    // openai-completions. Reason: OpenClaw's openai-completions shape does
+    // NOT forward tool definitions to LiteLLM (verified via LiteLLM's
+    // _is_function_call=false log and empty response.tool_calls). The model
+    // then hallucinates tool-use as XML/text because it knows the tool
+    // names but sees no structured tools field. anthropic-messages carries
+    // tools + tool_choice natively and LiteLLM proxies it via the
+    // /anthropic passthrough, preserving virtual-key + budget enforcement.
+    // Use LiteLLM's unified /v1/messages endpoint (not the /anthropic
+     // passthrough). /v1/messages accepts native Anthropic payload shape
+     // AND performs model_list lookup against LiteLLM's config.yaml, so the
+     // 'anthropic/claude-sonnet-4-6' alias resolves to the real upstream
+     // model. The /anthropic passthrough forwards model names unchanged and
+     // Anthropic rejects the alias with a 404.
+    const litellmAnthropicBase = base;
     cfg.models = cfg.models || {};
     cfg.models.providers = cfg.models.providers || {};
     cfg.models.providers.litellm = {
-      baseUrl: base,
+      baseUrl: litellmAnthropicBase,
       apiKey: process.env.LLM_API_KEY,
-      api: 'openai-completions',
+      api: 'anthropic-messages',
       models: [
         {
           id: modelId,
@@ -166,6 +177,60 @@ if [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
       botToken: process.env.TELEGRAM_BOT_TOKEN,
       allowFrom: ['*']
     };
+    fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+  " "$TMP_CONFIG"
+fi
+
+# WhatsApp (Kapso) channel — emits config for the openclaw-whatsapp-kapso
+# third-party plugin. Requires the plugin to be registered (entrypoint.sh does
+# that via `openclaw plugins install -l`). The plugin handles its own
+# webhook ingress via the gateway HTTP host, so Limbo's public-server no
+# longer needs a kapso webhook path.
+if [ "$CHANNEL_ADAPTER_WHATSAPP_KAPSO_ENABLED" = "true" ] && \
+   [ -n "$KAPSO_API_KEY" ] && [ -n "$KAPSO_PHONE_NUMBER_ID" ]; then
+  export KAPSO_API_KEY KAPSO_PHONE_NUMBER_ID KAPSO_WEBHOOK_SECRET KAPSO_API_BASE_URL
+  node -e "
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    // Register the plugin in OpenClaw's plugin registry so it's discovered at
+    // gateway start. Equivalent to 'openclaw plugins install -l <path>' but
+    // survives the regen rewrite (install-then-regen wipes the entry).
+    cfg.plugins = cfg.plugins || {};
+    cfg.plugins.entries = cfg.plugins.entries || {};
+    cfg.plugins.entries['whatsapp-kapso'] = { enabled: true };
+    cfg.plugins.load = cfg.plugins.load || {};
+    cfg.plugins.load.paths = Array.isArray(cfg.plugins.load.paths)
+      ? Array.from(new Set([...cfg.plugins.load.paths, '/usr/local/lib/node_modules/openclaw-whatsapp-kapso']))
+      : ['/usr/local/lib/node_modules/openclaw-whatsapp-kapso'];
+    cfg.plugins.installs = cfg.plugins.installs || {};
+    cfg.plugins.installs['whatsapp-kapso'] = {
+      source: 'path',
+      sourcePath: '/usr/local/lib/node_modules/openclaw-whatsapp-kapso',
+      installPath: '/usr/local/lib/node_modules/openclaw-whatsapp-kapso',
+      version: '2026.4.28',
+      installedAt: new Date().toISOString(),
+    };
+
+    cfg.channels = cfg.channels || {};
+    cfg.channels['whatsapp-kapso'] = {
+      enabled: true,
+      apiKey: process.env.KAPSO_API_KEY,
+      phoneNumberId: process.env.KAPSO_PHONE_NUMBER_ID,
+      webhookSecret: process.env.KAPSO_WEBHOOK_SECRET || '',
+    };
+    if (process.env.KAPSO_API_BASE_URL) {
+      cfg.channels['whatsapp-kapso'].apiBaseUrl = process.env.KAPSO_API_BASE_URL;
+    }
+
+    // Kapso posts webhooks from the internet via an external tunnel
+    // (ngrok locally, Cloudflare in cloud). The plugin mounts its webhook
+    // route on the gateway HTTP server, so the gateway must accept traffic
+    // from Docker's NAT interface (eth0), not only 127.0.0.1 inside the
+    // container. OpenClaw maps bind='lan' → 0.0.0.0; 'loopback' stays on
+    // 127.0.0.1 which Docker cannot forward to.
+    cfg.gateway = cfg.gateway || {};
+    cfg.gateway.bind = 'lan';
+
     fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
   " "$TMP_CONFIG"
 fi
@@ -243,6 +308,21 @@ if [ "$GOOGLE_CALENDAR_ENABLED" = "true" ] && [ -f "$GCAL_CREDS" ]; then
     fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
   " "$TMP_CONFIG"
 fi
+
+# Preserve meta from previous config (or last-good) so OpenClaw's integrity
+# check doesn't trigger "missing-meta-vs-last-good" and clobber our rewrite.
+node -e "
+  const fs = require('fs');
+  const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+  const candidates = [process.argv[2], process.argv[2] + '.last-good', process.argv[2] + '.bak'];
+  for (const p of candidates) {
+    try {
+      const prev = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (prev && prev.meta) { cfg.meta = prev.meta; break; }
+    } catch {}
+  }
+  fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+" "$TMP_CONFIG" "$OPENCLAW_CONFIG_PATH"
 
 # Atomic rename — chokidar's awaitWriteFinish handles the short window
 mv "$TMP_CONFIG" "$OPENCLAW_CONFIG_PATH"
