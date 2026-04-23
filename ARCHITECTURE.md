@@ -91,7 +91,6 @@ limbo/
 │   ├── system/               # Product-owned, root-owned, reset every boot
 │   │   ├── AGENTS.md         # Behavioral workflows and rules
 │   │   ├── TOOLS.md          # Tool usage instructions
-│   │   └── limbo-skill.md    # Agent skill definitions
 │   └── templates/            # User-owned, seeded on first run only
 │       ├── IDENTITY.md
 │       ├── SOUL.md

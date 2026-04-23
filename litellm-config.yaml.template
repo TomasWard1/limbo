@@ -40,6 +40,16 @@ model_list:
         - location: message
           role: system
 
+litellm_settings:
+  # Full verbose logging so we can see the outbound request body to Anthropic
+  # — needed to verify whether `tools` and `tool_choice` are actually being
+  # forwarded. Without this, a silent drop of the tools field makes Sonnet
+  # fall back to XML pseudo-tool-call hallucinations (LiteLLM #2639).
+  set_verbose: true
+  # Surface unknown params instead of silently dropping them — catches MCP
+  # tool-schema mismatches (inputSchema vs parameters) early.
+  drop_params: false
+
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL

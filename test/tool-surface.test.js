@@ -40,30 +40,57 @@ function renderTemplate() {
   return JSON.parse(json);
 }
 
-test('template uses profile "minimal" (not "full")', () => {
+test('template uses profile "full" with an explicit per-tool deny list', () => {
   const cfg = renderTemplate();
-  assert.equal(cfg.tools.profile, 'minimal',
-    'profile:full exposes ~40 native tools and confuses the model. Use minimal.');
+  assert.equal(cfg.tools.profile, 'full',
+    'Template uses profile:full because MCP tools need to coexist with a curated native subset. Specific tools are silenced via tools.deny.');
 });
 
-test('template explicitly allows session_status', () => {
-  const cfg = renderTemplate();
-  assert.ok(Array.isArray(cfg.tools.allow), 'tools.allow must be an array');
-  assert.ok(cfg.tools.allow.includes('session_status'),
-    'session_status is the only native tool Limbo needs — keep it explicit');
-});
+// The tool-surface-reduction work collapsed group-level denies into an
+// explicit per-tool list so we keep profile:full (needed for MCP tooling to
+// register cleanly) while still blocking the tools that confused the agent.
+// This list mirrors what ships in openclaw.json.template — update it here
+// when you deliberately re-enable or disable a native tool.
+const REQUIRED_DENY_TOOLS = [
+  'gateway',
+  'nodes',
+  'agents_list',
+  'image_generate',
+  'video_generate',
+  'music_generate',
+  'tts',
+  'browser',
+  'canvas',
+  'cron',
+  'memory_search',
+  'memory_get',
+  'sessions_list',
+  'sessions_history',
+  'sessions_send',
+  'sessions_spawn',
+  'sessions_yield',
+  'subagents',
+  'session_status',
+  'message',
+];
 
-test('template denies gateway (self-reconfig backdoor)', () => {
+test('template denies every native tool that confuses the agent', () => {
   const cfg = renderTemplate();
   assert.ok(Array.isArray(cfg.tools.deny), 'tools.deny must be an array');
-  assert.ok(cfg.tools.deny.includes('gateway'),
-    'The native gateway tool lets the agent patch its own config and restart');
+  for (const t of REQUIRED_DENY_TOOLS) {
+    assert.ok(cfg.tools.deny.includes(t),
+      `tools.deny must include ${t} — otherwise it leaks through profile:full and the agent sees (and calls) it`);
+  }
 });
 
-test('template denies native cron (duplicate of MCP cron_*)', () => {
+test('template raises bootstrap char limits so TOOLS.md/AGENTS.md are not truncated', () => {
   const cfg = renderTemplate();
-  assert.ok(cfg.tools.deny.includes('cron'),
-    'Our MCP cron_add/list/remove already wraps cron; the native tool is a confusing duplicate');
+  const defaults = cfg.agents && cfg.agents.defaults;
+  assert.ok(defaults, 'agents.defaults must exist');
+  assert.ok((defaults.bootstrapMaxChars || 0) >= 20000,
+    'TOOLS.md is ~12KB today and can grow — keep per-file limit generous to prevent truncation warnings that confuse the agent');
+  assert.ok((defaults.bootstrapTotalMaxChars || 0) >= 100000,
+    'Total bootstrap budget must cover AGENTS.md + TOOLS.md + IDENTITY.md + SOUL.md + USER.md + skill headers');
 });
 
 test('template does NOT include message in allow (replies are channel-routed automatically)', () => {
