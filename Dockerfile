@@ -57,7 +57,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gettext-base tz
 # crashes with "Cannot find module 'grammy'" even when TELEGRAM_ENABLED=false.
 # Pinned to the version that ships with OpenClaw's lockfile to avoid accidental
 # API drift. Bump when OpenClaw's own grammy peer range shifts.
-RUN npm install -g "openclaw@${OPENCLAW_VERSION}" "@googleworkspace/cli@0.22.3" "grammy@^1.31.0" "openclaw-whatsapp-kapso@^2026.4.28"
+RUN npm install -g "openclaw@${OPENCLAW_VERSION}" "@googleworkspace/cli@0.22.3" "grammy@^1.31.0" "openclaw-whatsapp-kapso@^2026.4.29"
 
 # Apply local patch for openclaw#63851 — the guarded fetch drops FormData fields,
 # breaking Groq audio transcription. Remove this once upstream PR #64349 ships in
