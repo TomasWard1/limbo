@@ -97,6 +97,14 @@ services:
       - /tmp/limbo-local-whatsapp/openclaw-state:/home/limbo/.openclaw
       - /tmp/limbo-local-whatsapp/config:/data/config
       - /tmp/limbo-local-whatsapp/flags:/flags
+      # To iterate on the kapso plugin without re-publishing to npm, add to a
+      # `docker-compose.local-whatsapp.override.yml`:
+      #   services:
+      #     limbo:
+      #       volumes:
+      #         - <path-to>/openclaw-whatsapp-kapso/dist:/usr/local/lib/node_modules/openclaw-whatsapp-kapso/dist:ro
+      # and bring up with `-f docker-compose.local-whatsapp.yml -f
+      # docker-compose.local-whatsapp.override.yml`.
     env_file:
       - /tmp/limbo-local-whatsapp/config/.env
     environment:
