@@ -199,8 +199,13 @@ GATEWAY_TOKEN=$GATEWAY_TOKEN
 # OpenClaw talks native Anthropic protocol; LiteLLM transparently proxies
 # /v1/messages to the real Anthropic backend. The real provider key is
 # container-local to litellm and never touches this file.
-MODEL_PROVIDER=anthropic
-MODEL_NAME=claude-sonnet-4-6
+#
+# Local dev defaults to GLM-5.1 via NVIDIA NIM free tier — no token spend
+# during iteration. LiteLLM's router_settings.fallbacks auto-jumps to
+# Sonnet if GLM errors (429, 5xx, timeout), so the experience stays
+# smooth. Override from .env.local to pin a specific model.
+MODEL_PROVIDER=${MODEL_PROVIDER:-nvidia_nim}
+MODEL_NAME=${MODEL_NAME:-z-ai/glm-5.1}
 LLM_API_KEY=$VIRTUAL_KEY
 LITELLM_ENABLED=true
 LITELLM_URL=http://litellm:4000
