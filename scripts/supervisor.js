@@ -47,6 +47,12 @@ function log(level, msg) {
 }
 
 async function main() {
+  const logger = {
+    info: (msg, meta) => log('INFO ', meta ? `${msg} ${JSON.stringify(meta)}` : msg),
+    warn: (msg, meta) => log('WARN ', meta ? `${msg} ${JSON.stringify(meta)}` : msg),
+    error: (msg, meta) => log('ERROR', meta ? `${msg} ${JSON.stringify(meta)}` : msg),
+  };
+
   const supervisor = createSupervisor({
     controlPort: CONTROL_PORT,
     // Bind to 0.0.0.0 inside the container, NOT 127.0.0.1. Docker's port
@@ -63,7 +69,16 @@ async function main() {
     wizardPortBase: WIZARD_PORT,
     spawnSetupServerFn: (cmd, args, opts) => spawn(cmd, args, opts),
     launchOpenclawFn: () => {
-      const args = OPENCLAW_VERBOSE ? ['gateway', '--verbose'] : ['gateway'];
+      // When a webhook-based channel is enabled, the gateway has to accept
+      // requests from the docker eth0 interface (not just 127.0.0.1 inside
+      // the container) so an external tunnel (ngrok / Cloudflare) forwarded
+      // to the mapped port actually reaches the plugin's webhook route.
+      // The CLI flag is the only reliable override — OpenClaw normalizes
+      // gateway.bind in config back to 'loopback' on write.
+      const needsLanBind = process.env.CHANNEL_ADAPTER_WHATSAPP_KAPSO_ENABLED === 'true';
+      const args = ['gateway'];
+      if (OPENCLAW_VERBOSE) args.push('--verbose');
+      if (needsLanBind) args.push('--bind', 'lan');
       log('INFO ', `launching ${OPENCLAW_BIN} ${args.join(' ')}`);
       // OPENCLAW_NO_RESPAWN=1 tells OpenClaw to do in-process restarts
       // instead of fork+exec detached children when its config watcher

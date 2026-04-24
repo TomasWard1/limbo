@@ -1,7 +1,38 @@
 services:
+  # LiteLLM side-car. Routes OpenClaw's LLM calls to the real provider
+  # (Anthropic / OpenAI / etc.) via virtual keys, so Limbo never holds
+  # the production API key and we gain per-tenant budgets + usage logs.
+  # Enable by setting LITELLM_ENABLED=true + LITELLM_URL=http://litellm:4000/v1
+  # in ~/.limbo/config/.env and providing litellm-config.yaml + secrets.
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+      - litellm-data:/app/db
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    env_file:
+      - ./config/litellm.env
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4000/health/readiness"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   limbo:
     # This file is a development reference. The CLI generates a versioned copy at install time.
     image: registry.gitlab.com/tomas209/limbo:latest
+    depends_on:
+      litellm:
+        condition: service_healthy
+        required: false
     init: true
     restart: unless-stopped
     read_only: true
@@ -39,3 +70,4 @@ services:
 
 volumes:
   limbo-data:
+  litellm-data:

@@ -77,12 +77,25 @@ test('openclaw.json.template registers limbo-vault MCP server', () => {
   assert.ok(json.includes('OPENCLAW_STATE_DIR'));
 });
 
-// Regression: manual allowlist had invalid tool names (cron, sessions)
-test('openclaw.json.template uses tool profile instead of manual allowlist', () => {
+// Regression: the old manual allowlist listed 'cron'/'sessions' as tool names,
+// which OpenClaw did not recognize. The template now uses tools.profile as the
+// base and only session_status in tools.allow. (cron *may* appear in
+// tools.deny — that's the tool-surface reduction work, not a regression.)
+test('openclaw.json.template uses tool profile instead of invalid allowlist names', () => {
   const json = read('openclaw.json.template');
   assert.ok(json.includes('"profile"'), 'Should use tools.profile');
-  assert.ok(!json.includes('"cron"') || !json.includes('"allow"'),
-    'Should not have manual allowlist with invalid tool names');
+  const cfg = JSON.parse(
+    json
+      .replace(/\$\{LIMBO_PORT\}/g, '18789')
+      .replace(/\$\{MODEL_PROVIDER\}/g, 'anthropic')
+      .replace(/\$\{MODEL_NAME\}/g, 'claude-sonnet-4-6')
+      .replace(/\$\{RUNTIME_REASONING_EFFORT\}/g, 'medium')
+      .replace(/\$\{OPENCLAW_STATE_DIR\}/g, '/home/limbo/.openclaw')
+  );
+  const allow = cfg.tools.allow || [];
+  for (const invalid of ['cron', 'sessions']) {
+    assert.ok(!allow.includes(invalid), `${invalid} is not a valid native tool name for tools.allow`);
+  }
 });
 
 test('openclaw.json.template has sandbox off', () => {

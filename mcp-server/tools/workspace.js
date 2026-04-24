@@ -8,8 +8,8 @@ const WORKSPACE_DIR = process.env.OPENCLAW_WORKSPACE_DIR
   || join(process.env.OPENCLAW_STATE_DIR || "/home/limbo/.openclaw", "workspace");
 
 // Only these files are writable by the agent.
-// System files (AGENTS.md, TOOLS.md, limbo-skill.md) are overwritten on every boot
-// from the image — the agent cannot persist changes to them.
+// System files (AGENTS.md, TOOLS.md, IDENTITY.md, SOUL.md) are overwritten on every
+// boot from the image — the agent cannot persist changes to them.
 const WRITABLE_FILES = new Set(["USER.md"]);
 
 // All workspace .md files are readable.

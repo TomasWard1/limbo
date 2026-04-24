@@ -175,7 +175,34 @@ You can also trigger it manually via `workflow_dispatch` if a push-triggered run
 
 ## Dev Secrets
 
-Shared dev secrets live in `~/.limbo-dev/secrets/` (LLM API key, gateway token, Telegram bot token). These are the same across all local Limbo instances — dev, eval, test. All docker-compose files for local development should reference secrets from this path.
+### Source of truth: 1Password (`Development` vault)
+
+**All new secrets for this project live in 1Password under the `limbo/<service-scope>` naming convention.** Examples:
+
+- `limbo/kapso-api` — Kapso WhatsApp API key (used by the channel adapter)
+- future: `limbo/anthropic`, `limbo/telegram-test-bot`, `limbo/groq`, etc.
+
+To reference them programmatically, use the item UUID (not the `op://vault/title/field` path — slashes in titles break that parser). Look up the UUID once with `op item list --vault Development --format json | jq` and hardcode it in the script that needs it, or use `op run -- <cmd>` to inject them as env vars.
+
+See `~/.claude/CLAUDE.md` § Secrets & Credentials for the full convention.
+
+### Legacy bind-mount secrets (still live, do not migrate yet)
+
+The Limbo container still reads these files at runtime during local dev, eval, and test runs:
+
+```
+~/.limbo-dev/secrets/
+├── llm_api_key
+├── gateway_token
+├── telegram_bot_token
+├── groq_api_key
+├── brave_api_key
+├── google_client_id
+├── google_client_secret
+└── auth-profiles.json
+```
+
+All docker-compose files for local development reference secrets from this path:
 
 ```yaml
 secrets:
@@ -183,7 +210,13 @@ secrets:
     file: ~/.limbo-dev/secrets/llm_api_key
 ```
 
-Never commit secrets. Never create new ones per instance — always reuse the shared set.
+These files survive until we migrate the container boot pipeline to `op run`. Do NOT migrate them one-off — the container can't read 1Password. Full migration is a Fase-later item.
+
+### Rules
+
+- Never commit secrets.
+- Never create new plain-text secret files. All new ones go to 1Password first; if the container also needs them, add `op read ... > ~/.limbo-dev/secrets/<name>` to a dev-setup script, not as the source of truth.
+- Never reuse personal (`Private` vault) credentials for project work.
 
 ## Local Development
 

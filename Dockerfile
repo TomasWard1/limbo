@@ -51,7 +51,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends gettext-base tz
 # @googleworkspace/cli (gws) — Google Calendar integration (optional feature).
 # Pin 0.22.3 because 0.22.4+ requires GLIBC_2.39 on linux/amd64, but node:22-slim
 # currently ships Debian 12 / glibc 2.36 in production.
-RUN npm install -g "openclaw@${OPENCLAW_VERSION}" "@googleworkspace/cli@0.22.3"
+# grammy — peer dependency of OpenClaw's telegram channel extension. OpenClaw
+# loads the extension module eagerly on gateway start regardless of whether
+# the channel is enabled, so without grammy on the module path the gateway
+# crashes with "Cannot find module 'grammy'" even when TELEGRAM_ENABLED=false.
+# Pinned to the version that ships with OpenClaw's lockfile to avoid accidental
+# API drift. Bump when OpenClaw's own grammy peer range shifts.
+RUN npm install -g "openclaw@${OPENCLAW_VERSION}" "@googleworkspace/cli@0.22.3" "grammy@^1.31.0" "openclaw-whatsapp-kapso@^2026.4.30"
 
 # Apply local patch for openclaw#63851 — the guarded fetch drops FormData fields,
 # breaking Groq audio transcription. Remove this once upstream PR #64349 ships in

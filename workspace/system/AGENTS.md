@@ -73,9 +73,10 @@ Files are stored in `vault/assets/` and accessed ONLY through vault tools. NEVER
 
 The system clock is set to the user's local timezone (from USER.md). **All times are local.**
 
+- **ALWAYS call `get_current_time` before creating any time-based reminder.** Never guess the current date from conversation context. Your training cutoff is not "now".
 - **Do NOT convert times.** The `cron_add` tool operates in the user's local timezone.
-- "In 3 hours" → read the current system time, add 3 hours, pass that absolute time to the tool.
-- "At 9am" → pass "9:00 AM" directly — no UTC conversion needed.
+- "In 3 hours" → call `get_current_time`, add 3 hours to the returned `iso`, pass that as `at`.
+- "At 9am" → call `get_current_time` to know today's date, then pass "YYYY-MM-DDT09:00:00<offset>".
 - For `"cron"` schedules: always include `"tz"` with the user's IANA timezone.
 - **Never manually apply a UTC offset.** The system already handles this.
 

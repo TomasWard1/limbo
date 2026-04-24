@@ -1,0 +1,130 @@
+# Local end-to-end testing for WhatsApp + Kapso + LiteLLM.
+#
+# Mirrors what runs in prod, just on your laptop with ngrok in front.
+# State persists under /tmp/limbo-local-whatsapp so you can `down` / `up`
+# without losing vault or keys.
+#
+# Workflow:
+#   1. bash scripts/bootstrap-local-whatsapp.sh
+#   2. ngrok http 80 --domain=<your-reserved-domain>  (or free tunnel)
+#   3. LIMBO_PUBLIC_URL=<ngrok-https-url> docker compose -f docker-compose.local-whatsapp.yml up -d
+#   4. In Kapso, set the inbound_message webhook to <ngrok>/channel/whatsapp
+#   5. Message the Kapso number from your phone
+#
+# Tear down: docker compose -f docker-compose.local-whatsapp.yml down
+
+services:
+  # Postgres side-car for LiteLLM state (virtual keys, budgets, usage logs).
+  # LiteLLM hardcodes Prisma with provider=postgresql so this cannot be swapped
+  # for sqlite. In production pool mode (Fase 3) this becomes a managed
+  # Postgres; locally we use the official alpine image with a named volume.
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    env_file:
+      - /tmp/limbo-local-whatsapp/config/postgres.env
+    volumes:
+      - limbo-local-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - /tmp/limbo-local-whatsapp/litellm-config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    env_file:
+      - /tmp/limbo-local-whatsapp/config/litellm.env
+    healthcheck:
+      # LiteLLM image is wolfi-based without wget/curl; use python stdlib.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:4000/health/readiness', timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  limbo:
+    image: ${LIMBO_IMAGE:-limbo:local-whatsapp}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+    pids_limit: 200
+    tmpfs:
+      - /tmp:size=100M,noexec,nosuid,nodev
+      - /home/limbo/.npm:size=50M,noexec,nosuid,nodev,uid=999,gid=999
+    ports:
+      # Public server (legacy, static/wizard only — kept for cloud-mode parity).
+      - "0.0.0.0:80:80"
+      # Gateway HTTP — exposed so ngrok can forward Kapso webhooks directly to
+      # the plugin's mounted route (/webhooks/whatsapp-kapso/<accountId>).
+      # Loopback-only on the host so it stays behind ngrok, never public.
+      - "127.0.0.1:18789:18900"
+    depends_on:
+      litellm:
+        condition: service_healthy
+    volumes:
+      - limbo-local-data:/data
+      - /tmp/limbo-local-whatsapp/vault:/data/vault
+      - /tmp/limbo-local-whatsapp/openclaw-state:/home/limbo/.openclaw
+      - /tmp/limbo-local-whatsapp/config:/data/config
+      - /tmp/limbo-local-whatsapp/flags:/flags
+      # To iterate on the kapso plugin without re-publishing to npm, add to a
+      # `docker-compose.local-whatsapp.override.yml`:
+      #   services:
+      #     limbo:
+      #       volumes:
+      #         - <path-to>/openclaw-whatsapp-kapso/dist:/usr/local/lib/node_modules/openclaw-whatsapp-kapso/dist:ro
+      # and bring up with `-f docker-compose.local-whatsapp.yml -f
+      # docker-compose.local-whatsapp.override.yml`.
+    env_file:
+      - /tmp/limbo-local-whatsapp/config/.env
+    environment:
+      # Supervisor reads LIMBO_PUBLIC_URL to decide whether to start the
+      # public server. Set via the shell when invoking `docker compose up`.
+      LIMBO_PUBLIC_URL: "${LIMBO_PUBLIC_URL:-}"
+      LIMBO_PUBLIC_PORT: "80"
+      LIMBO_PORT: "18900"
+      LIMBO_WIZARD_PORT: "15789"
+      NODE_OPTIONS: "${LIMBO_NODE_OPTIONS:---max-old-space-size=512}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 1g
+    memswap_limit: 1g
+
+volumes:
+  limbo-local-data:
+    name: limbo-local-whatsapp_limbo-data
+  limbo-local-postgres-data:
+    name: limbo-local-whatsapp_postgres-data

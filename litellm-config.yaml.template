@@ -1,0 +1,111 @@
+# LiteLLM proxy configuration template.
+#
+# The CLI materializes this file at install/configure time into
+# ~/.limbo/litellm-config.yaml, substituting environment-specific
+# values. The live file is bind-mounted into the litellm container.
+#
+# Virtual keys are generated via LiteLLM's /key/generate endpoint and
+# stored in the embedded sqlite (database_url below). The real provider
+# API keys (ANTHROPIC_API_KEY etc.) live ONLY in the litellm container's
+# environment — never in Limbo's openclaw.json.
+#
+# For the single-tenant MVP we ship one model_name 'limbo-default' that
+# routes to Anthropic Sonnet. Future multi-tenant setups add more rows
+# under model_list with per-tenant budgets.
+
+model_list:
+  # OpenClaw's "litellm" provider talks openai-completions to LiteLLM and
+  # sends the fully-qualified model id (e.g. "anthropic/claude-sonnet-4-6").
+  # LiteLLM's router matches model_name exactly, so publish the same id.
+  # Second entry (bare name) is a courtesy alias for direct curl testing.
+  #
+  # cache_control_injection_points tells LiteLLM to inject the
+  # `cache_control: {type: ephemeral}` marker on the outgoing Anthropic
+  # request so the system prompt + tool definitions are cached for 5 min.
+  # This cuts input tokens 90% on repeat turns and dodges the 30k
+  # tokens-per-minute organization rate limit that otherwise gets hit
+  # within 2-3 agent turns (system prompt alone is ~25k tokens).
+  - model_name: anthropic/claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      cache_control_injection_points:
+        - location: message
+          role: system
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      cache_control_injection_points:
+        - location: message
+          role: system
+
+  # Dev fallback — GLM-5.1 via NVIDIA NIM free tier. Used as an auto-failover
+  # for Sonnet (see router_settings.fallbacks) and as a swap target for
+  # A/B testing model quality during dev. 40 req/min cap, credit-limited,
+  # latency is erratic — NOT suitable for prod traffic. No cache_control:
+  # NVIDIA's openai-completions endpoint rejects Anthropic-style caching.
+  # The two rows mirror the Sonnet alias pattern: the qualified id matches
+  # what OpenClaw sends (provider=nvidia_nim from .env), the bare id is a
+  # courtesy for direct curl testing.
+  - model_name: nvidia_nim/z-ai/glm-5.1
+    litellm_params:
+      model: nvidia_nim/z-ai/glm-5.1
+      api_key: os.environ/NVIDIA_API_KEY
+      api_base: https://integrate.api.nvidia.com/v1
+      rpm: 40
+  - model_name: z-ai/glm-5.1
+    litellm_params:
+      model: nvidia_nim/z-ai/glm-5.1
+      api_key: os.environ/NVIDIA_API_KEY
+      api_base: https://integrate.api.nvidia.com/v1
+      rpm: 40
+
+  # Audio transcription via Groq Whisper.
+  #
+  # Exposed as an openai-compatible transcription endpoint on LiteLLM so
+  # OpenClaw's `groq` media-understanding provider (which POSTs OpenAI-
+  # format to {baseUrl}/audio/transcriptions) can be pointed at LiteLLM
+  # using baseUrl=http://litellm:4000/v1 and the user's virtual key instead
+  # of a direct Groq key. The master GROQ_API_KEY stays in the LiteLLM
+  # container env only; virtual-key budgets (limbo-plan quotas) cover both
+  # chat and transcription usage uniformly.
+  #
+  # Model alias matches the id OpenClaw sends so LiteLLM routes without
+  # rewrites. The bare and qualified rows mirror the Sonnet pattern.
+  - model_name: whisper-large-v3-turbo
+    litellm_params:
+      model: groq/whisper-large-v3-turbo
+      api_key: os.environ/GROQ_API_KEY
+  - model_name: groq/whisper-large-v3-turbo
+    litellm_params:
+      model: groq/whisper-large-v3-turbo
+      api_key: os.environ/GROQ_API_KEY
+
+router_settings:
+  # Auto-failover: when Sonnet errors (429, 5xx, timeout), retry once on
+  # GLM-5.1 via NVIDIA. The reverse fallback (GLM -> Sonnet) is intentionally
+  # omitted — if the operator flipped primary=GLM on purpose (dev/testing),
+  # we don't want silent Sonnet billing on every GLM hiccup.
+  fallbacks:
+    - anthropic/claude-sonnet-4-6: ["nvidia_nim/z-ai/glm-5.1"]
+  # Free-tier NVIDIA 429s recover slowly; fail over immediately instead of
+  # retrying on the same model.
+  num_retries: 0
+
+litellm_settings:
+  # Full verbose logging so we can see the outbound request body to Anthropic
+  # — needed to verify whether `tools` and `tool_choice` are actually being
+  # forwarded. Without this, a silent drop of the tools field makes Sonnet
+  # fall back to XML pseudo-tool-call hallucinations (LiteLLM #2639).
+  set_verbose: true
+  # Surface unknown params instead of silently dropping them — catches MCP
+  # tool-schema mismatches (inputSchema vs parameters) early.
+  drop_params: false
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  # Enables /key/generate + per-key budgets + usage tracking. Required for
+  # multi-tenant parity. Provider must be Postgres — LiteLLM hardcodes that
+  # in its Prisma schema, so sqlite is not an option.

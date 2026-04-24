@@ -8,7 +8,9 @@
       "sandbox": {
         "mode": "off"
       },
-      "thinkingDefault": "${RUNTIME_REASONING_EFFORT}"
+      "thinkingDefault": "${RUNTIME_REASONING_EFFORT}",
+      "bootstrapMaxChars": 24000,
+      "bootstrapTotalMaxChars": 128000
     }
   },
 
@@ -27,13 +29,47 @@
     "auth": {
       "mode": "token",
       "token": ""
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": { "enabled": true }
+      }
     }
   },
 
   "tools": {
     "profile": "full",
-    "exec": {
-      "timeoutSec": 1800
+    "deny": [
+      "gateway",
+      "nodes",
+      "agents_list",
+      "image_generate",
+      "video_generate",
+      "music_generate",
+      "tts",
+      "browser",
+      "canvas",
+      "cron",
+      "memory_search",
+      "memory_get",
+      "sessions_list",
+      "sessions_history",
+      "sessions_send",
+      "sessions_spawn",
+      "sessions_yield",
+      "subagents",
+      "session_status",
+      "message"
+    ]
+  },
+
+  "plugins": {
+    "entries": {
+      "acpx": { "enabled": false },
+      "amazon-bedrock": { "enabled": false },
+      "amazon-bedrock-mantle": { "enabled": false },
+      "browser": { "enabled": false },
+      "microsoft": { "enabled": false }
     }
   },
 
