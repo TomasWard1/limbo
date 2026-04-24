@@ -328,11 +328,11 @@ fi
 
 # Web search (Brave)
 #
-# Two parts: (1) provider config under tools.web.search, (2) push web_search
-# and web_fetch into tools.allow. Step (2) is required because the base
-# profile is 'minimal' — without an explicit allow entry the tools stay
-# hidden even with a provider key present. web_fetch rides along so the
-# agent can both search and fetch individual pages.
+# Provider config goes under tools.web.search. We only push web_search/web_fetch
+# into tools.allow when the profile is 'minimal' — with the default profile
+# ('full') these tools are already enabled, and writing an allow list there
+# collapses it into a strict allowlist that hides every MCP tool (calendar_*,
+# vault_*, cron_*, workspace_*, …) from the outbound request. See issue #274.
 if [ "$WEB_SEARCH_ENABLED" = "true" ] && [ -n "$BRAVE_API_KEY" ]; then
   export BRAVE_API_KEY
   node -e "
@@ -345,9 +345,11 @@ if [ "$WEB_SEARCH_ENABLED" = "true" ] && [ -n "$BRAVE_API_KEY" ]; then
       provider: 'brave',
       maxResults: 5
     };
-    cfg.tools.allow = Array.isArray(cfg.tools.allow) ? cfg.tools.allow : [];
-    for (const t of ['web_search', 'web_fetch']) {
-      if (!cfg.tools.allow.includes(t)) cfg.tools.allow.push(t);
+    if (cfg.tools.profile === 'minimal') {
+      cfg.tools.allow = Array.isArray(cfg.tools.allow) ? cfg.tools.allow : [];
+      for (const t of ['web_search', 'web_fetch']) {
+        if (!cfg.tools.allow.includes(t)) cfg.tools.allow.push(t);
+      }
     }
     fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
   " "$TMP_CONFIG"
