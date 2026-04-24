@@ -235,18 +235,93 @@ if [ "$CHANNEL_ADAPTER_WHATSAPP_KAPSO_ENABLED" = "true" ] && \
   " "$TMP_CONFIG"
 fi
 
-# Voice transcription (Groq) — pin audio provider to bypass the auto-resolver
-if [ "$VOICE_ENABLED" = "true" ] && [ -n "$GROQ_API_KEY" ]; then
-  export GROQ_API_KEY
+# Voice transcription — routed through LiteLLM instead of hitting Groq directly.
+#
+# LiteLLM exposes /v1/audio/transcriptions (openai-compatible) and routes the
+# `whisper-large-v3-turbo` alias to its Groq backend using the shared
+# GROQ_API_KEY that lives in the LiteLLM container's env. The tenant's
+# LLM_API_KEY virtual key budget covers both chat + transcription usage, so
+# Limbo never needs a Groq key of its own.
+#
+# We use provider='groq' because OpenClaw's groq media-understanding provider
+# knows how to build the POST body for Whisper; the baseUrl + auth.token
+# overrides redirect the actual HTTP call to LiteLLM.
+if [ "$LITELLM_ENABLED" = "true" ] && [ -n "$LITELLM_URL" ] && [ -n "$LLM_API_KEY" ]; then
+  # OpenClaw's media-understanding layer does a pre-check that the `groq`
+  # provider has *some* API key registered before building the HTTP request.
+  # It reads this from the process env. Our request.auth.token override
+  # replaces the Authorization header on the actual call (so the real key
+  # used upstream is LiteLLM's GROQ_API_KEY in the LiteLLM container), but
+  # we still need to satisfy the pre-check. Stuffing the tenant's virtual
+  # key here works for both: LiteLLM accepts it on its own endpoint, and
+  # OpenClaw sees "provider has a key" and proceeds.
+  export GROQ_API_KEY="${GROQ_API_KEY:-$LLM_API_KEY}"
+  export LITELLM_URL LLM_API_KEY
   node -e "
     const fs = require('fs');
     const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
     cfg.tools = cfg.tools || {};
     cfg.tools.media = cfg.tools.media || {};
     cfg.tools.media.audio = cfg.tools.media.audio || {};
-    cfg.tools.media.audio.models = [
-      { provider: 'groq', model: 'whisper-large-v3-turbo' }
-    ];
+    // allowPrivateNetwork only lives under models.providers.*.request in the
+    // openclaw schema (audit-wise, SSRF policy is a provider-wide opt-in —
+    // it can't be scoped to a single tools.media.*.models[] row). So we
+    // register the groq and litellm providers with their baseUrl, apiKey,
+    // and allowPrivateNetwork, and the tools.media.{audio,image}.models[]
+    // entries just reference them by id.
+    cfg.models = cfg.models || {};
+    cfg.models.providers = cfg.models.providers || {};
+
+    // Groq: the media-understanding transcription runner looks up the
+    // provider HTTP policy here for SSRF + headers. We only need the
+    // allowPrivateNetwork opt-in at this layer — the actual baseUrl +
+    // auth override for the transcription call lives on the
+    // tools.media.audio.models[] entry below (where the runner
+    // constructs the request). Models array is required by the schema
+    // but empty is fine because the model id for audio is set on the
+    // tools.media.audio.models[].model field, not on this registry.
+    cfg.models.providers.groq = {
+      baseUrl: process.env.LITELLM_URL + '/v1',
+      apiKey: process.env.LLM_API_KEY,
+      request: { allowPrivateNetwork: true },
+      models: [],
+    };
+
+    // Custom litellm provider for the image tool — pi-ai's openai transport
+    // will consume an OpenAI-shape /v1/chat/completions multimodal call,
+    // which LiteLLM translates to Anthropic's image content blocks upstream.
+    // Declaring input: ['text','image'] is what makes resolveImageRuntime's
+    // registry lookup accept this provider/model for the image capability.
+    cfg.models.providers.litellm = {
+      baseUrl: process.env.LITELLM_URL + '/v1',
+      apiKey: process.env.LLM_API_KEY,
+      api: 'openai-completions',
+      request: { allowPrivateNetwork: true },
+      models: [
+        {
+          id: 'claude-sonnet-4-6',
+          name: 'Claude Sonnet via LiteLLM',
+          input: ['text', 'image'],
+          maxTokens: 8192,
+        },
+      ],
+    };
+
+    cfg.tools.media.audio.models = [{
+      provider: 'groq',
+      model: 'whisper-large-v3-turbo',
+      baseUrl: process.env.LITELLM_URL + '/v1',
+      request: {
+        auth: { mode: 'authorization-bearer', token: process.env.LLM_API_KEY },
+      },
+    }];
+
+    cfg.tools.media.image = cfg.tools.media.image || {};
+    cfg.tools.media.image.models = [{
+      provider: 'litellm',
+      model: 'claude-sonnet-4-6',
+    }];
+
     fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
   " "$TMP_CONFIG"
 fi

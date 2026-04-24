@@ -46,6 +46,10 @@ set -a
 set +a
 
 : "${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env.local}"
+# GROQ_API_KEY is optional — only required to enable audio transcription.
+# When unset we skip LiteLLM's transcription route; users can still send
+# audio but the agent sees the envelope's MediaPath without a transcript.
+GROQ_API_KEY="${GROQ_API_KEY:-}"
 : "${KAPSO_API_KEY:?set KAPSO_API_KEY in .env.local}"
 : "${KAPSO_PHONE_NUMBER_ID:?set KAPSO_PHONE_NUMBER_ID in .env.local}"
 
@@ -113,8 +117,11 @@ EOF
 chmod 600 "$CONFIG_DIR/postgres.env"
 
 # LiteLLM env (read by the litellm service).
+# GROQ_API_KEY lives ONLY in this container — virtual keys minted by LiteLLM
+# wrap it so tenants get transcription without seeing the raw key.
 cat > "$CONFIG_DIR/litellm.env" <<EOF
 ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+GROQ_API_KEY=$GROQ_API_KEY
 LITELLM_MASTER_KEY=$LITELLM_MASTER_KEY
 DATABASE_URL=postgresql://litellm:$POSTGRES_PASSWORD@postgres:5432/litellm
 STORE_MODEL_IN_DB=True
@@ -189,6 +196,13 @@ MODEL_NAME=claude-sonnet-4-6
 LLM_API_KEY=$VIRTUAL_KEY
 LITELLM_ENABLED=true
 LITELLM_URL=http://litellm:4000
+# OpenClaw's media-understanding pre-check validates that the `groq`
+# provider has *some* key before routing transcription. The actual call
+# uses our `request.auth.token` override (the virtual key) which LiteLLM
+# then swaps for its real GROQ_API_KEY upstream. Any value here passes
+# the pre-check — using LLM_API_KEY keeps it token-shaped.
+GROQ_API_KEY=$VIRTUAL_KEY
+VOICE_ENABLED=true
 
 # ── WhatsApp (Kapso) channel ───────────────────────────────────────
 CHANNEL_ADAPTER_WHATSAPP_KAPSO_ENABLED=true
@@ -198,7 +212,6 @@ KAPSO_WEBHOOK_SECRET=${KAPSO_WEBHOOK_SECRET:-}
 
 # ── Legacy features (deprecated; disabled in local MVP) ────────────
 TELEGRAM_ENABLED=false
-VOICE_ENABLED=false
 WEB_SEARCH_ENABLED=false
 GOOGLE_CALENDAR_ENABLED=false
 EOF
